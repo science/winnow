@@ -90,7 +90,8 @@ describe("suggestProfileUpdate", () => {
           JSON.stringify({
             content: [{ type: "tool_use", name: "suggest_profile", input: suggestion }],
           }),
-          { status: 200 },
+          // The SDK only JSON-parses application/json bodies.
+          { status: 200, headers: { "Content-Type": "application/json" } },
         ),
       ),
     );
