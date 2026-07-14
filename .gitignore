@@ -8,3 +8,6 @@ web-ext-artifacts/
 .DS_Store
 test-results/
 playwright-report/
+
+# API keys for live-tier e2e (never commit)
+.env.production

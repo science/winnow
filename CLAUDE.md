@@ -68,7 +68,7 @@ Before implementing anything, search the codebase for existing infrastructure. E
 |---|---|---|---|
 | Unit (free) | Pure `lib/` logic, parser against captured fixtures, scorer orchestration with stubbed providers | `src/**/*.test.ts` | every commit, CI, no keys, no network |
 | E2E (free) | Playwright against the built feed page in demo mode (fixture data, storage shim) | `e2e/nonlive/` | CI |
-| Live | Real AI-provider calls (and manual real-YouTube checks) | `e2e/live/`, `src/tests/live/` | manual only; skip gracefully when keys absent |
+| Live | Real AI-provider calls (and manual real-YouTube checks) | `e2e/live/` (`npm run test:e2e:live`; keys from gitignored `.env.production` or env) | manual only; skip gracefully when keys absent |
 
 Rules (movie-night conventions):
 - Every test touching an external API is live-tier. The free tier must pass with API keys absent and network blocked.

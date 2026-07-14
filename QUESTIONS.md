@@ -12,7 +12,7 @@ Accumulated during autonomous work sessions. Answer at leisure; nothing here blo
 
 4. **Transcript fetch needs in-browser verification.** From the VM (no browser session) the timedtext endpoint returned an empty body — probably session/proof-of-origin gating. The code degrades gracefully to metadata-only scoring, but check the console (`transcripts: N/M fetched` log line) on your first real scoring run. If it's 0/M with a real session, the fallback is InnerTube's `get_transcript` endpoint — I left the parsing pure functions ready either way.
 
-5. **Live scoring validation.** Scoring is fully unit-tested against stubs, but no real Anthropic/OpenAI call has been made (no keys here, and I wouldn't use yours unasked). First real run: put a key in Settings, hit Refresh, and eyeball ~20 scores against your own judgment. Also worth checking: whether `gpt-4o-mini` is still the right cheap OpenAI model (`src/services/scoring/openaiScorer.ts` — one constant).
+5. **Live scoring validation.** ~~No real Anthropic/OpenAI call has been made.~~ **Update 2026-07-14:** live e2e tests (`npm run test:e2e:live`, keys from `.env.production`) now exercise both providers against their real APIs — strict schemas accepted, scores valid, on-profile substance outscores drama bait, bait flagged clickbait. Still worth your eyeball: ~20 scores on your *real* feed against your own judgment, and whether `gpt-4o-mini` is still the right cheap OpenAI model (`src/services/scoring/openaiScorer.ts` — one constant).
 
 6. **Icon.** Placeholder is a dark rounded square with a green "w" (ImageMagick). Fine until it isn't.
 
