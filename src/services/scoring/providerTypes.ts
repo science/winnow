@@ -1,4 +1,5 @@
 import type { Profile, Video } from "../../lib/types";
+import type { FeedbackExample } from "../../lib/feedback";
 
 export interface RawScore {
   videoId: string;
@@ -12,6 +13,7 @@ export type ScoreBatchFn = (
   videos: Video[],
   profile: Profile,
   apiKey: string,
+  feedback?: FeedbackExample[],
 ) => Promise<RawScore[]>;
 
 export type ProviderErrorKind =

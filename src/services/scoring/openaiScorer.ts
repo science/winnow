@@ -3,6 +3,7 @@
 // json_schema response_format — no streaming needed for batch scoring.
 
 import type { Profile, Video } from "../../lib/types";
+import type { FeedbackExample } from "../../lib/feedback";
 import { buildUserMessage, SCORES_SCHEMA, SYSTEM_PROMPT } from "./prompt";
 import { kindFromStatus, ProviderError, type RawScore } from "./providerTypes";
 
@@ -16,6 +17,7 @@ export async function scoreBatchOpenai(
   videos: Video[],
   profile: Profile,
   apiKey: string,
+  feedback: FeedbackExample[] = [],
 ): Promise<RawScore[]> {
   let res: Response;
   try {
@@ -30,7 +32,7 @@ export async function scoreBatchOpenai(
         temperature: 0,
         messages: [
           { role: "system", content: SYSTEM_PROMPT },
-          { role: "user", content: buildUserMessage(videos, profile) },
+          { role: "user", content: buildUserMessage(videos, profile, feedback) },
         ],
         response_format: {
           type: "json_schema",

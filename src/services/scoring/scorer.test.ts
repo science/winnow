@@ -152,6 +152,16 @@ describe("runScoring", () => {
     expect(result.unknownIds.length).toBe(60);
   });
 
+  it("should pass feedback through to the adapter", async () => {
+    const videos = ids(1).map(video);
+    const adapter = vi.fn(okAdapter());
+    const feedback = [{ vote: "down" as const, title: "Bait", channel: "c", duration: "1:00" }];
+    await runScoring(videos, {
+      adapter, model: "m", apiKey: "k", profile, cache: {}, sleep: noSleep, feedback,
+    });
+    expect(adapter).toHaveBeenCalledWith(videos, profile, "k", feedback);
+  });
+
   it("should call onBatch incrementally so the feed fills in live", async () => {
     const videos = ids(40).map(video);
     const onBatch = vi.fn();

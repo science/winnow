@@ -41,4 +41,58 @@ for (const { provider, envVar } of PROVIDERS) {
     expect(scores[SUBSTANCE_ID]!.score).toBeGreaterThan(scores[BAIT_ID]!.score);
     expect(scores[BAIT_ID]!.clickbait, "bait video flagged as clickbait").toBe(true);
   });
+
+  test(`should score with a feedback section present using ${provider}`, async ({ page }) => {
+    const apiKey = process.env[envVar];
+    test.skip(!apiKey, `${envVar} not set — live tier needs .env.production or env keys`);
+
+    // Only structural assertions here: the prompt with a <feedback> block
+    // must still parse into schema-valid scores on the real provider.
+    // Directional would be flaky at this sample size.
+    await openFeedWithLiveSeed(page, {
+      provider,
+      apiKey: apiKey!,
+      profile: LIVE_PROFILE,
+      videos: LIVE_VIDEOS,
+      feedback: [
+        {
+          videoId: "votedgone01",
+          vote: "down",
+          votedAt: Date.now() - 60_000,
+          title: "Top 10 SHOCKING Celebrity Meltdowns",
+          channelTitle: "Gossip Feed",
+          durationText: "7:15",
+          source: "home",
+          descriptionSnippet: null,
+          score: 40,
+          reason: "engagement bait",
+          clickbait: true,
+        },
+        {
+          videoId: "votedgone02",
+          vote: "up",
+          votedAt: Date.now() - 30_000,
+          title: "Building a CPU from NAND gates: full walkthrough",
+          channelTitle: "Hardware from Scratch",
+          durationText: "58:00",
+          source: "subscriptions",
+          descriptionSnippet: null,
+          score: 82,
+          reason: "substantive",
+          clickbait: false,
+        },
+      ],
+    });
+
+    const scores = await waitForStoredScores(page, ALL_IDS);
+    await expectNoFeedError(page);
+
+    for (const id of ALL_IDS) {
+      const s = scores[id]!;
+      expect(Number.isInteger(s.score), `${id} score is an integer`).toBe(true);
+      expect(s.score).toBeGreaterThanOrEqual(0);
+      expect(s.score).toBeLessThanOrEqual(100);
+      expect(s.reason.length, `${id} has a reason`).toBeGreaterThan(0);
+    }
+  });
 }

@@ -56,7 +56,8 @@ All persistence via `src/lib/storage.ts` (browser.storage.local → localStorage
 | `winnow:videos:v1` | `{ fetchedAt, videos[] }` | merged+deduped subs+home, cap 300, TTL 30 min |
 | `winnow:scores:v1` | `{ profileHash, scores: {videoId: {score, reason, clickbait, scoredAt, model}} }` | invalidated whole when profileHash mismatches |
 | `winnow:watched:v1` | `{videoId: watchedAt}` | written on Watch open; pruned with videos |
-| `winnow:transcripts:v1` | `{videoId: {excerpt, source: "timedtext"\|"innertube", fetchedAt}}` | successes only; pruned with videos |
+| `winnow:transcripts:v1` | `{videoId: {excerpt, source: "timedtext"\|"innertube", fetchedAt}}` | successes only; pruned with videos (voted ids kept) |
+| `winnow:feedback:v1` | `{videoId: FeedbackEntry}` — vote + votedAt + display-field snapshot + score-at-vote | cap 200 (oldest evicted); never pruned with videos |
 
 `profileHash = fnv1a(moreOf, lessOf, PROMPT_VERSION, modelId)` — editing the profile, bumping the prompt, or swapping models cleanly re-scores everything (movie-night's versioned-cache pattern). Transcript excerpts are cached by videoId (bounded by the 300-video window via pruning) so re-scores and feedback analysis don't re-fetch watch pages; fetch failures are never cached, staying retryable.
 
@@ -68,6 +69,10 @@ All persistence via `src/lib/storage.ts` (browser.storage.local → localStorage
 4. Retry policy (house rule): one 2s-backoff retry on 429/5xx/network only; 4xx and malformed JSON fail fast (bugs, not weather); 401 aborts the run with a settings banner.
 
 Tiers: **Top picks** (≥75, not clickbait) / **Worth a look** (50–74, clickbait-flagged high scorers demoted here) / **Winnowed out** (<50, folded). Score-collapse guard: when ≥95% of scored videos land in one tier, numeric badges hide and the UI suggests sharpening the profile.
+
+### Feedback (Good pick / Not for me)
+
+Per-video votes have two effects. **Instant and local:** the voted video moves tiers deterministically — a downvote winnows it regardless of score; an upvote pins it to the head of Top picks, outranking even the clickbait demotion (an explicit user verdict IS vetting). **Future scoring:** the most recent votes per direction (`FEEDBACK_PROMPT_CAP`) ride along in every scoring prompt as taste examples. Feedback is deliberately **not** a profileHash input: a vote never invalidates cached scores (a per-vote full re-score would cost real money per click and fight the two-phase evolution — prompt-append feedback is an acknowledged bridge, see `TWO_PHASE_SCORING.md`). New votes therefore influence only future cache misses; **"Re-score everything" in Settings is the feed-wide apply**. The accepted tradeoff: existing scores may predate recent votes.
 
 Cost (claude-haiku-4-5): cold start ~200 videos ≈ $0.10 without transcripts, roughly 3–5× that with transcript excerpts; incremental daily refresh is cents. Profile edit ⇒ full re-score (accepted for MVP; see TWO_PHASE_SCORING.md for the fix).
 

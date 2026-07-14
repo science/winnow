@@ -91,7 +91,9 @@
       ></textarea>
     </label>
     <p class="text-xs text-ink-faint">
-      Editing the profile re-scores your whole feed on the next refresh (a few cents with a cheap model).
+      Editing the profile re-scores your whole feed on the next refresh (a few cents with a cheap
+      model). Your Good pick / Not for me votes steer future scoring automatically; “Re-score
+      everything” below applies them to the whole feed at once.
     </p>
   </section>
 

@@ -6,6 +6,7 @@
 // reject numeric min/max.
 
 import type { Profile, Video } from "../../lib/types";
+import type { FeedbackExample } from "../../lib/feedback";
 import { buildUserMessage, SCORES_SCHEMA, SYSTEM_PROMPT } from "./prompt";
 import { kindFromStatus, ProviderError, type RawScore } from "./providerTypes";
 
@@ -20,6 +21,7 @@ export async function scoreBatchAnthropic(
   videos: Video[],
   profile: Profile,
   apiKey: string,
+  feedback: FeedbackExample[] = [],
 ): Promise<RawScore[]> {
   let res: Response;
   try {
@@ -36,7 +38,7 @@ export async function scoreBatchAnthropic(
         max_tokens: 4096,
         temperature: 0,
         system: SYSTEM_PROMPT,
-        messages: [{ role: "user", content: buildUserMessage(videos, profile) }],
+        messages: [{ role: "user", content: buildUserMessage(videos, profile, feedback) }],
         tools: [
           {
             name: "score_videos",

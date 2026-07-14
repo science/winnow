@@ -8,7 +8,9 @@ import type { Profile, TranscriptCacheEntry, Video, VideoScore } from "../../lib
 import { profileHash } from "../../lib/profileHash";
 import { KEYS, storageGet, storageSet } from "../../lib/storage";
 import { log } from "../../lib/logger";
-import { BATCH_SIZE, PROMPT_VERSION } from "./prompt";
+import { BATCH_SIZE, FEEDBACK_PROMPT_CAP, PROMPT_VERSION } from "./prompt";
+import { recentExamples, type FeedbackExample } from "../../lib/feedback";
+import { feedback as feedbackStore, feedbackReady } from "../../stores/feedbackStore";
 import { ProviderError, isRetryable, type ScoreBatchFn } from "./providerTypes";
 import { scoreBatchAnthropic, ANTHROPIC_MODEL } from "./anthropicScorer";
 import { scoreBatchOpenai, OPENAI_MODEL } from "./openaiScorer";
@@ -32,6 +34,8 @@ export interface ScoringDeps {
   model: string;
   apiKey: string;
   profile: Profile;
+  /** Recent voted examples included in every batch prompt. */
+  feedback?: FeedbackExample[];
   /** Cached scores already valid for the current profile hash. */
   cache: Record<string, VideoScore>;
   sleep?: (ms: number) => Promise<void>;
@@ -73,12 +77,12 @@ export async function runScoring(videos: Video[], deps: ScoringDeps): Promise<Sc
     let raw;
     try {
       try {
-        raw = await deps.adapter(batch, deps.profile, deps.apiKey);
+        raw = await deps.adapter(batch, deps.profile, deps.apiKey, deps.feedback);
       } catch (err) {
         if (!isRetryable(err)) throw err;
         log.warn("scoring batch failed, retrying once", err);
         await sleep(RETRY_DELAY_MS);
-        raw = await deps.adapter(batch, deps.profile, deps.apiKey);
+        raw = await deps.adapter(batch, deps.profile, deps.apiKey, deps.feedback);
       }
     } catch (err) {
       if (err instanceof ProviderError && err.kind === "auth") {
@@ -250,11 +254,16 @@ export async function scoreFeed(): Promise<void> {
       : null,
   );
 
+  await feedbackReady;
   const result = await runScoring(enrichment.videos, {
     adapter,
     model,
     apiKey,
     profile: $profile,
+    // Votes steer future runs only: feedback is deliberately NOT a
+    // profileHash input, so cached scores stand until a natural miss or
+    // an explicit "Re-score everything" (see DESIGN.md).
+    feedback: recentExamples(get(feedbackStore), FEEDBACK_PROMPT_CAP),
     cache,
     onProgress: (scoredCount, scoreTotal) =>
       status.update((s) => ({ ...s, scoredCount, scoreTotal })),

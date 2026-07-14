@@ -2,13 +2,15 @@
 // built page scores seeded fixture videos with a REAL provider key — no
 // YouTube session needed (fresh fetchedAt keeps initFeed inside the TTL).
 import { expect, type Page } from "@playwright/test";
-import type { Profile, Provider, Settings, Video, VideoScore } from "../../src/lib/types";
+import type { FeedbackEntry, Profile, Provider, Settings, Video, VideoScore } from "../../src/lib/types";
 
 export interface LiveSeed {
   provider: Provider;
   apiKey: string;
   profile: Pick<Profile, "moreOf" | "lessOf">;
   videos: Video[];
+  /** Optional pre-existing votes (winnow:feedback:v1). */
+  feedback?: FeedbackEntry[];
 }
 
 export async function openFeedWithLiveSeed(page: Page, seed: LiveSeed): Promise<void> {
@@ -18,14 +20,18 @@ export async function openFeedWithLiveSeed(page: Page, seed: LiveSeed): Promise<
     openaiApiKey: seed.provider === "openai" ? seed.apiKey : null,
   };
   const profile: Profile = { ...seed.profile, updatedAt: Date.now() };
+  const feedback = Object.fromEntries((seed.feedback ?? []).map((e) => [e.videoId, e]));
   await page.addInitScript(
     (state) => {
       localStorage.clear();
       localStorage.setItem("winnow:settings:v1", JSON.stringify(state.settings));
       localStorage.setItem("winnow:profile:v1", JSON.stringify(state.profile));
       localStorage.setItem("winnow:videos:v1", JSON.stringify(state.videos));
+      if (Object.keys(state.feedback).length > 0) {
+        localStorage.setItem("winnow:feedback:v1", JSON.stringify(state.feedback));
+      }
     },
-    { settings, profile, videos: { fetchedAt: Date.now(), videos: seed.videos } },
+    { settings, profile, videos: { fetchedAt: Date.now(), videos: seed.videos }, feedback },
   );
   await page.goto("/feed.html");
 }
