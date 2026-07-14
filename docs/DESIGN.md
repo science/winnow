@@ -82,7 +82,8 @@ Cost (claude-haiku-4-5): cold start ~200 videos ≈ $0.10 without transcripts, r
 
 - Unit (free tier): pure `lib/` logic, parser fixtures, scorer orchestration with stub providers — no network, no keys. `npm test`.
 - E2E (free tier): Playwright against the built page in demo mode. `npm run test:e2e`.
-- Live checks are manual: load the temporary add-on, sign in to YouTube, refresh, eyeball parsed feed vs youtube.com, then add a real key and sanity-check curation quality.
+- E2E (live tier, manual): real Anthropic/OpenAI calls against seeded fixture videos — asserts score shape and that on-profile substance outscores bait. `npm run test:e2e:live`, keys from gitignored `.env.production`; skips when keys are absent.
+- Real-YouTube checks stay manual: load the temporary add-on, sign in to YouTube, refresh, eyeball parsed feed vs youtube.com and curation quality. See `DEVELOPMENT.md` for the full loop and debugging playbook.
 
 ## Post-MVP roadmap
 

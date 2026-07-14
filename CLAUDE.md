@@ -6,7 +6,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Winnow is a Firefox browser extension (Manifest V3) that replaces the YouTube feed experience with an AI-curated one. It reads the user's real YouTube data (subscriptions feed + homepage recommendations) by fetching youtube.com pages with the user's own session cookies and parsing the embedded `ytInitialData` JSON, scores each video with an LLM (Anthropic or OpenAI, user-supplied keys) against a free-text interest profile, and renders a calm, bounded feed. Everything runs client-side; all state lives in `browser.storage.local`. No backend, no telemetry.
 
-Product principles (do not relitigate): **no autoplay, no infinite scroll, no engagement bait**. Winnowed-out videos are hidden behind a fold, never deleted — curation stays auditable. See `docs/DESIGN.md` for architecture and `docs/TWO_PHASE_SCORING.md` for the planned scoring evolution.
+Product principles (do not relitigate): **no autoplay, no infinite scroll, no engagement bait**. Winnowed-out videos are hidden behind a fold, never deleted — curation stays auditable.
+
+**Before starting feature work, read `docs/DEVELOPMENT.md`** — module map, invariants/gotchas, and recipes for common changes (parser shapes, providers, settings, storage keys, e2e). `docs/DESIGN.md` has the architecture and storage schema registry; `docs/TWO_PHASE_SCORING.md` the planned scoring evolution; `QUESTIONS.md` the open user-blocked items.
 
 ## Commands
 

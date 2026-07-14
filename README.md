@@ -48,7 +48,7 @@ npm run zip        # package web-ext-artifacts/winnow-<version>.zip
 
 CI (GitHub Actions) runs check + unit + e2e + build on every push and attaches the zip; tags `v*` create a GitHub Release with the artifact.
 
-Architecture and data-flow: `docs/DESIGN.md`. Planned scoring evolution: `docs/TWO_PHASE_SCORING.md`. Engineering conventions (TDD, test tiers, commit discipline): `CLAUDE.md`.
+Architecture and data-flow: `docs/DESIGN.md`. Hands-on developer guide (module map, invariants, feature recipes): `docs/DEVELOPMENT.md`. Planned scoring evolution: `docs/TWO_PHASE_SCORING.md`. Engineering conventions (TDD, test tiers, commit discipline): `CLAUDE.md`.
 
 ## License
 
