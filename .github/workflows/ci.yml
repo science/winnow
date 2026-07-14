@@ -1,0 +1,40 @@
+name: CI
+
+on:
+  push:
+    branches: ["main"]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Type check
+        run: npm run check
+      - name: Unit tests
+        run: npm test
+      - name: Build & package
+        run: npm run zip
+      - name: Upload extension artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: winnow-extension
+          path: web-ext-artifacts/*.zip
+      - name: Attach zip to release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" --generate-notes web-ext-artifacts/*.zip \
+            || gh release upload "${GITHUB_REF_NAME}" web-ext-artifacts/*.zip

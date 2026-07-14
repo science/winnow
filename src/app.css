@@ -1,0 +1,26 @@
+@import "tailwindcss";
+
+/* Design tokens. Calm, low-stimulation palette: winnow's UI must never
+   compete with content for attention. */
+@theme {
+  --color-surface: #0f1419;
+  --color-surface-raised: #1a2129;
+  --color-surface-hover: #232c36;
+  --color-ink: #e6e9ec;
+  --color-ink-muted: #8b98a5;
+  --color-ink-faint: #5c6a76;
+  --color-accent: #7fb069;
+  --color-accent-muted: #567a46;
+  --color-caution: #d4a373;
+  --color-danger: #c97064;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  background-color: var(--color-surface);
+  color: var(--color-ink);
+}
