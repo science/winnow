@@ -1,0 +1,61 @@
+# Two-Phase Scoring — the planned evolution
+
+Status: **design note, not implemented.** The MVP scores directly: the LLM sees `(video metadata + profile)` and returns a score. That couples every score to the profile — editing the profile invalidates the whole cache and costs a full re-score (~$0.10 and a few minutes of batch calls).
+
+The fix is the architecture movie-night uses (`~/dev/movie-night/backend/src/Services/` — reviewed 2026-07-13). It splits scoring into a profile-independent enrichment pass and a deterministic, instant ranking pass.
+
+## The shape
+
+```
+Phase 1 — enrichment (LLM, once per video, cached forever)
+  video metadata + transcript ──► structured taxonomy
+    { clickbait_severity: 1-5, substance_density: 1-5, novelty: 1-5,
+      production_effort: 1-5, intellectual_demand: ordinal,
+      emotional_tone: enum, format: enum(tutorial|essay|vlog|news|reaction|…),
+      topics: string[], hype_signals: string[] }
+
+Phase 2 — profile translation (LLM, once per profile edit, O(1))
+  moreOf/lessOf free text ──► structured target
+    { fields the user actually constrained, each with value + importance 0-10 }
+
+Rank — pure TypeScript, no LLM, runs in ms
+  weighted average over constrained fields only; ordinal near-miss credit;
+  empty target ⇒ all tie; reasons composed deterministically from the
+  top-contributing fields.
+```
+
+## Payoffs
+
+- **Profile edits re-rank instantly** for the cost of one small translation call (~$0.001), instead of a full re-score. This unlocks a live "tune your profile and watch the feed reorder" UX.
+- Enrichment cache never invalidates on profile changes — keyed by `hash(video metadata) + ENRICHMENT_PROMPT_VERSION + model`.
+- The ranker is a pure function: unit-testable with exact assertions, zero network, and its explanations can't hallucinate (they're composed from stored fields).
+
+## Movie-night patterns to port (file references)
+
+| Pattern | Movie-night source | Winnow target |
+|---|---|---|
+| Taxonomy enrichment prompt (controlled vocabulary, every enum's poles described) | `OpenAiMovieAnalysisService.php:23-60` | Phase 1 prompt |
+| Free-text → structured target with per-field `importance`, emit-only-constrained-fields | `OpenAiRubricTargetTranslator.php:28-93` | Phase 2 prompt |
+| Strict-mode "no optional fields" workaround: nullable + `canonicalize()` strips nulls | `OpenAiRubricTargetTranslator.php:137-146, 337-401` | both phases' schemas |
+| Weighted-average-over-present-fields scorer; ordinal near-miss credit (`1 - dist/4`); empty target ⇒ tie | `RubricSoftScorer.php:70, 160-207` | `src/lib/rubricScorer.ts` (new, pure) |
+| Deterministic reasons from top-3 contributing fields, `(field,value)→phrase` lookup | `ReasoningComposer.php:23-83` | reason composition |
+| Content-hash skip-if-unchanged for incremental enrichment | `EmbeddingTextBuilder.hashOf()` + `MovieEmbeddingRunner:82-87` | enrichment cache key |
+| Version-string cache invalidation ("bump when prompt or schema changes") | `Caching*.php:26-30` | `ENRICHMENT_PROMPT_VERSION`, `TRANSLATOR_PROMPT_VERSION` |
+| Score-collapse guard (already ported in MVP) | `SemanticRecommendationService.php:251-255` | `src/lib/tiers.ts` ✓ |
+| RRF rank fusion — only if a second ranking signal appears (recency prior, channel boost) | `RrfRanker.php` | not planned yet |
+
+## What the MVP already prepared
+
+- Score cache entries carry `model` and participate in a versioned hash — the cache shape extends to enrichment without migration pain.
+- The `scoreBatch` adapter interface is strategy-agnostic; enrichment slots in behind `scorer.ts` without touching stores or UI.
+- Tier bucketing, collapse detection, and sorting are already pure `lib/` functions with exact-assertion tests — the ranker joins them.
+
+## Migration sketch
+
+1. Add `enrichBatch` adapters (same provider files, new prompt + schema) and `winnow:enrichment:v1` storage keyed by content hash.
+2. Add `translateProfile` (one call, cached by `fnv1a(moreOf+lessOf+version+model)`).
+3. Add pure `rubricScorer.ts` + tests (port movie-night's exact-score unit tests: exact match ⇒ 1.0, distance-2 ⇒ 0.5, etc.).
+4. Switch `scorer.ts` to: enrichment misses → LLM; then rank locally. Keep direct scoring behind a setting for A/B comparison during the transition.
+5. Compare curation quality by eyeball on a real feed before removing direct scoring.
+
+Open design question when we get there: taxonomy breadth. Movies are one domain; YouTube spans everything, so the taxonomy must stay generic (substance, bait, format, effort) with `topics[]` carrying the domain specifics — resist per-domain fields.
