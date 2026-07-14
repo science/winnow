@@ -6,6 +6,7 @@
 // in-browser confirmation (see QUESTIONS.md).
 
 import { log } from "../../lib/logger";
+import { extractJsonBlob } from "./pageExtract";
 
 export const TRANSCRIPT_EXCERPT_CHARS = 2000;
 
@@ -17,10 +18,10 @@ interface CaptionTrack {
 
 /** Pull `var ytInitialPlayerResponse = {...}` from a watch page. */
 export function extractPlayerResponse(html: string): unknown {
-  const m = /var ytInitialPlayerResponse\s*=\s*(\{.*?\});(?:var|<\/script>)/s.exec(html);
-  if (!m?.[1]) return null;
+  const raw = extractJsonBlob(html, /var ytInitialPlayerResponse\s*=\s*/);
+  if (!raw) return null;
   try {
-    return JSON.parse(m[1]);
+    return JSON.parse(raw);
   } catch {
     return null;
   }

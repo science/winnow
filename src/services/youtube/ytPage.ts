@@ -4,6 +4,7 @@
 // user's session cookies.
 
 import { log } from "../../lib/logger";
+import { extractJsonBlob } from "./pageExtract";
 
 export const FEED_URLS = {
   subscriptions: "https://www.youtube.com/feed/subscriptions",
@@ -46,8 +47,7 @@ export function extractYtInitialData(html: string): unknown {
 }
 
 function rawYtInitialData(html: string): string | null {
-  const m = /var ytInitialData\s*=\s*(\{.*?\});<\/script>/s.exec(html);
-  return m?.[1] ?? null;
+  return extractJsonBlob(html, /var ytInitialData\s*=\s*/);
 }
 
 /** Read the LOGGED_IN flag from ytcfg. Null when not found. */
