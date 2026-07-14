@@ -1,0 +1,708 @@
+{
+  "contents": {
+    "twoColumnBrowseResultsRenderer": {
+      "tabs": [
+        {
+          "tabRenderer": {
+            "content": {
+              "richGridRenderer": {
+                "contents": [
+                  {
+                    "richSectionRenderer": {
+                      "content": {
+                        "brandVideoShelfRenderer": {
+                          "content": [
+                            {
+                              "videoRenderer": {
+                                "videoId": "jEkM7c3ra4E",
+                                "thumbnail": {
+                                  "thumbnails": [
+                                    {
+                                      "url": "https://i.ytimg.com/vi/jEkM7c3ra4E/hq720.jpg?sqp=-oaymwEcCOgCEMoBSFXyq4qpAw4IARUAAIhCGAFwAcABBg==&rs=AOn4CLCa8f75P8ubAzMoMtcHejmdRsuouQ",
+                                      "width": 360,
+                                      "height": 202
+                                    },
+                                    {
+                                      "url": "https://i.ytimg.com/vi/jEkM7c3ra4E/hq720.jpg?sqp=-oaymwEcCNAFEJQDSFXyq4qpAw4IARUAAIhCGAFwAcABBg==&rs=AOn4CLATDR6frGqZBHVBOX8L5P7cwBVtxA",
+                                      "width": 720,
+                                      "height": 404
+                                    }
+                                  ]
+                                },
+                                "title": {
+                                  "runs": [
+                                    {
+                                      "text": "The World Cup Knockouts But It's Lord of the Rings (Part 2)"
+                                    }
+                                  ]
+                                },
+                                "descriptionSnippet": {
+                                  "runs": [
+                                    {
+                                      "text": "Patreon or become a Youtube member for extra content: https://www.patreon.com/CharlieHopkinson\nhttps://www.youtube.com/channel/UCewLMcro9tNP97XQ1rxtLXQ/join\n\nCome see me perform live: https://www.c..."
+                                    }
+                                  ]
+                                },
+                                "longBylineText": {
+                                  "runs": [
+                                    {
+                                      "text": "Charlie Hopkinson",
+                                      "navigationEndpoint": {
+                                        "commandMetadata": {
+                                          "webCommandMetadata": {
+                                            "url": "/@CharlieHopkinson",
+                                            "webPageType": "WEB_PAGE_TYPE_CHANNEL",
+                                            "rootVe": 3611,
+                                            "apiUrl": "/youtubei/v1/browse"
+                                          }
+                                        },
+                                        "browseEndpoint": {
+                                          "browseId": "UCewLMcro9tNP97XQ1rxtLXQ",
+                                          "canonicalBaseUrl": "/@CharlieHopkinson"
+                                        }
+                                      }
+                                    }
+                                  ]
+                                },
+                                "publishedTimeText": {
+                                  "simpleText": "1 day ago"
+                                },
+                                "lengthText": {
+                                  "simpleText": "2:10"
+                                },
+                                "viewCountText": {
+                                  "simpleText": "143,480 views"
+                                },
+                                "navigationEndpoint": {
+                                  "commandMetadata": {
+                                    "webCommandMetadata": {
+                                      "url": "/watch?v=jEkM7c3ra4E&pp=kggXbXZzLXBlci1jdWx0LXdvcmxkY3VwMGE%3D",
+                                      "webPageType": "WEB_PAGE_TYPE_WATCH",
+                                      "rootVe": 3832
+                                    }
+                                  },
+                                  "watchEndpoint": {
+                                    "videoId": "jEkM7c3ra4E",
+                                    "playerParams": "kggXbXZzLXBlci1jdWx0LXdvcmxkY3VwMGE%3D",
+                                    "watchEndpointSupportedOnesieConfig": {
+                                      "html5PlaybackOnesieConfig": {
+                                        "commonConfig": {
+                                          "url": "https://rr3---sn-nvopjoxu-25vs.googlevideo.com/initplayback?source=youtube&oeis=1&c=WEB&oad=3200&ovd=3200&oaad=11000&oavd=11000&ocs=700&oewis=1&oputc=1&ofpcc=1&siu=1&msp=1&odepv=1&id=8c490cedcdeb6b81&ip=135.180.27.156&initcwndbps=3651250&mt=1784065751&oweuc="
+                                        }
+                                      }
+                                    }
+                                  }
+                                },
+                                "ownerBadges": [
+                                  {
+                                    "metadataBadgeRenderer": {
+                                      "icon": {
+                                        "iconType": "CHECK_CIRCLE_THICK"
+                                      },
+                                      "style": "BADGE_STYLE_TYPE_VERIFIED",
+                                      "tooltip": "Verified",
+                                      "accessibilityData": {
+                                        "label": "Verified"
+                                      }
+                                    }
+                                  }
+                                ],
+                                "ownerText": {
+                                  "runs": [
+                                    {
+                                      "text": "Charlie Hopkinson",
+                                      "navigationEndpoint": {
+                                        "commandMetadata": {
+                                          "webCommandMetadata": {
+                                            "url": "/@CharlieHopkinson",
+                                            "webPageType": "WEB_PAGE_TYPE_CHANNEL",
+                                            "rootVe": 3611,
+                                            "apiUrl": "/youtubei/v1/browse"
+                                          }
+                                        },
+                                        "browseEndpoint": {
+                                          "browseId": "UCewLMcro9tNP97XQ1rxtLXQ",
+                                          "canonicalBaseUrl": "/@CharlieHopkinson"
+                                        }
+                                      }
+                                    }
+                                  ]
+                                },
+                                "shortBylineText": {
+                                  "runs": [
+                                    {
+                                      "text": "Charlie Hopkinson",
+                                      "navigationEndpoint": {
+                                        "commandMetadata": {
+                                          "webCommandMetadata": {
+                                            "url": "/@CharlieHopkinson",
+                                            "webPageType": "WEB_PAGE_TYPE_CHANNEL",
+                                            "rootVe": 3611,
+                                            "apiUrl": "/youtubei/v1/browse"
+                                          }
+                                        },
+                                        "browseEndpoint": {
+                                          "browseId": "UCewLMcro9tNP97XQ1rxtLXQ",
+                                          "canonicalBaseUrl": "/@CharlieHopkinson"
+                                        }
+                                      }
+                                    }
+                                  ]
+                                },
+                                "showActionMenu": false,
+                                "shortViewCountText": {
+                                  "simpleText": "143K views"
+                                },
+                                "channelThumbnailSupportedRenderers": {
+                                  "channelThumbnailWithLinkRenderer": {
+                                    "thumbnail": {
+                                      "thumbnails": [
+                                        {
+                                          "url": "https://yt3.ggpht.com/ytc/AIdro_lD04gloyloUXGGk36erAO0ncWA6S0scCiAd-Xy9GQro3yv=s68-c-k-c0x00ffffff-no-rj",
+                                          "width": 68,
+                                          "height": 68
+                                        }
+                                      ]
+                                    },
+                                    "navigationEndpoint": {
+                                      "commandMetadata": {
+                                        "webCommandMetadata": {
+                                          "url": "/@CharlieHopkinson",
+                                          "webPageType": "WEB_PAGE_TYPE_CHANNEL",
+                                          "rootVe": 3611,
+                                          "apiUrl": "/youtubei/v1/browse"
+                                        }
+                                      },
+                                      "browseEndpoint": {
+                                        "browseId": "UCewLMcro9tNP97XQ1rxtLXQ",
+                                        "canonicalBaseUrl": "/@CharlieHopkinson"
+                                      }
+                                    }
+                                  }
+                                },
+                                "serviceEndpoint": {
+                                  "commandMetadata": {
+                                    "webCommandMetadata": {
+                                      "sendPost": true,
+                                      "apiUrl": "/youtubei/v1/feedback"
+                                    }
+                                  },
+                                  "feedbackEndpoint": {
+                                    "uiActions": {
+                                      "hideEnclosingContainer": true
+                                    }
+                                  }
+                                },
+                                "inlinePlaybackEndpoint": {
+                                  "commandMetadata": {
+                                    "webCommandMetadata": {
+                                      "url": "/watch?v=jEkM7c3ra4E&pp=YAHIAQGiBhUBhZRfrz3l6m7PGynqr7Oi_09Dq9nSBwkJhxoBhyohjO8%3D",
+                                      "webPageType": "WEB_PAGE_TYPE_WATCH",
+                                      "rootVe": 3832
+                                    }
+                                  },
+                                  "watchEndpoint": {
+                                    "videoId": "jEkM7c3ra4E",
+                                    "playerParams": "YAHIAQGiBhUBhZRfrz3l6m7PGynqr7Oi_09Dq9nSBwkJhxoBhyohjO8%3D",
+                                    "playerExtraUrlParams": [
+                                      {
+                                        "key": "inline",
+                                        "value": "1"
+                                      }
+                                    ],
+                                    "watchEndpointSupportedOnesieConfig": {
+                                      "html5PlaybackOnesieConfig": {
+                                        "commonConfig": {
+                                          "url": "https://rr3---sn-nvopjoxu-25vs.googlevideo.com/initplayback?source=youtube&oeis=1&c=WEB&oad=3200&ovd=3200&oaad=11000&oavd=11000&ocs=700&oewis=1&oputc=1&ofpcc=1&siu=1&msp=1&odepv=1&id=8c490cedcdeb6b81&ip=135.180.27.156&initcwndbps=3651250&mt=1784065751&oweuc="
+                                        }
+                                      }
+                                    }
+                                  }
+                                },
+                                "avatar": {}
+                              }
+                            },
+                            {
+                              "videoRenderer": {
+                                "videoId": "ZNSS4sTHAAQ",
+                                "thumbnail": {
+                                  "thumbnails": [
+                                    {
+                                      "url": "https://i.ytimg.com/vi/ZNSS4sTHAAQ/hq720.jpg?sqp=-oaymwEcCOgCEMoBSFXyq4qpAw4IARUAAIhCGAFwAcABBg==&rs=AOn4CLC4mi6qSBxCL4aAkcb_HN02-VERig",
+                                      "width": 360,
+                                      "height": 202
+                                    },
+                                    {
+                                      "url": "https://i.ytimg.com/vi/ZNSS4sTHAAQ/hq720.jpg?sqp=-oaymwEcCNAFEJQDSFXyq4qpAw4IARUAAIhCGAFwAcABBg==&rs=AOn4CLAYH4BHQG29fVVN73-OSUJDM6Y5SQ",
+                                      "width": 720,
+                                      "height": 404
+                                    }
+                                  ]
+                                },
+                                "title": {
+                                  "runs": [
+                                    {
+                                      "text": "The Viral World Cup Propaganda Americans Wanted to Believe"
+                                    }
+                                  ]
+                                },
+                                "descriptionSnippet": {
+                                  "runs": [
+                                    {
+                                      "text": "Is this viral German world cup tourist legit? There might be a bigger story hidden underneath. \nVlog channel https://youtube.com/EvanEdinger\n\nThank you so much for watching! Hope you enjoyed..."
+                                    }
+                                  ]
+                                },
+                                "longBylineText": {
+                                  "runs": [
+                                    {
+                                      "text": "Evan Edinger",
+                                      "navigationEndpoint": {
+                                        "commandMetadata": {
+                                          "webCommandMetadata": {
+                                            "url": "/@evan",
+                                            "webPageType": "WEB_PAGE_TYPE_CHANNEL",
+                                            "rootVe": 3611,
+                                            "apiUrl": "/youtubei/v1/browse"
+                                          }
+                                        },
+                                        "browseEndpoint": {
+                                          "browseId": "UCT7H_xchRHaT9zr5GalIZVA",
+                                          "canonicalBaseUrl": "/@evan"
+                                        }
+                                      }
+                                    }
+                                  ]
+                                },
+                                "publishedTimeText": {
+                                  "simpleText": "2 days ago"
+                                },
+                                "lengthText": {
+                                  "simpleText": "15:38"
+                                },
+                                "viewCountText": {
+                                  "simpleText": "358,847 views"
+                                },
+                                "navigationEndpoint": {
+                                  "commandMetadata": {
+                                    "webCommandMetadata": {
+                                      "url": "/watch?v=ZNSS4sTHAAQ&pp=kggXbXZzLXBlci1jdWx0LXdvcmxkY3VwMGE%3D",
+                                      "webPageType": "WEB_PAGE_TYPE_WATCH",
+                                      "rootVe": 3832
+                                    }
+                                  },
+                                  "watchEndpoint": {
+                                    "videoId": "ZNSS4sTHAAQ",
+                                    "playerParams": "kggXbXZzLXBlci1jdWx0LXdvcmxkY3VwMGE%3D",
+                                    "watchEndpointSupportedOnesieConfig": {
+                                      "html5PlaybackOnesieConfig": {
+                                        "commonConfig": {
+                                          "url": "https://rr2---sn-nvopjoxu-nunl.googlevideo.com/initplayback?source=youtube&oeis=1&c=WEB&oad=3200&ovd=3200&oaad=11000&oavd=11000&ocs=700&oewis=1&oputc=1&ofpcc=1&siu=1&msp=1&odepv=1&id=64d492e2c4c70004&ip=135.180.27.156&initcwndbps=3858750&mt=1784065751&oweuc="
+                                        }
+                                      }
+                                    }
+                                  }
+                                },
+                                "ownerBadges": [
+                                  {
+                                    "metadataBadgeRenderer": {
+                                      "icon": {
+                                        "iconType": "CHECK_CIRCLE_THICK"
+                                      },
+                                      "style": "BADGE_STYLE_TYPE_VERIFIED",
+                                      "tooltip": "Verified",
+                                      "accessibilityData": {
+                                        "label": "Verified"
+                                      }
+                                    }
+                                  }
+                                ],
+                                "ownerText": {
+                                  "runs": [
+                                    {
+                                      "text": "Evan Edinger",
+                                      "navigationEndpoint": {
+                                        "commandMetadata": {
+                                          "webCommandMetadata": {
+                                            "url": "/@evan",
+                                            "webPageType": "WEB_PAGE_TYPE_CHANNEL",
+                                            "rootVe": 3611,
+                                            "apiUrl": "/youtubei/v1/browse"
+                                          }
+                                        },
+                                        "browseEndpoint": {
+                                          "browseId": "UCT7H_xchRHaT9zr5GalIZVA",
+                                          "canonicalBaseUrl": "/@evan"
+                                        }
+                                      }
+                                    }
+                                  ]
+                                },
+                                "shortBylineText": {
+                                  "runs": [
+                                    {
+                                      "text": "Evan Edinger",
+                                      "navigationEndpoint": {
+                                        "commandMetadata": {
+                                          "webCommandMetadata": {
+                                            "url": "/@evan",
+                                            "webPageType": "WEB_PAGE_TYPE_CHANNEL",
+                                            "rootVe": 3611,
+                                            "apiUrl": "/youtubei/v1/browse"
+                                          }
+                                        },
+                                        "browseEndpoint": {
+                                          "browseId": "UCT7H_xchRHaT9zr5GalIZVA",
+                                          "canonicalBaseUrl": "/@evan"
+                                        }
+                                      }
+                                    }
+                                  ]
+                                },
+                                "showActionMenu": false,
+                                "shortViewCountText": {
+                                  "simpleText": "358K views"
+                                },
+                                "channelThumbnailSupportedRenderers": {
+                                  "channelThumbnailWithLinkRenderer": {
+                                    "thumbnail": {
+                                      "thumbnails": [
+                                        {
+                                          "url": "https://yt3.ggpht.com/ytc/AIdro_lJKZj4ba9aw0qRbKwXMkHkZmq_eC_dtwPMOGFBYdCSIkEk=s68-c-k-c0x00ffffff-no-rj",
+                                          "width": 68,
+                                          "height": 68
+                                        }
+                                      ]
+                                    },
+                                    "navigationEndpoint": {
+                                      "commandMetadata": {
+                                        "webCommandMetadata": {
+                                          "url": "/@evan",
+                                          "webPageType": "WEB_PAGE_TYPE_CHANNEL",
+                                          "rootVe": 3611,
+                                          "apiUrl": "/youtubei/v1/browse"
+                                        }
+                                      },
+                                      "browseEndpoint": {
+                                        "browseId": "UCT7H_xchRHaT9zr5GalIZVA",
+                                        "canonicalBaseUrl": "/@evan"
+                                      }
+                                    }
+                                  }
+                                },
+                                "serviceEndpoint": {
+                                  "commandMetadata": {
+                                    "webCommandMetadata": {
+                                      "sendPost": true,
+                                      "apiUrl": "/youtubei/v1/feedback"
+                                    }
+                                  },
+                                  "feedbackEndpoint": {
+                                    "uiActions": {
+                                      "hideEnclosingContainer": true
+                                    }
+                                  }
+                                },
+                                "inlinePlaybackEndpoint": {
+                                  "commandMetadata": {
+                                    "webCommandMetadata": {
+                                      "url": "/watch?v=ZNSS4sTHAAQ&pp=YAHIAQGiBhUBhZRfrxl6j3-xTQTpXEFs_zZiEoI%3D",
+                                      "webPageType": "WEB_PAGE_TYPE_WATCH",
+                                      "rootVe": 3832
+                                    }
+                                  },
+                                  "watchEndpoint": {
+                                    "videoId": "ZNSS4sTHAAQ",
+                                    "playerParams": "YAHIAQGiBhUBhZRfrxl6j3-xTQTpXEFs_zZiEoI%3D",
+                                    "playerExtraUrlParams": [
+                                      {
+                                        "key": "inline",
+                                        "value": "1"
+                                      }
+                                    ],
+                                    "watchEndpointSupportedOnesieConfig": {
+                                      "html5PlaybackOnesieConfig": {
+                                        "commonConfig": {
+                                          "url": "https://rr2---sn-nvopjoxu-nunl.googlevideo.com/initplayback?source=youtube&oeis=1&c=WEB&oad=3200&ovd=3200&oaad=11000&oavd=11000&ocs=700&oewis=1&oputc=1&ofpcc=1&siu=1&msp=1&odepv=1&id=64d492e2c4c70004&ip=135.180.27.156&initcwndbps=3858750&mt=1784065751&oweuc="
+                                        }
+                                      }
+                                    }
+                                  }
+                                },
+                                "avatar": {}
+                              }
+                            }
+                          ],
+                          "subtitle": {
+                            "runs": [
+                              {
+                                "text": "Catch all the latest moments from the tournament"
+                              }
+                            ]
+                          },
+                          "primaryButton": {
+                            "buttonRenderer": {
+                              "style": "STYLE_MONO_TONAL",
+                              "size": "SIZE_DEFAULT",
+                              "isDisabled": false,
+                              "text": {
+                                "runs": [
+                                  {
+                                    "text": "Explore more"
+                                  }
+                                ]
+                              },
+                              "command": {
+                                "commandExecutorCommand": {
+                                  "commands": [
+                                    {
+                                      "commandMetadata": {
+                                        "webCommandMetadata": {
+                                          "url": "/results?search_query=FIFA+World+Cup+2026",
+                                          "webPageType": "WEB_PAGE_TYPE_SEARCH",
+                                          "rootVe": 4724
+                                        }
+                                      },
+                                      "searchEndpoint": {
+                                        "query": "FIFA World Cup 2026",
+                                        "pageType": "SEARCH_PAGE_TYPE_MAIN_RESULTS"
+                                      }
+                                    },
+                                    {
+                                      "commandMetadata": {
+                                        "webCommandMetadata": {
+                                          "sendPost": true,
+                                          "apiUrl": "/youtubei/v1/feedback"
+                                        }
+                                      },
+                                      "feedbackEndpoint": {
+                                        "uiActions": {
+                                          "hideEnclosingContainer": true
+                                        }
+                                      }
+                                    }
+                                  ]
+                                }
+                              }
+                            }
+                          },
+                          "impressionEndpoint": {
+                            "commandMetadata": {
+                              "webCommandMetadata": {
+                                "sendPost": true,
+                                "apiUrl": "/youtubei/v1/feedback"
+                              }
+                            },
+                            "feedbackEndpoint": {
+                              "uiActions": {
+                                "hideEnclosingContainer": false
+                              }
+                            }
+                          },
+                          "showMoreButton": {
+                            "buttonRenderer": {
+                              "style": "STYLE_OPACITY",
+                              "size": "SIZE_DEFAULT",
+                              "text": {
+                                "runs": [
+                                  {
+                                    "text": "Show more"
+                                  }
+                                ]
+                              },
+                              "icon": {
+                                "iconType": "EXPAND"
+                              }
+                            }
+                          },
+                          "isFirstFeedItem": false,
+                          "header": {
+                            "sectionHeaderViewModel": {
+                              "headline": {
+                                "content": "FIFA World Cup 2026™",
+                                "styleRuns": [
+                                  {
+                                    "startIndex": 0,
+                                    "length": 20,
+                                    "weight": 700
+                                  }
+                                ]
+                              },
+                              "leadingAccessory": {
+                                "avatar": {}
+                              },
+                              "bottomBadges": [
+                                {
+                                  "badgeViewModel": {
+                                    "badgeText": "YouTube featured",
+                                    "badgeStyle": "BADGE_PROMOTED"
+                                  }
+                                }
+                              ],
+                              "rendererContext": {
+                                "commandContext": {
+                                  "onTap": {
+                                    "innertubeCommand": {
+                                      "commandExecutorCommand": {
+                                        "commands": [
+                                          {
+                                            "commandMetadata": {
+                                              "webCommandMetadata": {
+                                                "url": "/results?search_query=FIFA+World+Cup+2026",
+                                                "webPageType": "WEB_PAGE_TYPE_SEARCH",
+                                                "rootVe": 4724
+                                              }
+                                            },
+                                            "searchEndpoint": {
+                                              "query": "FIFA World Cup 2026",
+                                              "pageType": "SEARCH_PAGE_TYPE_MAIN_RESULTS"
+                                            }
+                                          },
+                                          {
+                                            "commandMetadata": {
+                                              "webCommandMetadata": {
+                                                "sendPost": true,
+                                                "apiUrl": "/youtubei/v1/feedback"
+                                              }
+                                            },
+                                            "feedbackEndpoint": {
+                                              "uiActions": {
+                                                "hideEnclosingContainer": false
+                                              }
+                                            }
+                                          }
+                                        ]
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          },
+                          "overflowButton": {
+                            "menuRenderer": {
+                              "items": [
+                                {
+                                  "menuServiceItemRenderer": {
+                                    "text": {
+                                      "simpleText": "Not interested"
+                                    },
+                                    "icon": {
+                                      "iconType": "HIDE"
+                                    },
+                                    "serviceEndpoint": {
+                                      "commandMetadata": {
+                                        "webCommandMetadata": {
+                                          "sendPost": true,
+                                          "apiUrl": "/youtubei/v1/feedback"
+                                        }
+                                      },
+                                      "feedbackEndpoint": {
+                                        "uiActions": {
+                                          "hideEnclosingContainer": true
+                                        },
+                                        "actions": [
+                                          {
+                                            "replaceEnclosingAction": {
+                                              "item": {
+                                                "notificationMultiActionRenderer": {
+                                                  "responseText": {
+                                                    "runs": [
+                                                      {
+                                                        "text": "Got it. We'll tune your recommendations."
+                                                      }
+                                                    ]
+                                                  }
+                                                }
+                                              }
+                                            }
+                                          }
+                                        ]
+                                      }
+                                    }
+                                  }
+                                },
+                                {
+                                  "menuServiceItemRenderer": {
+                                    "text": {
+                                      "simpleText": "About YouTube featured"
+                                    },
+                                    "icon": {
+                                      "iconType": "INFO"
+                                    },
+                                    "serviceEndpoint": {
+                                      "showDialogCommand": {
+                                        "panelLoadingStrategy": {
+                                          "inlineContent": {
+                                            "dialogViewModel": {
+                                              "header": {
+                                                "dialogHeaderViewModel": {
+                                                  "headline": {
+                                                    "content": "About YouTube featured",
+                                                    "styleRuns": [
+                                                      {
+                                                        "startIndex": 0,
+                                                        "length": 22
+                                                      }
+                                                    ]
+                                                  }
+                                                }
+                                              },
+                                              "footer": {
+                                                "panelFooterViewModel": {
+                                                  "primaryButton": {
+                                                    "buttonViewModel": {
+                                                      "title": "Got it",
+                                                      "onTap": {
+                                                        "innertubeCommand": {
+                                                          "dismissDialogEndpoint": {}
+                                                        }
+                                                      },
+                                                      "style": "BUTTON_VIEW_MODEL_STYLE_MONO",
+                                                      "isFullWidth": true,
+                                                      "type": "BUTTON_VIEW_MODEL_TYPE_FILLED"
+                                                    }
+                                                  },
+                                                  "shouldHideDivider": true
+                                                }
+                                              },
+                                              "content": {
+                                                "basicContentViewModel": {
+                                                  "paragraphs": [
+                                                    {
+                                                      "text": {
+                                                        "content": "\"YouTube featured\" promotes YouTube features and programs, often using content that YouTube has chosen based on your viewing habits or through manual selections.",
+                                                        "styleRuns": [
+                                                          {
+                                                            "startIndex": 0,
+                                                            "length": 161
+                                                          }
+                                                        ]
+                                                      }
+                                                    }
+                                                  ]
+                                                }
+                                              }
+                                            }
+                                          }
+                                        }
+                                      }
+                                    }
+                                  }
+                                }
+                              ]
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

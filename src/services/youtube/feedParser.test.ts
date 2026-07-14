@@ -4,6 +4,9 @@ import channelLockup from "./fixtures/channel-videos-lockup.json";
 import homeSignedIn from "./fixtures/home-lockup-signedin.json";
 import homeSignedOut from "./fixtures/home-signedout.json";
 import subsVideoRenderer from "./fixtures/subscriptions-videorenderer.json";
+import homeRealBrandShelf from "./fixtures/home-real-brandshelf.json";
+import homeRealSignedIn from "./fixtures/home-real-signedin.json";
+import subsRealSignedIn from "./fixtures/subscriptions-real-signedin.json";
 
 describe("parseFeedPage — legacy videoRenderer shapes (subscriptions)", () => {
   const videos = parseFeedPage(subsVideoRenderer, "subscriptions");
@@ -73,6 +76,48 @@ describe("parseFeedPage — modern lockupViewModel shapes", () => {
     const videos = parseFeedPage(homeSignedIn, "home");
     expect(videos.some((v) => v.id === "PLplaylist000")).toBe(false);
     expect(videos).toHaveLength(1);
+  });
+});
+
+// Fixtures pruned from a real signed-in capture (2026-07-14, "Copy debug
+// fixture"): the true richGrid nesting, scrubbed of tracking/identity fields.
+// These lock the shapes YouTube actually serves logged-in users today.
+describe("parseFeedPage — real signed-in subscriptions capture", () => {
+  const videos = parseFeedPage(subsRealSignedIn, "subscriptions");
+
+  it("should parse every ordinary video with full metadata", () => {
+    expect(videos.map((v) => v.id)).toEqual(["1CQgZY8pzO4", "EY-7SbK_B5k"]);
+    const v = videos[0]!;
+    expect(v.title).toBe("Mikhail Tal's Spectacular Smash of the Scandinavian");
+    expect(v.channelTitle).toBe("ChessNetwork");
+    expect(v.channelId).toMatch(/^UC/);
+    expect(v.durationText).toBe("10:00");
+    expect(v.durationSec).toBe(600);
+    expect(v.publishedText).toBe("2 hours ago");
+    expect(v.viewCount).toBe(474);
+    expect(v.thumbnailUrl).toContain("i.ytimg.com");
+  });
+
+  it("should skip the Shorts shelf embedded in the grid", () => {
+    expect(JSON.stringify(subsRealSignedIn)).toContain("shortsLockupViewModel");
+    expect(videos.some((v) => v.title.includes("#shorts"))).toBe(false);
+  });
+});
+
+describe("parseFeedPage — real signed-in home capture", () => {
+  it("should parse recommendation lockups with full metadata", () => {
+    const videos = parseFeedPage(homeRealSignedIn, "home");
+    expect(videos.map((v) => v.id)).toEqual(["0DL9K3FCdxU", "LjvuwKXxfVc"]);
+    const v = videos[0]!;
+    expect(v.channelTitle).toBe("Chess Nexus");
+    expect(v.durationSec).toBe(579);
+    expect(v.viewCount).toBeGreaterThan(0);
+    expect(v.publishedAtApprox).not.toBeNull();
+  });
+
+  it("should skip brand promo shelves (advertiser-injected, not the user's feed)", () => {
+    expect(JSON.stringify(homeRealBrandShelf)).toContain("videoRenderer");
+    expect(parseFeedPage(homeRealBrandShelf, "home")).toEqual([]);
   });
 });
 

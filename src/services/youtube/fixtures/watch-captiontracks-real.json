@@ -1,0 +1,16 @@
+{
+  "captions": {
+    "playerCaptionsTracklistRenderer": {
+      "captionTracks": [
+        {
+          "baseUrl": "https://www.youtube.com/api/timedtext?v=0TILwM-FpLk&lang=en&kind=asr",
+          "languageCode": "en",
+          "kind": "asr",
+          "name": {
+            "simpleText": "English (auto-generated)"
+          }
+        }
+      ]
+    }
+  }
+}

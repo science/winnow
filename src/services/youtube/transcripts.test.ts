@@ -92,6 +92,26 @@ describe("extractTranscriptParams", () => {
   });
 });
 
+// Fixtures pruned from a real watch-page capture (2026-07-14): the shapes
+// YouTube actually serves, so synthetic drift can't hide a seam break.
+describe("real watch-page capture shapes", () => {
+  it("should pick the ASR English track from the real captionTracks shape", async () => {
+    const player = (await import("./fixtures/watch-captiontracks-real.json")).default;
+    const tracks = captionTracksFrom(player);
+    expect(tracks.length).toBeGreaterThan(0);
+    const picked = pickCaptionTrack(tracks);
+    expect(picked?.languageCode).toBe("en");
+    expect(picked?.baseUrl).toContain("timedtext");
+  });
+
+  it("should find getTranscriptEndpoint params in the real engagement-panel shape", async () => {
+    const data = (await import("./fixtures/watch-transcript-params-real.json")).default;
+    const params = extractTranscriptParams(data);
+    expect(params).toMatch(/^Cgsw/);
+    expect(params!.length).toBeGreaterThan(100);
+  });
+});
+
 describe("parseInnertubeTranscript", () => {
   const modern = {
     actions: [

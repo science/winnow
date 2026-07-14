@@ -190,6 +190,10 @@ function publishedAtFrom(publishedText: string | null): number | null {
 // reelItemRenderer) and ads (adSlotRenderer) are deliberately absent.
 const VIDEO_KEYS = new Set(["videoRenderer", "gridVideoRenderer", "compactVideoRenderer"]);
 
+// Container subtrees skipped wholesale: advertiser/brand promo shelves hold
+// ordinary videoRenderers, but they're injected promotion, not the feed.
+const SKIP_SUBTREE_KEYS = new Set(["brandVideoShelfRenderer"]);
+
 /**
  * Extract all videos from a ytInitialData tree (any feed page shape).
  * Never throws; unrecognized structures yield an empty list.
@@ -212,6 +216,7 @@ export function parseFeedPage(data: unknown, source: FeedSource): Video[] {
     }
     if (!isObj(node)) return;
     for (const [key, value] of Object.entries(node)) {
+      if (SKIP_SUBTREE_KEYS.has(key)) continue;
       if (!isObj(value)) {
         walk(value);
         continue;
