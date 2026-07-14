@@ -17,15 +17,16 @@
 <div class="space-y-4">
   <a href="#/" class="text-sm text-ink-muted hover:text-ink">← Back to feed</a>
 
-  <!-- embedUrl carries the no-autoplay/nocookie rationale; the DNR rule in
-       public/dnr-rules.json injects the Referer YouTube requires (error 153). -->
+  <!-- embedUrl carries the start-on-open/nocookie rationale; the DNR rule in
+       public/dnr-rules.json injects the Referer YouTube requires (error 153).
+       allow="autoplay" is required or the browser ignores autoplay=1. -->
   <div class="aspect-video w-full overflow-hidden rounded-lg bg-black">
     <iframe
       data-testid="watch-embed"
       src={embedUrl(videoId)}
       title={video?.title ?? "YouTube video"}
       class="h-full w-full"
-      allow="encrypted-media; picture-in-picture; fullscreen"
+      allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
       allowfullscreen
     ></iframe>
   </div>

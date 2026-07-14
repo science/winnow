@@ -25,10 +25,16 @@ export async function setEmbedReferer(page: Page, referer: string | null): Promi
   });
 }
 
+/** "Playable" = the player committed to a working state: either it is already
+ *  playing (start-on-open succeeded; Play flips to Pause) or it shows the
+ *  Play button (the browser's autoplay policy blocked the start — acceptable
+ *  degrade). Either way the error screen must be absent. */
 export async function expectEmbedPlayable(page: Page): Promise<void> {
-  await expect(embedFrame(page).getByRole("button", { name: "Play video" })).toBeVisible({
-    timeout: 30_000,
-  });
+  await expect(
+    embedFrame(page)
+      .getByRole("button", { name: "Play video" })
+      .or(embedFrame(page).getByRole("button", { name: /^Pause/ })),
+  ).toBeVisible({ timeout: 30_000 });
   await expect(embedFrame(page).getByText("Video player configuration error")).toBeHidden();
 }
 

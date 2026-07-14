@@ -7,7 +7,7 @@ import {
   clickWinnowedFold,
   clickFirstVideoInTier,
   expectWatchViewForSomeVideo,
-  expectNoAutoplayInEmbed,
+  expectStartOnOpenEmbed,
   clickBackToFeed,
   expectFeedBottomMarker,
 } from "../helpers";
@@ -34,13 +34,13 @@ test("should bucket demo videos into tiers with the bait behind the fold", async
   await expectFeedBottomMarker(page);
 });
 
-test("should open the watch view from a card, with no autoplay, and return", async ({ page }) => {
+test("should open the watch view from a card with start-on-open playback, and return", async ({ page }) => {
   await openFeedDemo(page);
   await waitForScoredFeed(page);
 
   await clickFirstVideoInTier(page, "top");
   await expectWatchViewForSomeVideo(page);
-  await expectNoAutoplayInEmbed(page);
+  await expectStartOnOpenEmbed(page);
 
   await clickBackToFeed(page);
   await waitForScoredFeed(page);

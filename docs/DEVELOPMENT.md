@@ -39,7 +39,7 @@ Status as of 2026-07-14: MVP confirmed working by the user against real YouTube 
 | `src/stores/settingsStore.ts` | Settings/profile stores, `isConfigured`, `applyKeyChange`, `missingConfig` | Settings semantics |
 | `src/stores/feedStore.ts` | Videos/scores/watched/status stores, `tiers`/`collapsed` deriveds, `initFeed`/`refresh` (TTL 30 min), `transcriptCoverage`, pruning | Feed state machine |
 | `src/stores/feedbackStore.ts` | Persisted votes (`toggleVote`); NEVER pruned with the video window | Vote persistence |
-| `src/components/` | `App` (config gate + routes), `Feed` (tier sections), `VideoCard`, `ScoreBadge`, `Watch` (nocookie embed, no autoplay), `Settings`, `Onboarding` | UI |
+| `src/components/` | `App` (config gate + routes), `Feed` (tier sections), `VideoCard`, `ScoreBadge`, `Watch` (nocookie embed, start-on-open, no autoplay-next), `Settings`, `Onboarding` | UI |
 | `src/background.ts` | Toolbar click → open/focus feed tab. Import-free; keep it that way | Almost never |
 | `e2e/helpers/` | **All Playwright selectors** (house rule: specs use helpers only) | Any e2e work |
 | `e2e/nonlive/`, `e2e/live/` | Demo-mode specs (CI) / real-provider specs (manual) | Recipes 6, 7 |

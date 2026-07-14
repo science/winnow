@@ -33,8 +33,12 @@ describe("embedUrl", () => {
     expect(url).toContain("https://www.youtube-nocookie.com/embed/abc123DEF45");
   });
 
-  it("should never enable autoplay", () => {
-    expect(embedUrl("abc123DEF45")).not.toContain("autoplay");
+  it("should request start-on-open playback (the clicked video plays immediately)", () => {
+    expect(embedUrl("abc123DEF45")).toContain("autoplay=1");
+  });
+
+  it("should never mute to smuggle playback past the browser's autoplay policy", () => {
+    expect(embedUrl("abc123DEF45")).not.toContain("mute");
   });
 });
 

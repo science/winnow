@@ -148,9 +148,12 @@ export async function expectWatchViewForSomeVideo(page: Page): Promise<void> {
   await expect(page.locator("iframe[src*='youtube-nocookie.com/embed/']")).toBeVisible();
 }
 
-export async function expectNoAutoplayInEmbed(page: Page): Promise<void> {
+/** Start-on-open: the clicked video is asked to play immediately (autoplay=1,
+ *  unmuted). Autoplay-NEXT remains forbidden — nothing queues after. */
+export async function expectStartOnOpenEmbed(page: Page): Promise<void> {
   const src = await page.locator("iframe[src*='youtube-nocookie.com']").getAttribute("src");
-  expect(src).not.toContain("autoplay");
+  expect(src).toContain("autoplay=1");
+  expect(src).not.toContain("mute");
 }
 
 export async function clickBackToFeed(page: Page): Promise<void> {

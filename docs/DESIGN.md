@@ -6,7 +6,7 @@ YouTube's feed optimizes for engagement: minutes watched, clicks, return visits.
 
 Non-negotiables (rejected features, forever):
 
-- **No autoplay.** Nothing plays until the user presses play; nothing queues after.
+- **No autoplay-next.** The video the user clicked starts playing on open (start-on-open is intent, not a dark pattern); nothing ever queues or plays after it ends.
 - **No infinite scroll.** The feed is bounded and has a bottom, and says so.
 - **No engagement-ranked anything.** Ordering is score tiers × recency.
 - **Nothing is silently deleted.** Winnowed-out videos sit behind a one-click fold with the reason each was filtered — the curation must stay auditable or the user can't trust it.
