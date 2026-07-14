@@ -1,0 +1,102 @@
+{
+  "__comment": "Synthetic fixture: signed-in homepage shape using modern lockupViewModel with a channel metadata row, plus a playlist lockup that must be skipped (contentType filter).",
+  "contents": {
+    "twoColumnBrowseResultsRenderer": {
+      "tabs": [
+        {
+          "tabRenderer": {
+            "content": {
+              "richGridRenderer": {
+                "contents": [
+                  {
+                    "richItemRenderer": {
+                      "content": {
+                        "lockupViewModel": {
+                          "contentImage": {
+                            "thumbnailViewModel": {
+                              "image": {
+                                "sources": [
+                                  { "url": "https://i.ytimg.com/vi/home789JKL01/hqdefault.jpg", "width": 336, "height": 188 }
+                                ]
+                              },
+                              "overlays": [
+                                {
+                                  "thumbnailBottomOverlayViewModel": {
+                                    "badges": [
+                                      {
+                                        "thumbnailBadgeViewModel": {
+                                          "text": "23:22",
+                                          "badgeStyle": "THUMBNAIL_OVERLAY_BADGE_STYLE_DEFAULT"
+                                        }
+                                      }
+                                    ]
+                                  }
+                                }
+                              ]
+                            }
+                          },
+                          "metadata": {
+                            "lockupMetadataViewModel": {
+                              "title": { "content": "The Recommended Video That Is Actually Good" },
+                              "metadata": {
+                                "contentMetadataViewModel": {
+                                  "metadataRows": [
+                                    {
+                                      "metadataParts": [
+                                        {
+                                          "text": {
+                                            "content": "Quality Channel",
+                                            "commandRuns": [
+                                              {
+                                                "onTap": {
+                                                  "innertubeCommand": {
+                                                    "browseEndpoint": { "browseId": "UCquality9876" }
+                                                  }
+                                                }
+                                              }
+                                            ]
+                                          }
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "metadataParts": [
+                                        { "text": { "content": "2.1M views" } },
+                                        { "text": { "content": "3 weeks ago" } }
+                                      ]
+                                    }
+                                  ]
+                                }
+                              }
+                            }
+                          },
+                          "contentId": "home789JKL01",
+                          "contentType": "LOCKUP_CONTENT_TYPE_VIDEO"
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "richItemRenderer": {
+                      "content": {
+                        "lockupViewModel": {
+                          "contentId": "PLplaylist000",
+                          "contentType": "LOCKUP_CONTENT_TYPE_PLAYLIST",
+                          "metadata": {
+                            "lockupMetadataViewModel": {
+                              "title": { "content": "A playlist that should be skipped" }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

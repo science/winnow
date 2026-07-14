@@ -1,0 +1,91 @@
+{
+  "contents": {
+    "twoColumnBrowseResultsRenderer": {
+      "tabs": [
+        {
+          "tabRenderer": {
+            "selected": true,
+            "content": {
+              "richGridRenderer": {
+                "contents": [
+                  {
+                    "richSectionRenderer": {
+                      "content": {
+                        "feedNudgeRenderer": {
+                          "title": {
+                            "runs": [
+                              {
+                                "text": "Try searching to get started"
+                              }
+                            ],
+                            "accessibility": {
+                              "accessibilityData": {
+                                "label": "Try searching to get started"
+                              }
+                            }
+                          },
+                          "subtitle": {
+                            "runs": [
+                              {
+                                "text": "Start watching videos to help us build a feed of videos you'll love."
+                              }
+                            ],
+                            "accessibility": {
+                              "accessibilityData": {
+                                "label": "Start watching videos to help us build a feed of videos you'll love."
+                              }
+                            }
+                          },
+                          "impressionEndpoint": {
+                            "clickTrackingParams": "CBUQoogMIhMI8PinocbRlQMV1w2QBh1sRjydygEEhOf4wA==",
+                            "commandMetadata": {
+                              "webCommandMetadata": {
+                                "sendPost": true,
+                                "apiUrl": "/youtubei/v1/feedback"
+                              }
+                            },
+                            "feedbackEndpoint": {
+                              "feedbackToken": "AB9zfpIxlQD_Bsvscxkf-roIxAzXdkMTnUdrreOjRzGUUZwHCYsZbOhA6Gbrq79GIDDDq9OGw4wAAsL-ntZIA0nbvLP5Pf2eY6VBBaCqpLRl7WKd1sheN2T0dSc9AmJlwwf6byw01GMndyF5Va92MiWzIIvDJBHY4SxX6C-UqhZleI50sNPzPZg"
+                            }
+                          },
+                          "trackingParams": "CBUQoogMIhMI8PinocbRlQMV1w2QBh1sRjyd",
+                          "applyModernizedStyle": true,
+                          "contentsLocation": "FEED_NUDGE_CONTENTS_LOCATION_UNKNOWN",
+                          "trimStyle": "FEED_NUDGE_TRIM_STYLE_NO_TRIM",
+                          "backgroundStyle": "FEED_NUDGE_BACKGROUND_STYLE_UNKNOWN",
+                          "disableDropShadow": false
+                        }
+                      },
+                      "trackingParams": "CBQQ45cFGAAiEwjw-KehxtGVAxXXDZAGHWxGPJ0="
+                    }
+                  }
+                ],
+                "trackingParams": "CBMQ8eIEIhMI8PinocbRlQMV1w2QBh1sRjyd",
+                "targetId": "browse-feedFEwhat_to_watch",
+                "reflowOptions": {
+                  "minimumRowsOfVideosAtStart": 2,
+                  "minimumRowsOfVideosBetweenSections": 1
+                },
+                "layoutSizing": "RICH_GRID_LAYOUT_SIZING_STANDARD"
+              }
+            },
+            "tabIdentifier": "FEwhat_to_watch",
+            "trackingParams": "CBIQ8JMBGAsiEwjw-KehxtGVAxXXDZAGHWxGPJ0="
+          }
+        }
+      ]
+    }
+  },
+  "header": {
+    "feedTabbedHeaderRenderer": {
+      "title": {
+        "runs": [
+          {
+            "text": "Home"
+          }
+        ]
+      }
+    }
+  },
+  "trackingParams": "CAAQhGciEwjw-KehxtGVAxXXDZAGHWxGPJ3KAQSE5_jA"
+}

@@ -1,0 +1,128 @@
+{
+  "__comment": "Synthetic fixture: legacy videoRenderer shapes as served on the subscriptions feed. Includes a normal video, a live stream, a defective item (no videoId), a Shorts shelf, and an ad slot — the last three must be skipped by the parser.",
+  "contents": {
+    "twoColumnBrowseResultsRenderer": {
+      "tabs": [
+        {
+          "tabRenderer": {
+            "content": {
+              "richGridRenderer": {
+                "contents": [
+                  {
+                    "richItemRenderer": {
+                      "content": {
+                        "videoRenderer": {
+                          "videoId": "abc123DEF45",
+                          "title": { "runs": [{ "text": "How Winnowing Works" }] },
+                          "ownerText": {
+                            "runs": [
+                              {
+                                "text": "Grain Channel",
+                                "navigationEndpoint": {
+                                  "browseEndpoint": { "browseId": "UCgrain12345" }
+                                }
+                              }
+                            ]
+                          },
+                          "publishedTimeText": { "simpleText": "3 days ago" },
+                          "lengthText": { "simpleText": "12:34" },
+                          "viewCountText": { "simpleText": "123,456 views" },
+                          "thumbnail": {
+                            "thumbnails": [
+                              { "url": "https://i.ytimg.com/vi/abc123DEF45/mqdefault.jpg", "width": 320, "height": 180 },
+                              { "url": "https://i.ytimg.com/vi/abc123DEF45/hqdefault.jpg", "width": 480, "height": 270 }
+                            ]
+                          },
+                          "descriptionSnippet": {
+                            "runs": [{ "text": "A video about separating wheat from chaff." }]
+                          }
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "richItemRenderer": {
+                      "content": {
+                        "videoRenderer": {
+                          "videoId": "live456GHI78",
+                          "title": { "runs": [{ "text": "Harvest Livestream" }] },
+                          "ownerText": {
+                            "runs": [
+                              {
+                                "text": "Grain Channel",
+                                "navigationEndpoint": {
+                                  "browseEndpoint": { "browseId": "UCgrain12345" }
+                                }
+                              }
+                            ]
+                          },
+                          "viewCountText": { "runs": [{ "text": "1,024" }, { "text": " watching" }] },
+                          "badges": [
+                            {
+                              "metadataBadgeRenderer": {
+                                "style": "BADGE_STYLE_TYPE_LIVE_NOW",
+                                "label": "LIVE"
+                              }
+                            }
+                          ],
+                          "thumbnail": {
+                            "thumbnails": [
+                              { "url": "https://i.ytimg.com/vi/live456GHI78/hqdefault_live.jpg", "width": 480, "height": 270 }
+                            ]
+                          }
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "richItemRenderer": {
+                      "content": {
+                        "videoRenderer": {
+                          "title": { "runs": [{ "text": "Defective item with no videoId" }] }
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "richSectionRenderer": {
+                      "content": {
+                        "richShelfRenderer": {
+                          "title": { "runs": [{ "text": "Shorts" }] },
+                          "contents": [
+                            {
+                              "richItemRenderer": {
+                                "content": {
+                                  "shortsLockupViewModel": {
+                                    "entityId": "shorts-shelf-item-1",
+                                    "onTap": {
+                                      "innertubeCommand": {
+                                        "reelWatchEndpoint": { "videoId": "shortAAA111" }
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          ]
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "richItemRenderer": {
+                      "content": {
+                        "adSlotRenderer": {
+                          "adSlotMetadata": { "slotId": "ad-slot-1" }
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}
