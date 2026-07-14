@@ -1,8 +1,15 @@
 <script lang="ts">
   import { route } from "./lib/router";
+  import { isConfigured, profile, settings, settingsReady } from "./stores/settingsStore";
   import Feed from "./components/Feed.svelte";
   import Watch from "./components/Watch.svelte";
   import Settings from "./components/Settings.svelte";
+  import Onboarding from "./components/Onboarding.svelte";
+
+  let ready = $state(false);
+  void settingsReady.then(() => (ready = true));
+
+  const configured = $derived(isConfigured($settings, $profile));
 </script>
 
 <div class="mx-auto min-h-screen max-w-5xl px-4 pb-16">
@@ -18,10 +25,14 @@
   </header>
 
   <main>
-    {#if $route.name === "watch"}
+    {#if !ready}
+      <!-- storage load is near-instant; avoid flashing onboarding -->
+    {:else if $route.name === "watch"}
       <Watch videoId={$route.videoId} />
     {:else if $route.name === "settings"}
       <Settings />
+    {:else if !configured}
+      <Onboarding />
     {:else}
       <Feed />
     {/if}

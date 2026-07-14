@@ -1,0 +1,64 @@
+import type { Profile, Video } from "../../lib/types";
+
+// Bump whenever the system prompt or output schema changes — it participates
+// in the score-cache hash, so a bump cleanly re-scores everything.
+export const PROMPT_VERSION = 1;
+
+export const BATCH_SIZE = 20;
+
+export const SYSTEM_PROMPT = `You curate a YouTube feed for one person. You will receive their interest profile (what they want more of and less of) and a batch of videos with metadata (title, channel, duration, age, view count, source, and sometimes a description snippet).
+
+Score each video 0-100 for how likely watching it leaves this person genuinely satisfied and enriched afterward — not how likely they are to click it. Reward substance that matches the profile. Penalize clickbait, engagement bait, manufactured outrage, and titles or framing that overpromise (withheld subject, "you won't believe", all-caps hype, fear-mongering thumbnails). A video can be squarely on-topic for the profile and still be clickbait — score it accordingly and set the clickbait flag.
+
+Source "home" means YouTube's recommendation algorithm chose it (be more skeptical of engagement optimization); "subscriptions" means the person chose to follow this channel.
+
+Calibration: 80-100 clearly worth their time; 50-79 plausibly worth it; 0-49 skip. Use the full range — differentiate.
+
+For each video return: videoId, score, a reason of at most 120 characters written directly to the user explaining the score, and a clickbait boolean.`;
+
+// One schema shared by both providers. Kept minimal: Anthropic strict
+// structured outputs reject numeric min/max, so bounds are clamped
+// client-side in scorer.ts instead.
+export const SCORES_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: ["scores"],
+  properties: {
+    scores: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["videoId", "score", "reason", "clickbait"],
+        properties: {
+          videoId: { type: "string" },
+          score: { type: "integer" },
+          reason: { type: "string" },
+          clickbait: { type: "boolean" },
+        },
+      },
+    },
+  },
+} as const;
+
+export function buildUserMessage(videos: Video[], profile: Profile): string {
+  const items = videos.map((v) => ({
+    videoId: v.id,
+    title: v.title,
+    channel: v.channelTitle ?? "unknown",
+    duration: v.durationText ?? (v.isLive ? "live now" : "unknown"),
+    age: v.publishedText ?? "unknown",
+    views: v.viewCountText ?? "unknown",
+    source: v.source,
+    ...(v.descriptionSnippet ? { description: v.descriptionSnippet.slice(0, 500) } : {}),
+  }));
+  return [
+    "<profile>",
+    `More of this: ${profile.moreOf.trim() || "(not specified)"}`,
+    `Less of this: ${profile.lessOf.trim() || "(not specified)"}`,
+    "</profile>",
+    "",
+    `Score these ${items.length} videos:`,
+    JSON.stringify(items, null, 1),
+  ].join("\n");
+}
