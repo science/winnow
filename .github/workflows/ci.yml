@@ -24,6 +24,10 @@ jobs:
         run: npm run check
       - name: Unit tests
         run: npm test
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
+      - name: E2E tests (demo mode, no network/keys)
+        run: npm run test:e2e
       - name: Build & package
         run: npm run zip
       - name: Upload extension artifact

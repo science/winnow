@@ -12,6 +12,7 @@ import { BATCH_SIZE, PROMPT_VERSION } from "./prompt";
 import { ProviderError, isRetryable, type ScoreBatchFn } from "./providerTypes";
 import { scoreBatchAnthropic, ANTHROPIC_MODEL } from "./anthropicScorer";
 import { scoreBatchOpenai, OPENAI_MODEL } from "./openaiScorer";
+import { scoreBatchDemo, DEMO_MODEL } from "./demoScorer";
 import { videos as videosStore, scores as scoresStore, pendingScores, status } from "../../stores/feedStore";
 import { settings, profile as profileStore, settingsReady } from "../../stores/settingsStore";
 import { fetchTranscriptExcerpt } from "../youtube/transcripts";
@@ -165,11 +166,17 @@ export async function scoreFeed(): Promise<void> {
   await settingsReady;
   const $settings = get(settings);
   const $profile = get(profileStore);
-  const apiKey = $settings.provider === "anthropic" ? $settings.anthropicApiKey : $settings.openaiApiKey;
-  if (!apiKey || (!$profile.moreOf.trim() && !$profile.lessOf.trim())) return;
+  const demo = isDemoMode();
+  const realKey = $settings.provider === "anthropic" ? $settings.anthropicApiKey : $settings.openaiApiKey;
+  if (!demo && (!realKey || (!$profile.moreOf.trim() && !$profile.lessOf.trim()))) return;
 
-  const adapter = $settings.provider === "anthropic" ? scoreBatchAnthropic : scoreBatchOpenai;
-  const model = $settings.provider === "anthropic" ? ANTHROPIC_MODEL : OPENAI_MODEL;
+  const apiKey = demo ? "demo" : realKey!;
+  const adapter = demo
+    ? scoreBatchDemo
+    : $settings.provider === "anthropic"
+      ? scoreBatchAnthropic
+      : scoreBatchOpenai;
+  const model = demo ? DEMO_MODEL : $settings.provider === "anthropic" ? ANTHROPIC_MODEL : OPENAI_MODEL;
   const hash = profileHash($profile, PROMPT_VERSION, model);
 
   const stored = await storageGet<StoredScores>(KEYS.scores);
