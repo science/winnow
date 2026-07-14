@@ -2,13 +2,48 @@
   import { applyKeyChange, profile, settings } from "../stores/settingsStore";
   import { KEYS, storageRemove } from "../lib/storage";
   import { scores } from "../stores/feedStore";
+  import { feedback } from "../stores/feedbackStore";
   import { scoreFeed } from "../services/scoring/scorer";
+  import {
+    MIN_VOTES_FOR_SUGGESTION,
+    suggestProfileUpdate,
+    type ProfileSuggestion,
+  } from "../services/scoring/profileSuggest";
   import { lastCaptures } from "../services/youtube/ytPage";
   import { lastTranscriptCapture } from "../services/youtube/transcripts";
   import type { Provider } from "../lib/types";
 
   let saved = $state(false);
   let captureMessage = $state("");
+  let suggesting = $state(false);
+  let suggestion = $state<ProfileSuggestion | null>(null);
+  let suggestError = $state("");
+
+  const voteCount = $derived(Object.keys($feedback).length);
+
+  async function runSuggest(): Promise<void> {
+    suggesting = true;
+    suggestError = "";
+    suggestion = null;
+    try {
+      suggestion = await suggestProfileUpdate();
+    } catch (err) {
+      suggestError = err instanceof Error ? err.message : "Suggestion failed.";
+    } finally {
+      suggesting = false;
+    }
+  }
+
+  function applySuggestion(): void {
+    const s = suggestion;
+    if (!s) return;
+    profile.update((p) => ({ ...p, moreOf: s.moreOf, lessOf: s.lessOf, updatedAt: Date.now() }));
+    suggestion = null;
+    flashSaved();
+    // The profileHash change makes this a clean full re-score — identical
+    // semantics to editing the profile by hand.
+    void scoreFeed();
+  }
 
   function setProvider(p: Provider): void {
     settings.update((s) => ({ ...s, provider: p }));
@@ -142,6 +177,55 @@
       Keys live only in this browser's extension storage and are sent only to the provider you chose.
     </p>
     {#if saved}<p class="text-xs text-accent">Saved.</p>{/if}
+  </section>
+
+  <section class="space-y-3">
+    <h2 class="text-lg font-medium">Feedback</h2>
+    <p class="text-sm text-ink-muted" data-testid="feedback-count">
+      You've rated {voteCount} {voteCount === 1 ? "video" : "videos"} (Good pick / Not for me).
+    </p>
+    <button
+      onclick={runSuggest}
+      disabled={voteCount < MIN_VOTES_FOR_SUGGESTION || suggesting}
+      class="rounded-md bg-surface-raised px-4 py-2 text-sm text-ink hover:bg-surface-hover disabled:opacity-50"
+      data-testid="suggest-profile"
+      >Suggest profile updates from my feedback</button
+    >
+    {#if voteCount < MIN_VOTES_FOR_SUGGESTION}
+      <p class="text-xs text-ink-faint">
+        Rate at least {MIN_VOTES_FOR_SUGGESTION} videos in the feed to unlock suggestions.
+      </p>
+    {/if}
+    {#if suggesting}<p class="text-xs text-ink-muted">Analyzing your rated videos…</p>{/if}
+    {#if suggestError}<p class="text-xs text-danger">{suggestError}</p>{/if}
+    {#if suggestion}
+      <div
+        class="space-y-3 rounded-md border border-accent/40 bg-surface-raised p-4"
+        data-testid="profile-suggestion"
+      >
+        <div>
+          <p class="text-xs font-medium uppercase tracking-wide text-ink-faint">Suggested — More of this</p>
+          <p class="mt-1 whitespace-pre-wrap text-sm text-ink">{suggestion.moreOf}</p>
+        </div>
+        <div>
+          <p class="text-xs font-medium uppercase tracking-wide text-ink-faint">Suggested — Less of this</p>
+          <p class="mt-1 whitespace-pre-wrap text-sm text-ink">{suggestion.lessOf}</p>
+        </div>
+        <p class="text-xs italic text-ink-muted">{suggestion.rationale}</p>
+        <div class="flex gap-2">
+          <button
+            onclick={applySuggestion}
+            class="rounded-md bg-accent-muted px-4 py-2 text-sm text-white hover:opacity-90"
+            data-testid="apply-suggestion">Apply (re-scores the feed)</button
+          >
+          <button
+            onclick={() => (suggestion = null)}
+            class="rounded-md bg-surface-raised px-4 py-2 text-sm text-ink hover:bg-surface-hover"
+            data-testid="dismiss-suggestion">Dismiss</button
+          >
+        </div>
+      </div>
+    {/if}
   </section>
 
   <section class="space-y-3">

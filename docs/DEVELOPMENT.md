@@ -20,19 +20,24 @@ Status as of 2026-07-14: MVP confirmed working by the user against real YouTube 
 | `src/lib/storage.ts` | `KEYS` registry + the ONLY storage chokepoint (webext → localStorage → memory) | New persisted key (also update DESIGN.md schema table) |
 | `src/lib/tiers.ts` | `TIER_THRESHOLDS`, `bucketVideos`, `scoresCollapse` | Tier logic, sort order, collapse heuristic |
 | `src/lib/format.ts` | Loose parsing of YouTube display text (durations, view counts, relative ages) | New display-text shape shows up |
+| `src/lib/feedback.ts` | Pure vote bookkeeping: `applyVote` (toggle/replace/evict, cap 200), `recentExamples` for the prompt | Vote semantics |
 | `src/lib/profileHash.ts` | fnv1a + score-cache invalidation hash | Rarely; hash inputs change via prompt.ts/model consts |
 | `src/lib/router.ts` | Hash routes `#/`, `#/watch/<id>`, `#/settings` | New route |
 | `src/lib/logger.ts` | `log.debug/info` (dev-only, tree-shaken) vs `log.warn/error` (ship) | Never add bare `console.*` |
-| `src/services/youtube/ytPage.ts` | Credentialed page fetch, `ytInitialData` extraction, signed-out detection, `lastCaptures` (feeds the "Copy debug fixture" button) | Fetch/extraction issues |
+| `src/services/youtube/pageExtract.ts` | Balanced-brace JSON-blob extraction (string/escape-aware) shared by ytPage and transcripts | Blob extraction breaks |
+| `src/services/youtube/ytPage.ts` | Credentialed page fetch, `ytInitialData` + ytcfg extraction (`extractInnertubeConfig`), signed-out detection, `lastCaptures` (feeds the "Copy debug fixture" button) | Fetch/extraction issues |
 | `src/services/youtube/feedParser.ts` | **The fragility boundary.** ytInitialData → `Video[]`; deep-walk over `videoRenderer`/`gridVideoRenderer`/`compactVideoRenderer` + `lockupViewModel` | YouTube changes shapes (see recipe 2) |
 | `src/services/youtube/feedSource.ts` | `isDemoMode()`, demo fixtures, `loadFeeds()` merge/dedupe/cap (300), partial-failure warnings | Feed sources, demo behavior |
-| `src/services/youtube/transcripts.ts` | Watch page → caption track → json3 → 2k-char excerpt; null on ANY failure | Transcript issues (unverified seam — QUESTIONS #4) |
+| `src/services/youtube/transcripts.ts` | Two-path excerpt fetch: timedtext json3 → InnerTube `get_transcript` fallback; null on ANY failure; `lastTranscriptCapture` debug capture | Transcript issues (in-browser verdict pending — QUESTIONS #4) |
 | `src/services/scoring/prompt.ts` | `PROMPT_VERSION`, `BATCH_SIZE`, system prompt, shared JSON schema, user-message builder | Prompt changes (see recipe 7 — bump the version!) |
 | `src/services/scoring/providerTypes.ts` | `ScoreBatchFn` interface, `ProviderError` taxonomy (`auth/rate/server/network/bad_request/bad_response`), `isRetryable` | New provider or error kind |
-| `src/services/scoring/{anthropic,openai,demo}Scorer.ts` | One `ScoreBatchFn` each; model IDs are single reviewed constants | Provider/model changes |
-| `src/services/scoring/scorer.ts` | `runScoring` (pure-ish orchestrator: batching, concurrency 2, retry, clamping, hallucinated-id filtering) + `scoreFeed` (store wiring, cache, transcript enrichment) | Scoring pipeline changes |
+| `src/services/scoring/structuredCall.ts` | ONE structured-output call, either provider (forced tool / json_schema, headers, error taxonomy) | New call types (two-phase `translateProfile` goes here) |
+| `src/services/scoring/{anthropic,openai,demo}Scorer.ts` | One `ScoreBatchFn` each (thin wrappers over structuredCall); model IDs are single reviewed constants | Provider/model changes |
+| `src/services/scoring/scorer.ts` | `runScoring` (pure-ish orchestrator: batching, concurrency 2, retry, clamping, hallucinated-id filtering) + `scoreFeed` (store wiring, cache, transcript enrichment + coverage) | Scoring pipeline changes |
+| `src/services/scoring/profileSuggest.ts` | Feedback → suggested moreOf/lessOf replacement (uncached structured call, demo stub, `MIN_VOTES_FOR_SUGGESTION`) | Suggestion quality/flow |
 | `src/stores/settingsStore.ts` | Settings/profile stores, `isConfigured`, `applyKeyChange`, `missingConfig` | Settings semantics |
-| `src/stores/feedStore.ts` | Videos/scores/watched/status stores, `tiers`/`collapsed` deriveds, `initFeed`/`refresh` (TTL 30 min) | Feed state machine |
+| `src/stores/feedStore.ts` | Videos/scores/watched/status stores, `tiers`/`collapsed` deriveds, `initFeed`/`refresh` (TTL 30 min), `transcriptCoverage`, pruning | Feed state machine |
+| `src/stores/feedbackStore.ts` | Persisted votes (`toggleVote`); NEVER pruned with the video window | Vote persistence |
 | `src/components/` | `App` (config gate + routes), `Feed` (tier sections), `VideoCard`, `ScoreBadge`, `Watch` (nocookie embed, no autoplay), `Settings`, `Onboarding` | UI |
 | `src/background.ts` | Toolbar click → open/focus feed tab. Import-free; keep it that way | Almost never |
 | `e2e/helpers/` | **All Playwright selectors** (house rule: specs use helpers only) | Any e2e work |
@@ -54,6 +59,8 @@ Things that WILL bite if forgotten:
 - **`feedParser.ts` never throws.** A malformed item is skipped, never fatal. Every recognized shape has a fixture test. Don't widen the parse surface casually.
 - **Store pattern (wolfechat):** init from storage, then `subscribe → persist`, gated by a `persist` flag so the initial default write doesn't clobber stored state before load. Copy `settingsStore.ts` when adding a store. Svelte 5 runes are for component-local state only; anything cross-component or persisted is a store.
 - **`isConfigured` requires a key for the *selected* provider.** `applyKeyChange` re-points the provider at whichever key exists — keep that invariant or onboarding silently deadlocks (this was the first real-user bug).
+- **Feedback is deliberately NOT a profileHash input.** Votes never invalidate cached scores; they ride in prompts for future cache misses, and "Re-score everything" is the feed-wide apply. Hashing feedback would full-re-score on every click. The voted video itself moves tiers instantly via `bucketVideos`' vote override (a user vote outranks the score AND the clickbait demotion).
+- **Profile suggestions apply only on explicit user approval** ("suggested, never silent" — product rule). Apply routes through a normal `profile.update`, so the re-score falls out of the hash change.
 - **Demo scorer is deterministic by design** (fnv1a of videoId). Nonlive e2e asserts exact tier placements (`abc123DEF45` → top, `live456GHI78` → winnowed). Changing its math means recomputing those expectations. Two deliberate e2e seams: ids prefixed `unvet` never get a demo score (exercises the awaiting-vetting fold), and `?slow=1` alongside `?demo=1` delays each demo batch so in-progress scoring states are observable.
 - **Unvetted videos never render as browsable feed items.** While a run is active the feed shows a progress panel (`scoring-progress`); leftovers a run couldn't score sit behind the `unvetted-fold` (with Retry inside). Don't reintroduce an always-visible unscored section.
 - **`log.debug/info` don't exist in production builds.** Debugging an installed extension needs `npm run build:dev`. Extension-page console is plain F12 on the winnow tab; background script via `about:debugging` → Inspect.

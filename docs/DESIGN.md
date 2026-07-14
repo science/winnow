@@ -95,8 +95,8 @@ Cost (claude-haiku-4-5): cold start ~200 videos ≈ $0.10 without transcripts, r
 
 1. **Two-phase scoring** (`TWO_PHASE_SCORING.md`) — profile edits become instant re-ranks.
 2. InnerTube continuations for deeper feeds (needs SAPISIDHASH auth header).
-3. 👍/👎 per-video feedback appended to the scoring prompt.
-4. Watch-history-informed profile suggestions (suggested, never silent).
+3. ~~Per-video feedback appended to the scoring prompt~~ — **shipped** (Good pick / Not for me; see Feedback section above).
+4. ~~Feedback-informed profile suggestions (suggested, never silent)~~ — **shipped** (Settings → "Suggest profile updates from my feedback"). Watch-history-informed suggestions remain future work.
 5. Takeover mode: redirect youtube.com's homepage to winnow.
 6. Per-channel mute/boost weights; configurable tier thresholds and windows.
 7. Chrome port (MV3 service_worker + webextension-polyfill).

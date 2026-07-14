@@ -1,8 +1,57 @@
 // All selectors for the settings surface live HERE, not in specs.
-import { type Page } from "@playwright/test";
+import { expect, type Page } from "@playwright/test";
+import type { FeedbackEntry, Profile } from "../../src/lib/types";
 
 export async function openSettings(page: Page): Promise<void> {
   await page.goto("/feed.html#/settings");
+}
+
+/** Open settings in demo mode with optional pre-seeded votes and profile. */
+export async function openSettingsDemoWithState(
+  page: Page,
+  state: { feedback?: FeedbackEntry[]; profile?: Pick<Profile, "moreOf" | "lessOf"> } = {},
+): Promise<void> {
+  await page.addInitScript(
+    (s) => {
+      localStorage.clear();
+      if (s.feedback) {
+        localStorage.setItem(
+          "winnow:feedback:v1",
+          JSON.stringify(Object.fromEntries(s.feedback.map((e) => [e.videoId, e]))),
+        );
+      }
+      if (s.profile) {
+        localStorage.setItem(
+          "winnow:profile:v1",
+          JSON.stringify({ ...s.profile, updatedAt: Date.now() }),
+        );
+      }
+    },
+    state,
+  );
+  await page.goto("/feed.html?demo=1#/settings");
+}
+
+export async function expectSuggestProfileEnabled(page: Page, enabled: boolean): Promise<void> {
+  if (enabled) await expect(page.getByTestId("suggest-profile")).toBeEnabled();
+  else await expect(page.getByTestId("suggest-profile")).toBeDisabled();
+}
+
+export async function clickSuggestProfile(page: Page): Promise<void> {
+  await page.getByTestId("suggest-profile").click();
+}
+
+export async function getSuggestionText(page: Page, timeoutMs = 60_000): Promise<string> {
+  await expect(page.getByTestId("profile-suggestion")).toBeVisible({ timeout: timeoutMs });
+  return page.getByTestId("profile-suggestion").innerText();
+}
+
+export async function applySuggestion(page: Page): Promise<void> {
+  await page.getByTestId("apply-suggestion").click();
+}
+
+export async function dismissSuggestion(page: Page): Promise<void> {
+  await page.getByTestId("dismiss-suggestion").click();
 }
 
 export async function fillMoreOfProfile(page: Page, text: string): Promise<void> {

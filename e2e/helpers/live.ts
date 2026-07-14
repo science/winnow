@@ -11,6 +11,8 @@ export interface LiveSeed {
   videos: Video[];
   /** Optional pre-existing votes (winnow:feedback:v1). */
   feedback?: FeedbackEntry[];
+  /** Hash route to land on (default the feed, which starts scoring). */
+  route?: string;
 }
 
 export async function openFeedWithLiveSeed(page: Page, seed: LiveSeed): Promise<void> {
@@ -33,7 +35,7 @@ export async function openFeedWithLiveSeed(page: Page, seed: LiveSeed): Promise<
     },
     { settings, profile, videos: { fetchedAt: Date.now(), videos: seed.videos }, feedback },
   );
-  await page.goto("/feed.html");
+  await page.goto(`/feed.html${seed.route ?? ""}`);
 }
 
 interface StoredScores {

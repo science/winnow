@@ -17,3 +17,9 @@ Accumulated during autonomous work sessions. Answer at leisure; nothing here blo
 6. **Icon.** Placeholder is a dark rounded square with a green "w" (ImageMagick). Fine until it isn't.
 
 7. **CI e2e note.** CI installs Chromium for Playwright each run (~30s with cache). If that ever annoys, we can cache the browser or gate e2e to PRs only.
+
+## 2026-07-14 (feedback + transcripts + vetted-only feed session)
+
+8. **Feedback staleness tradeoff — sign off or veto.** Votes deliberately do NOT invalidate cached scores (each vote would otherwise trigger a full paid re-score). They steer newly scored videos automatically; **"Re-score everything" in Settings is the apply-feed-wide gesture**. If that feels wrong in use, a cheaper "re-score stale only" mode is possible — say the word.
+
+9. **Model for profile suggestions.** "Suggest profile updates from my feedback" reuses the cheap scoring models (`claude-haiku-4-5` / `gpt-4o-mini`). It's a rare, quality-sensitive call — if the suggestions read shallow on real data, a stronger model here costs pennies per use. Both providers produced good suggestions in live e2e; your call after real use.
