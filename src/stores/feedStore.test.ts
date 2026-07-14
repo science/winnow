@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { get } from "svelte/store";
 import { pruneStaleEntries, watched } from "./feedStore";
+import { toggleVote } from "./feedbackStore";
 import { KEYS, storageGet, storageSet } from "../lib/storage";
 import type { TranscriptCacheEntry, Video } from "../lib/types";
 
@@ -42,5 +43,19 @@ describe("pruneStaleEntries", () => {
     expect(get(watched)).toEqual({ stays0000001: 1 });
     const cache = await storageGet<Record<string, TranscriptCacheEntry>>(KEYS.transcripts);
     expect(cache).toEqual({ stays0000001: entry("kept") });
+  });
+
+  it("should keep transcript-cache entries for voted videos even after they leave the feed window", async () => {
+    watched.set({});
+    await toggleVote({ ...video("votedgone01"), scoreState: "unknown" }, "up");
+    await storageSet(KEYS.transcripts, {
+      votedgone01: entry("kept for feedback analysis"),
+      unvotedgone: entry("dropped"),
+    });
+
+    await pruneStaleEntries([video("stays0000001")]);
+
+    const cache = await storageGet<Record<string, TranscriptCacheEntry>>(KEYS.transcripts);
+    expect(cache).toEqual({ votedgone01: entry("kept for feedback analysis") });
   });
 });

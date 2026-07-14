@@ -65,3 +65,23 @@ export interface Profile {
   lessOf: string;
   updatedAt: number;
 }
+
+export type Vote = "up" | "down";
+
+/** One persisted user verdict (winnow:feedback:v1). Snapshots the video's
+ * display fields at vote time — the Video object itself gets pruned from
+ * the 300-cap feed window, but votes must keep teaching future scoring. */
+export interface FeedbackEntry {
+  videoId: string;
+  vote: Vote;
+  votedAt: number;
+  title: string;
+  channelTitle: string | null;
+  durationText: string | null;
+  source: FeedSource;
+  descriptionSnippet: string | null;
+  /** What the model thought when the user voted; null when unscored. */
+  score: number | null;
+  reason: string | null;
+  clickbait: boolean | null;
+}

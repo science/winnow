@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { ScoredVideo } from "../lib/types";
   import ScoreBadge from "./ScoreBadge.svelte";
+  import VoteButtons from "./VoteButtons.svelte";
 
   let {
     video,
@@ -53,5 +54,6 @@
     {:else if video.scoreState === "pending"}
       <div class="text-xs text-ink-faint">scoring…</div>
     {/if}
+    <VoteButtons {video} />
   </div>
 </a>

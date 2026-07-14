@@ -84,6 +84,62 @@ describe("bucketVideos", () => {
     );
     expect(tiers.top.map((v) => v.id)).toEqual(["unwatched00", "watched0000"]);
   });
+
+  it("should demote a downvoted video to winnowed regardless of score", () => {
+    const tiers = bucketVideos([video({ score: 95, id: "downvoted00" })], new Set(), {
+      downvoted00: { vote: "down", votedAt: 1 },
+    });
+    expect(tiers.winnowed.map((v) => v.id)).toEqual(["downvoted00"]);
+    expect(tiers.top).toHaveLength(0);
+  });
+
+  it("should promote an upvoted video to top picks even when scored low or clickbait", () => {
+    const tiers = bucketVideos(
+      [
+        video({ score: 10, id: "lowscore000" }),
+        video({ score: 90, clickbait: true, id: "baityfave00" }),
+      ],
+      new Set(),
+      { lowscore000: { vote: "up", votedAt: 1 }, baityfave00: { vote: "up", votedAt: 2 } },
+    );
+    expect(tiers.top.map((v) => v.id).sort()).toEqual(["baityfave00", "lowscore000"]);
+    expect(tiers.winnowed).toHaveLength(0);
+    expect(tiers.worthALook).toHaveLength(0);
+  });
+
+  it("should place an upvoted unscored video in top picks", () => {
+    const tiers = bucketVideos(
+      [video({ scoreState: "unknown", score: undefined, id: "unvetted001" })],
+      new Set(),
+      { unvetted001: { vote: "up", votedAt: 1 } },
+    );
+    expect(tiers.top.map((v) => v.id)).toEqual(["unvetted001"]);
+    expect(tiers.unscored).toHaveLength(0);
+  });
+
+  it("should sort upvoted videos ahead of others within top picks, most recent vote first", () => {
+    const now = Date.now();
+    const tiers = bucketVideos(
+      [
+        video({ score: 90, id: "unvoted0000", publishedAtApprox: now }),
+        video({ score: 80, id: "earlyvote00", publishedAtApprox: now - 100_000 }),
+        video({ score: 80, id: "latevote000", publishedAtApprox: now - 200_000 }),
+      ],
+      new Set(),
+      { earlyvote00: { vote: "up", votedAt: 100 }, latevote000: { vote: "up", votedAt: 200 } },
+    );
+    expect(tiers.top.map((v) => v.id)).toEqual(["latevote000", "earlyvote00", "unvoted0000"]);
+  });
+
+  it("should leave unvoted videos in their score tiers", () => {
+    const tiers = bucketVideos(
+      [video({ score: 80, id: "plainhigh00" }), video({ score: 20, id: "plainlow000" })],
+      new Set(),
+      { someoneelse: { vote: "down", votedAt: 1 } },
+    );
+    expect(tiers.top.map((v) => v.id)).toEqual(["plainhigh00"]);
+    expect(tiers.winnowed.map((v) => v.id)).toEqual(["plainlow000"]);
+  });
 });
 
 describe("scoresCollapse", () => {

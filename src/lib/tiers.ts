@@ -1,4 +1,7 @@
-import type { ScoredVideo } from "./types";
+import type { ScoredVideo, Vote } from "./types";
+
+/** Minimal view of the feedback store that tier bucketing needs. */
+export type VoteMap = Record<string, { vote: Vote; votedAt: number }>;
 
 export const TIER_THRESHOLDS = {
   /** score >= top and not clickbait ⇒ Top picks */
@@ -28,10 +31,18 @@ function byRecencyThenWatched(watched: ReadonlySet<string>) {
 export function bucketVideos(
   videos: ScoredVideo[],
   watched: ReadonlySet<string> = new Set(),
+  votes: VoteMap = {},
 ): Tiers {
   const tiers: Tiers = { top: [], worthALook: [], winnowed: [], unscored: [] };
   for (const v of videos) {
-    if (v.scoreState !== "scored" || v.score === undefined) {
+    // An explicit user vote IS vetting — it outranks the model's score
+    // (including the clickbait demotion) and even the unscored state.
+    const vote = votes[v.id]?.vote;
+    if (vote === "down") {
+      tiers.winnowed.push(v);
+    } else if (vote === "up") {
+      tiers.top.push(v);
+    } else if (v.scoreState !== "scored" || v.score === undefined) {
       tiers.unscored.push(v);
     } else if (v.score >= TIER_THRESHOLDS.top && !v.clickbait) {
       tiers.top.push(v);
@@ -42,7 +53,17 @@ export function bucketVideos(
     }
   }
   const cmp = byRecencyThenWatched(watched);
-  tiers.top.sort(cmp);
+  // Upvotes pin to the head of Top picks, most recent vote first.
+  tiers.top.sort((a, b) => {
+    const at = votes[a.id]?.vote === "up" ? votes[a.id]!.votedAt : null;
+    const bt = votes[b.id]?.vote === "up" ? votes[b.id]!.votedAt : null;
+    if (at !== null || bt !== null) {
+      if (at === null) return 1;
+      if (bt === null) return -1;
+      return bt - at;
+    }
+    return cmp(a, b);
+  });
   tiers.worthALook.sort(cmp);
   tiers.winnowed.sort(cmp);
   tiers.unscored.sort(cmp);

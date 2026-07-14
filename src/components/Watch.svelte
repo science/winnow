@@ -2,6 +2,7 @@
   import { onMount } from "svelte";
   import { markWatched, scoredVideos } from "../stores/feedStore";
   import ScoreBadge from "./ScoreBadge.svelte";
+  import VoteButtons from "./VoteButtons.svelte";
 
   let { videoId }: { videoId: string } = $props();
 
@@ -39,6 +40,7 @@
       {#if video.scoreState === "scored"}
         <ScoreBadge score={video.score} reason={video.reason} clickbait={video.clickbait} />
       {/if}
+      <VoteButtons {video} />
     </div>
   {/if}
 

@@ -3,6 +3,7 @@ import type { TranscriptCacheEntry, Video, VideoScore, ScoredVideo } from "../li
 import { bucketVideos, scoresCollapse, type Tiers } from "../lib/tiers";
 import { KEYS, storageGet, storageSet } from "../lib/storage";
 import { loadFeeds } from "../services/youtube/feedSource";
+import { feedback } from "./feedbackStore";
 import { log } from "../lib/logger";
 
 const VIDEOS_TTL_MS = 30 * 60 * 1000;
@@ -51,9 +52,12 @@ export const scoredVideos = derived(
     }),
 );
 
-export const tiers = derived([scoredVideos, watched], ([$scored, $watched]): Tiers => {
-  return bucketVideos($scored, new Set(Object.keys($watched)));
-});
+export const tiers = derived(
+  [scoredVideos, watched, feedback],
+  ([$scored, $watched, $feedback]): Tiers => {
+    return bucketVideos($scored, new Set(Object.keys($watched)), $feedback);
+  },
+);
 
 export const collapsed = derived(scoredVideos, ($scored) => scoresCollapse($scored));
 
@@ -113,7 +117,9 @@ export async function markWatched(videoId: string): Promise<void> {
 }
 
 /** Drop watched marks and transcript-cache entries whose videos left the
- * feed window. Exported for tests. */
+ * feed window. Transcripts for VOTED videos are kept — feedback analysis
+ * needs them after the video is gone. The feedback store itself is never
+ * pruned here (bounded by FEEDBACK_STORE_CAP instead). Exported for tests. */
 export async function pruneStaleEntries(current: Video[]): Promise<void> {
   const ids = new Set(current.map((v) => v.id));
   const w = get(watched);
@@ -124,7 +130,10 @@ export async function pruneStaleEntries(current: Video[]): Promise<void> {
   }
   const transcripts = await storageGet<Record<string, TranscriptCacheEntry>>(KEYS.transcripts);
   if (transcripts) {
-    const kept = Object.fromEntries(Object.entries(transcripts).filter(([id]) => ids.has(id)));
+    const votedIds = new Set(Object.keys(get(feedback)));
+    const kept = Object.fromEntries(
+      Object.entries(transcripts).filter(([id]) => ids.has(id) || votedIds.has(id)),
+    );
     if (Object.keys(kept).length !== Object.keys(transcripts).length) {
       await storageSet(KEYS.transcripts, kept);
     }

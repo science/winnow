@@ -113,6 +113,37 @@ export async function expectTranscriptCoverageHidden(page: Page): Promise<void> 
   await expect(page.getByTestId("transcript-coverage")).not.toBeVisible();
 }
 
+function cardByTitle(page: Page, title: string) {
+  return page.getByTestId("video-card").filter({ hasText: title });
+}
+
+/** Click Good pick / Not for me on the card with this title (the card must
+ * be visible — open the relevant fold first). */
+export async function voteOnVideo(page: Page, title: string, vote: "up" | "down"): Promise<void> {
+  await cardByTitle(page, title).getByTestId(`vote-${vote}`).click();
+}
+
+export async function getVotePressedState(page: Page, title: string, vote: "up" | "down"): Promise<boolean> {
+  const value = await cardByTitle(page, title).getByTestId(`vote-${vote}`).getAttribute("aria-pressed");
+  return value === "true";
+}
+
+export async function expectVideoInTier(
+  page: Page,
+  tier: "top" | "worth" | "winnowed",
+  title: string,
+): Promise<void> {
+  await expect(page.getByTestId(`tier-${tier}`).getByTestId("video-card").filter({ hasText: title })).toBeVisible();
+}
+
+export async function expectVideoNotInTier(
+  page: Page,
+  tier: "top" | "worth" | "winnowed",
+  title: string,
+): Promise<void> {
+  await expect(page.getByTestId(`tier-${tier}`).getByTestId("video-card").filter({ hasText: title })).not.toBeVisible();
+}
+
 export async function expectWatchViewForSomeVideo(page: Page): Promise<void> {
   await expect(page.locator("iframe[src*='youtube-nocookie.com/embed/']")).toBeVisible();
 }
