@@ -103,11 +103,15 @@ describe("structuredCall", () => {
     expect(openaiPayload.response_format.json_schema.strict).toBe(true);
   });
 
-  it("should not send temperature to OpenAI (gpt-5.x models reject non-default sampling)", async () => {
-    const { requests } = stubFetch(() => jsonResponse(openaiBody));
+  it("should not send temperature to either provider (gpt-5.x and claude-sonnet-5+ reject it)", async () => {
+    const { requests } = stubFetch((req) =>
+      req.url.includes("anthropic") ? jsonResponse(anthropicBody) : jsonResponse(openaiBody),
+    );
     await structuredCall(spec("openai"));
-    const payload = await requests[0]!.json();
-    expect(payload.temperature).toBeUndefined();
+    await structuredCall(spec("anthropic"));
+    for (const req of requests) {
+      expect(((await req.json()) as Record<string, unknown>)["temperature"]).toBeUndefined();
+    }
   });
 
   it("should never retry internally — one 500 means one request and a server error (house retry lives in scorer.ts)", async () => {

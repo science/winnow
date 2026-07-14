@@ -2,6 +2,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   buildSuggestMessage,
   MIN_VOTES_FOR_SUGGESTION,
+  SUGGEST_ANTHROPIC_MODEL,
+  SUGGEST_OPENAI_MODEL,
   SUGGEST_TRANSCRIPT_CHARS,
   suggestProfileUpdate,
 } from "./profileSuggest";
@@ -89,19 +91,29 @@ describe("suggestProfileUpdate", () => {
       c: entry("c", "down"),
     });
     const suggestion = { moreOf: "more of this", lessOf: "less of this", rationale: "because" };
+    const bodies: Array<Record<string, unknown>> = [];
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () =>
-        new Response(
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        bodies.push((await new Request(input as RequestInfo, init).json()) as Record<string, unknown>);
+        return new Response(
           JSON.stringify({
             content: [{ type: "tool_use", name: "suggest_profile", input: suggestion }],
           }),
           // The SDK only JSON-parses application/json bodies.
           { status: 200, headers: { "Content-Type": "application/json" } },
-        ),
-      ),
+        );
+      }),
     );
 
     await expect(suggestProfileUpdate()).resolves.toEqual(suggestion);
+    // Rare, quality-sensitive call → the stronger dedicated model, not the
+    // cheap scoring model the settings carry.
+    expect(bodies[0]!["model"]).toBe(SUGGEST_ANTHROPIC_MODEL);
+  });
+
+  it("should use stronger dedicated models, decoupled from the scoring constants", () => {
+    expect(SUGGEST_ANTHROPIC_MODEL).toBe("claude-sonnet-5");
+    expect(SUGGEST_OPENAI_MODEL).toBe("gpt-5.4-mini");
   });
 });

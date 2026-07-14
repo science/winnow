@@ -10,12 +10,16 @@ import { KEYS, storageGet } from "../../lib/storage";
 import { feedback, feedbackReady } from "../../stores/feedbackStore";
 import { profile as profileStore, settings, settingsReady } from "../../stores/settingsStore";
 import { isDemoMode } from "../youtube/feedSource";
-import { ANTHROPIC_MODEL } from "./anthropicScorer";
-import { OPENAI_MODEL } from "./openaiScorer";
 import { structuredCall } from "./structuredCall";
 
 export const MIN_VOTES_FOR_SUGGESTION = 3;
 export const SUGGEST_TRANSCRIPT_CHARS = 500;
+
+// Rare, quality-sensitive call → stronger models than batch scoring, fixed
+// here rather than following the Settings scoring-model picker (deliberate;
+// user sign-off in QUESTIONS #9). Costs pennies per use.
+export const SUGGEST_ANTHROPIC_MODEL = "claude-sonnet-5";
+export const SUGGEST_OPENAI_MODEL = "gpt-5.4-mini";
 
 export interface ProfileSuggestion {
   moreOf: string;
@@ -112,7 +116,7 @@ export async function suggestProfileUpdate(): Promise<ProfileSuggestion> {
   return structuredCall<ProfileSuggestion>({
     provider: $settings.provider,
     apiKey,
-    model: $settings.provider === "anthropic" ? ANTHROPIC_MODEL : OPENAI_MODEL,
+    model: $settings.provider === "anthropic" ? SUGGEST_ANTHROPIC_MODEL : SUGGEST_OPENAI_MODEL,
     system: SUGGEST_SYSTEM_PROMPT,
     user: buildSuggestMessage($profile, entries, transcripts),
     schema: SUGGEST_SCHEMA,

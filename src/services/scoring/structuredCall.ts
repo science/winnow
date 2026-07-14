@@ -49,10 +49,11 @@ export async function structuredCall<T>(spec: StructuredCallSpec): Promise<T> {
     });
     let message: Anthropic.Message;
     try {
+      // No temperature: claude-sonnet-5+ rejects it as deprecated
+      // (curl-verified: "temperature is deprecated for this model").
       message = await client.messages.create({
         model: spec.model,
         max_tokens: spec.maxTokens ?? 4096,
-        temperature: 0,
         system: spec.system,
         messages: [{ role: "user", content: spec.user }],
         tools: [
