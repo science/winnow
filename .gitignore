@@ -11,3 +11,6 @@ playwright-report/
 
 # API keys for live-tier e2e (never commit)
 .env.production
+
+# AMO signing credentials (never commit)
+credentials/
