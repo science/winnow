@@ -149,7 +149,8 @@ async function enrichWithTranscripts(videos: Video[], missIds: Set<string>): Pro
   async function worker(): Promise<void> {
     while (next < targets.length) {
       const v = targets[next++]!;
-      excerpts.set(v.id, await fetchTranscriptExcerpt(v.id));
+      const result = await fetchTranscriptExcerpt(v.id);
+      excerpts.set(v.id, result?.excerpt ?? null);
     }
   }
   await Promise.all(Array.from({ length: TRANSCRIPT_CONCURRENCY }, worker));

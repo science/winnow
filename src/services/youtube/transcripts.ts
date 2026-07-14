@@ -1,14 +1,33 @@
-// Transcript enrichment: watch page → ytInitialPlayerResponse →
-// captionTracks → timedtext json3 → plain-text excerpt. Every step is
-// best-effort; any failure returns null and scoring proceeds on metadata
-// alone. NOTE: timedtext returns an empty body without a real browser
-// session — verified working shapes, but the credentialed path needs
-// in-browser confirmation (see QUESTIONS.md).
+// Transcript enrichment, two paths tried in order per video:
+//   1. timedtext — watch page → ytInitialPlayerResponse → captionTracks →
+//      timedtext json3 (known to return an empty body in some sessions,
+//      suspected proof-of-origin gating);
+//   2. InnerTube get_transcript — ytcfg apiKey/clientVersion + the watch
+//      page's getTranscriptEndpoint params, cookies-only auth.
+// Every step is best-effort; any failure returns null and scoring proceeds
+// on metadata alone. In-browser verification tracked in QUESTIONS.md.
 
 import { log } from "../../lib/logger";
 import { extractJsonBlob } from "./pageExtract";
+import { extractInnertubeConfig, extractYtInitialData } from "./ytPage";
 
 export const TRANSCRIPT_EXCERPT_CHARS = 2000;
+
+export interface TranscriptResult {
+  excerpt: string;
+  source: "timedtext" | "innertube";
+}
+
+/** Raw payloads from the most recent real transcript fetch — feeds the
+ * Settings "Copy debug fixture" button so real shapes can become fixtures. */
+export const lastTranscriptCapture: {
+  current: {
+    videoId: string;
+    playerResponseRaw: string | null;
+    ytInitialDataRaw: string | null;
+    innertubeResponseRaw: string | null;
+  } | null;
+} = { current: null };
 
 interface CaptionTrack {
   baseUrl?: string;
@@ -63,26 +82,151 @@ export function captionTracksFrom(playerResponse: unknown): CaptionTrack[] {
   return Array.isArray(tracks) ? tracks : [];
 }
 
-/** Fetch a transcript excerpt for one video. Null on any failure. */
+/** Deep-walk the watch page's ytInitialData for the transcript panel's
+ * getTranscriptEndpoint params (needed by InnerTube get_transcript). */
+export function extractTranscriptParams(ytInitialData: unknown): string | null {
+  let found: string | null = null;
+  const walk = (node: unknown): void => {
+    if (found || node === null || typeof node !== "object") return;
+    if (Array.isArray(node)) {
+      for (const item of node) walk(item);
+      return;
+    }
+    const obj = node as Record<string, unknown>;
+    const endpoint = obj["getTranscriptEndpoint"] as { params?: unknown } | undefined;
+    if (endpoint && typeof endpoint.params === "string" && endpoint.params) {
+      found = endpoint.params;
+      return;
+    }
+    for (const value of Object.values(obj)) walk(value);
+  };
+  walk(ytInitialData);
+  return found;
+}
+
+/** Flatten an InnerTube get_transcript response into plain text. Tolerant
+ * deep-walk over both the current segment shape and the older cue shape. */
+export function parseInnertubeTranscript(data: unknown, maxChars: number): string | null {
+  const parts: string[] = [];
+  let length = 0;
+  const push = (text: string): void => {
+    const cleaned = text.replace(/\n/g, " ").trim();
+    if (!cleaned) return;
+    parts.push(cleaned);
+    length += cleaned.length + 1;
+  };
+  const walk = (node: unknown): void => {
+    if (length >= maxChars || node === null || typeof node !== "object") return;
+    if (Array.isArray(node)) {
+      for (const item of node) walk(item);
+      return;
+    }
+    const obj = node as Record<string, unknown>;
+    const segment = obj["transcriptSegmentRenderer"] as
+      | { snippet?: { runs?: Array<{ text?: string }>; simpleText?: string } }
+      | undefined;
+    if (segment?.snippet) {
+      const runs = segment.snippet.runs;
+      const text = Array.isArray(runs)
+        ? runs.map((r) => r.text ?? "").join("")
+        : (segment.snippet.simpleText ?? "");
+      push(text);
+      return;
+    }
+    const cue = obj["transcriptCueRenderer"] as { cue?: { simpleText?: string } } | undefined;
+    if (cue?.cue?.simpleText) {
+      push(cue.cue.simpleText);
+      return;
+    }
+    for (const value of Object.values(obj)) walk(value);
+  };
+  walk(data);
+  if (parts.length === 0) return null;
+  return parts.join(" ").slice(0, maxChars);
+}
+
+/** InnerTube get_transcript fallback. Cookies-only auth: a 401/403 here
+ * means the endpoint wants SAPISIDHASH — logged distinctively, null returned
+ * (the contingency is tracked in QUESTIONS.md, not silently attempted). */
+export async function fetchTranscriptInnertube(
+  html: string,
+  videoId: string,
+  maxChars: number,
+  fetchFn: typeof fetch,
+): Promise<string | null> {
+  const cfg = extractInnertubeConfig(html);
+  if (!cfg) return null;
+  const params = extractTranscriptParams(extractYtInitialData(html));
+  if (!params) return null;
+
+  const res = await fetchFn(
+    `https://www.youtube.com/youtubei/v1/get_transcript?key=${cfg.apiKey}&prettyPrint=false`,
+    {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        context: { client: { clientName: "WEB", clientVersion: cfg.clientVersion, hl: "en" } },
+        params,
+      }),
+    },
+  );
+  if (res.status === 401 || res.status === 403) {
+    log.warn(
+      `InnerTube get_transcript rejected (${res.status}) for ${videoId} — cookies-only auth may be insufficient (SAPISIDHASH contingency, see QUESTIONS.md)`,
+    );
+    return null;
+  }
+  if (!res.ok) return null;
+  const raw = await res.text();
+  if (lastTranscriptCapture.current?.videoId === videoId) {
+    lastTranscriptCapture.current.innertubeResponseRaw = raw;
+  }
+  return parseInnertubeTranscript(JSON.parse(raw), maxChars);
+}
+
+/** Fetch a transcript excerpt for one video: timedtext first, InnerTube
+ * fallback. Null on any failure. `deps.fetchFn` is injectable for tests. */
 export async function fetchTranscriptExcerpt(
   videoId: string,
   maxChars: number = TRANSCRIPT_EXCERPT_CHARS,
-): Promise<string | null> {
+  deps: { fetchFn?: typeof fetch } = {},
+): Promise<TranscriptResult | null> {
+  const fetchFn = deps.fetchFn ?? fetch;
   try {
-    const pageRes = await fetch(`https://www.youtube.com/watch?v=${videoId}`, {
+    const pageRes = await fetchFn(`https://www.youtube.com/watch?v=${videoId}`, {
       credentials: "include",
       headers: { "Accept-Language": "en-US,en;q=0.9" },
     });
     if (!pageRes.ok) return null;
-    const player = extractPlayerResponse(await pageRes.text());
-    const track = pickCaptionTrack(captionTracksFrom(player));
-    if (!track?.baseUrl) return null;
+    const html = await pageRes.text();
+    lastTranscriptCapture.current = {
+      videoId,
+      playerResponseRaw: extractJsonBlob(html, /var ytInitialPlayerResponse\s*=\s*/),
+      ytInitialDataRaw: extractJsonBlob(html, /var ytInitialData\s*=\s*/),
+      innertubeResponseRaw: null,
+    };
 
-    const ttRes = await fetch(`${track.baseUrl}&fmt=json3`, { credentials: "include" });
-    if (!ttRes.ok) return null;
-    const body = await ttRes.text();
-    if (!body) return null;
-    return parseJson3Transcript(JSON.parse(body), maxChars);
+    try {
+      const player = extractPlayerResponse(html);
+      const track = pickCaptionTrack(captionTracksFrom(player));
+      if (track?.baseUrl) {
+        const ttRes = await fetchFn(`${track.baseUrl}&fmt=json3`, { credentials: "include" });
+        if (ttRes.ok) {
+          const body = await ttRes.text();
+          if (body) {
+            const excerpt = parseJson3Transcript(JSON.parse(body), maxChars);
+            if (excerpt) return { excerpt, source: "timedtext" };
+          }
+        }
+      }
+    } catch (err) {
+      log.debug("timedtext path failed for", videoId, err);
+    }
+
+    const excerpt = await fetchTranscriptInnertube(html, videoId, maxChars, fetchFn);
+    if (excerpt) return { excerpt, source: "innertube" };
+    return null;
   } catch (err) {
     log.debug("transcript fetch failed for", videoId, err);
     return null;

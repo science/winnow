@@ -50,6 +50,20 @@ function rawYtInitialData(html: string): string | null {
   return extractJsonBlob(html, /var ytInitialData\s*=\s*/);
 }
 
+export interface InnertubeConfig {
+  apiKey: string;
+  clientVersion: string;
+}
+
+/** Read the InnerTube API key + client version from ytcfg. Null when either
+ * is missing — an InnerTube call can't be built without both. */
+export function extractInnertubeConfig(html: string): InnertubeConfig | null {
+  const apiKey = /"INNERTUBE_API_KEY"\s*:\s*"([^"]+)"/.exec(html)?.[1];
+  const clientVersion = /"INNERTUBE_CONTEXT_CLIENT_VERSION"\s*:\s*"([^"]+)"/.exec(html)?.[1];
+  if (!apiKey || !clientVersion) return null;
+  return { apiKey, clientVersion };
+}
+
 /** Read the LOGGED_IN flag from ytcfg. Null when not found. */
 export function extractLoggedIn(html: string): boolean | null {
   const m = /"LOGGED_IN"\s*:\s*(true|false)/.exec(html);

@@ -4,6 +4,7 @@
   import { scores } from "../stores/feedStore";
   import { scoreFeed } from "../services/scoring/scorer";
   import { lastCaptures } from "../services/youtube/ytPage";
+  import { lastTranscriptCapture } from "../services/youtube/transcripts";
   import type { Provider } from "../lib/types";
 
   let saved = $state(false);
@@ -26,13 +27,34 @@
 
   async function copyFixture(): Promise<void> {
     const parts = Object.entries(lastCaptures);
-    if (parts.length === 0) {
+    const transcript = lastTranscriptCapture.current;
+    if (parts.length === 0 && !transcript) {
       captureMessage = "Nothing captured yet — refresh the feed first.";
       return;
     }
-    const bundle = Object.fromEntries(parts.map(([k, v]) => [k, JSON.parse(v ?? "null")]));
+    const bundle: Record<string, unknown> = Object.fromEntries(
+      parts.map(([k, v]) => [k, JSON.parse(v ?? "null")]),
+    );
+    if (transcript) {
+      bundle["transcript"] = {
+        videoId: transcript.videoId,
+        playerResponse: safeParse(transcript.playerResponseRaw),
+        ytInitialData: safeParse(transcript.ytInitialDataRaw),
+        innertubeResponse: safeParse(transcript.innertubeResponseRaw),
+      };
+    }
+    const captured = [...parts.map(([k]) => k), ...(transcript ? ["transcript"] : [])];
     await navigator.clipboard.writeText(JSON.stringify(bundle, null, 2));
-    captureMessage = `Copied raw ytInitialData for: ${parts.map(([k]) => k).join(", ")}. Paste into a file for parser fixtures.`;
+    captureMessage = `Copied raw captures for: ${captured.join(", ")}. Paste into a file for parser fixtures.`;
+  }
+
+  function safeParse(raw: string | null): unknown {
+    if (!raw) return null;
+    try {
+      return JSON.parse(raw);
+    } catch {
+      return null;
+    }
   }
 </script>
 
