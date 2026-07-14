@@ -6,10 +6,15 @@ export async function openSettings(page: Page): Promise<void> {
   await page.goto("/feed.html#/settings");
 }
 
-/** Open settings in demo mode with optional pre-seeded votes and profile. */
+/** Open settings in demo mode with optional pre-seeded votes, profile, and
+ *  model catalog (winnow:models:v1). */
 export async function openSettingsDemoWithState(
   page: Page,
-  state: { feedback?: FeedbackEntry[]; profile?: Pick<Profile, "moreOf" | "lessOf"> } = {},
+  state: {
+    feedback?: FeedbackEntry[];
+    profile?: Pick<Profile, "moreOf" | "lessOf">;
+    models?: { anthropic: string[]; openai: string[] };
+  } = {},
 ): Promise<void> {
   await page.addInitScript(
     (s) => {
@@ -24,6 +29,12 @@ export async function openSettingsDemoWithState(
         localStorage.setItem(
           "winnow:profile:v1",
           JSON.stringify({ ...s.profile, updatedAt: Date.now() }),
+        );
+      }
+      if (s.models) {
+        localStorage.setItem(
+          "winnow:models:v1",
+          JSON.stringify({ ...s.models, fetchedAt: Date.now() }),
         );
       }
     },
@@ -75,6 +86,27 @@ export async function isProviderSelected(page: Page, name: "Anthropic" | "OpenAI
 
 export async function selectProvider(page: Page, name: "Anthropic" | "OpenAI"): Promise<void> {
   await page.getByRole("radio", { name }).click();
+}
+
+export async function selectAnthropicModel(page: Page, id: string): Promise<void> {
+  await page.getByLabel(/anthropic model/i).selectOption(id);
+}
+
+export async function selectOpenAiModel(page: Page, id: string): Promise<void> {
+  await page.getByLabel(/openai model/i).selectOption(id);
+}
+
+export async function getAnthropicModelOptions(page: Page): Promise<string[]> {
+  return page.getByLabel(/anthropic model/i).locator("option").allTextContents();
+}
+
+export async function getOpenAiModelOptions(page: Page): Promise<string[]> {
+  return page.getByLabel(/openai model/i).locator("option").allTextContents();
+}
+
+export async function expectRefreshModelsEnabled(page: Page, enabled: boolean): Promise<void> {
+  if (enabled) await expect(page.getByTestId("refresh-models")).toBeEnabled();
+  else await expect(page.getByTestId("refresh-models")).toBeDisabled();
 }
 
 /** Read persisted state straight from the localStorage fallback. */

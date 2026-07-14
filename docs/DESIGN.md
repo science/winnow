@@ -58,6 +58,7 @@ All persistence via `src/lib/storage.ts` (browser.storage.local → localStorage
 | `winnow:watched:v1` | `{videoId: watchedAt}` | written on Watch open; pruned with videos |
 | `winnow:transcripts:v1` | `{videoId: {excerpt, source: "timedtext"\|"innertube", fetchedAt}}` | successes only; pruned with videos (voted ids kept) |
 | `winnow:feedback:v1` | `{videoId: FeedbackEntry}` — vote + votedAt + display-field snapshot + score-at-vote | cap 200 (oldest evicted); never pruned with videos |
+| `winnow:models:v1` | `{ anthropic: string[], openai: string[], fetchedAt }` — model catalog for the Settings picker | refreshed only on explicit "Refresh model list"; picker works offline from this |
 
 `profileHash = fnv1a(moreOf, lessOf, PROMPT_VERSION, modelId)` — editing the profile, bumping the prompt, or swapping models cleanly re-scores everything (movie-night's versioned-cache pattern). Transcript excerpts are cached by videoId (bounded by the 300-video window via pruning) so re-scores and feedback analysis don't re-fetch watch pages; fetch failures are never cached, staying retryable.
 

@@ -11,6 +11,9 @@
   } from "../services/scoring/profileSuggest";
   import { lastCaptures } from "../services/youtube/ytPage";
   import { lastTranscriptCapture } from "../services/youtube/transcripts";
+  import { fetchProviderModels } from "../services/scoring/modelCatalog";
+  import { modelCatalog } from "../stores/modelCatalogStore";
+  import { isDemoMode } from "../services/youtube/feedSource";
   import type { Provider } from "../lib/types";
 
   let saved = $state(false);
@@ -18,8 +21,55 @@
   let suggesting = $state(false);
   let suggestion = $state<ProfileSuggestion | null>(null);
   let suggestError = $state("");
+  let refreshingModels = $state(false);
+  let modelsError = $state("");
 
   const voteCount = $derived(Object.keys($feedback).length);
+  const demo = isDemoMode();
+
+  // The current selection always renders, even when the catalog hasn't been
+  // fetched (fresh install) or no longer lists it (retired model).
+  const anthropicOptions = $derived(
+    $modelCatalog.anthropic.includes($settings.anthropicModel)
+      ? $modelCatalog.anthropic
+      : [$settings.anthropicModel, ...$modelCatalog.anthropic],
+  );
+  const openaiOptions = $derived(
+    $modelCatalog.openai.includes($settings.openaiModel)
+      ? $modelCatalog.openai
+      : [$settings.openaiModel, ...$modelCatalog.openai],
+  );
+
+  function setModel(provider: Provider, model: string): void {
+    settings.update((s) =>
+      provider === "anthropic" ? { ...s, anthropicModel: model } : { ...s, openaiModel: model },
+    );
+    flashSaved();
+  }
+
+  async function refreshModels(): Promise<void> {
+    refreshingModels = true;
+    modelsError = "";
+    try {
+      const [anthropic, openai] = await Promise.all([
+        $settings.anthropicApiKey
+          ? fetchProviderModels("anthropic", $settings.anthropicApiKey)
+          : Promise.resolve<string[] | null>(null),
+        $settings.openaiApiKey
+          ? fetchProviderModels("openai", $settings.openaiApiKey)
+          : Promise.resolve<string[] | null>(null),
+      ]);
+      modelCatalog.update((c) => ({
+        anthropic: anthropic ?? c.anthropic,
+        openai: openai ?? c.openai,
+        fetchedAt: Date.now(),
+      }));
+    } catch (err) {
+      modelsError = err instanceof Error ? err.message : "Model list refresh failed.";
+    } finally {
+      refreshingModels = false;
+    }
+  }
 
   async function runSuggest(): Promise<void> {
     suggesting = true;
@@ -173,8 +223,44 @@
         }}
       />
     </label>
+    <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+      <label class="block text-sm">
+        <span class="mb-1 block font-medium text-ink-muted">Anthropic model</span>
+        <select
+          class="w-full rounded-md border border-surface-hover bg-surface-raised p-3 text-sm"
+          value={$settings.anthropicModel}
+          onchange={(e) => setModel("anthropic", e.currentTarget.value)}
+        >
+          {#each anthropicOptions as id (id)}
+            <option value={id}>{id}</option>
+          {/each}
+        </select>
+      </label>
+      <label class="block text-sm">
+        <span class="mb-1 block font-medium text-ink-muted">OpenAI model</span>
+        <select
+          class="w-full rounded-md border border-surface-hover bg-surface-raised p-3 text-sm"
+          value={$settings.openaiModel}
+          onchange={(e) => setModel("openai", e.currentTarget.value)}
+        >
+          {#each openaiOptions as id (id)}
+            <option value={id}>{id}</option>
+          {/each}
+        </select>
+      </label>
+    </div>
+    <button
+      onclick={refreshModels}
+      disabled={demo || refreshingModels || (!$settings.anthropicApiKey && !$settings.openaiApiKey)}
+      class="rounded-md bg-surface-raised px-4 py-2 text-sm text-ink hover:bg-surface-hover disabled:opacity-50"
+      data-testid="refresh-models"
+      title="Fetches the current model list from each provider you have a key for"
+      >{refreshingModels ? "Refreshing model list…" : "Refresh model list"}</button
+    >
+    {#if modelsError}<p class="text-xs text-danger">{modelsError}</p>{/if}
     <p class="text-xs text-ink-faint">
       Keys live only in this browser's extension storage and are sent only to the provider you chose.
+      Changing the scoring model re-scores the feed (cached scores are per-model).
     </p>
     {#if saved}<p class="text-xs text-accent">Saved.</p>{/if}
   </section>

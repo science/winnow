@@ -26,8 +26,9 @@ export interface StructuredCallSpec {
 }
 
 /** Map an SDK failure onto the house error taxonomy. Both SDKs expose the
- * same error shapes: APIConnectionError (network) and APIError (.status). */
-function toProviderError(err: unknown, label: string): ProviderError {
+ * same error shapes: APIConnectionError (network) and APIError (.status).
+ * Shared with modelCatalog.ts — one mapping, no split-brain fixes. */
+export function toProviderError(err: unknown, label: string): ProviderError {
   if (err instanceof Anthropic.APIConnectionError || err instanceof OpenAI.APIConnectionError) {
     return new ProviderError("network", `${label}: ${err.message}`);
   }
