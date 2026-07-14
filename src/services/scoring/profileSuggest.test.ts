@@ -75,7 +75,13 @@ describe("suggestProfileUpdate", () => {
   });
 
   it("should return a parsed suggestion from the provider response", async () => {
-    settings.set({ provider: "anthropic", anthropicApiKey: "test-key", openaiApiKey: null });
+    settings.set({
+      provider: "anthropic",
+      anthropicApiKey: "test-key",
+      openaiApiKey: null,
+      anthropicModel: "claude-haiku-4-5",
+      openaiModel: "gpt-5.4-mini",
+    });
     profile.set(PROFILE);
     feedback.set({
       a: entry("a", "up"),

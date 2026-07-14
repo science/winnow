@@ -34,6 +34,8 @@ User: gpt-4o-mini is absolutely the incorrect model. The correct model is `gpt-5
 
 Related: we should be using JS SDKs to interact with the models, not custom coded API calls (Wolfechat and many other local ~/dev projects use SDKs for these model providers)
 
+→ **Resolved 2026-07-14, three commits.** (a) Provider calls now go through the official SDKs (`@anthropic-ai/sdk`, `openai`, both `dangerouslyAllowBrowser` — note wolfechat actually uses the SDK only for Anthropic and raw fetch for OpenAI; winnow now uses SDKs for both, with `maxRetries: 0` so the house single-retry policy stays in scorer.ts). (b) Default OpenAI scoring model is `gpt-5.4-mini`, verified live against the real API; `temperature` was dropped from OpenAI payloads since gpt-5.x rejects non-default sampling. (c) Settings now has a per-provider model picker populated from each provider's live `/v1/models` list (wolfechat pattern), persisted in `winnow:settings:v1`; changing model auto-invalidates the score cache via the existing hash.
+
 6. **Icon.** Placeholder is a dark rounded square with a green "w" (ImageMagick). Fine until it isn't.
 
 User: fine

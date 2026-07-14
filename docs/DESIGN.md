@@ -24,7 +24,7 @@ toolbar button ─► feed.html (Svelte SPA, hash routes #/, #/watch/<id>, #/set
                     │
                     ├─ services/scoring/scorer.ts ──── batches → provider adapter → VideoScore
                     │     ├─ anthropicScorer.ts        claude-haiku-4-5, strict forced tool
-                    │     ├─ openaiScorer.ts           gpt-4o-mini, strict json_schema
+                    │     ├─ openaiScorer.ts           gpt-5.4-mini, strict json_schema
                     │     └─ demoScorer.ts             ?demo=1 offline stub
                     │
                     └─ stores/feedStore.ts ─────────── tiers (derived) → Feed/VideoCard/Watch
@@ -51,7 +51,7 @@ All persistence via `src/lib/storage.ts` (browser.storage.local → localStorage
 
 | Key | Shape | Lifecycle |
 |---|---|---|
-| `winnow:settings:v1` | `{ provider, anthropicApiKey, openaiApiKey }` | persisted on change |
+| `winnow:settings:v1` | `{ provider, anthropicApiKey, openaiApiKey, anthropicModel, openaiModel }` | persisted on change; missing model fields fill from defaults on load |
 | `winnow:profile:v1` | `{ moreOf, lessOf, updatedAt }` | free-text interest profile |
 | `winnow:videos:v1` | `{ fetchedAt, videos[] }` | merged+deduped subs+home, cap 300, TTL 30 min |
 | `winnow:scores:v1` | `{ profileHash, scores: {videoId: {score, reason, clickbait, scoredAt, model}} }` | invalidated whole when profileHash mismatches |

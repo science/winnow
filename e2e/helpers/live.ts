@@ -20,6 +20,8 @@ export async function openFeedWithLiveSeed(page: Page, seed: LiveSeed): Promise<
     provider: seed.provider,
     anthropicApiKey: seed.provider === "anthropic" ? seed.apiKey : null,
     openaiApiKey: seed.provider === "openai" ? seed.apiKey : null,
+    anthropicModel: "claude-haiku-4-5",
+    openaiModel: "gpt-5.4-mini",
   };
   const profile: Profile = { ...seed.profile, updatedAt: Date.now() };
   const feedback = Object.fromEntries((seed.feedback ?? []).map((e) => [e.videoId, e]));

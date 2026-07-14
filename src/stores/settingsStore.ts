@@ -5,11 +5,17 @@
 import { writable } from "svelte/store";
 import type { Profile, Provider, Settings } from "../lib/types";
 import { KEYS, storageGet, storageSet } from "../lib/storage";
+import { ANTHROPIC_MODEL } from "../services/scoring/anthropicScorer";
+import { OPENAI_MODEL } from "../services/scoring/openaiScorer";
 
-const DEFAULT_SETTINGS: Settings = {
+// Exported so tests can lock the load-path spread-merge (legacy stored blobs
+// without model fields must pick up the defaults).
+export const DEFAULT_SETTINGS: Settings = {
   provider: "anthropic",
   anthropicApiKey: null,
   openaiApiKey: null,
+  anthropicModel: ANTHROPIC_MODEL,
+  openaiModel: OPENAI_MODEL,
 };
 
 const DEFAULT_PROFILE: Profile = { moreOf: "", lessOf: "", updatedAt: 0 };

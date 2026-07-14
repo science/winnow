@@ -1,8 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { applyKeyChange, isConfigured, missingConfig } from "./settingsStore";
+import { applyKeyChange, DEFAULT_SETTINGS, isConfigured, missingConfig } from "./settingsStore";
 import type { Profile, Settings } from "../lib/types";
 
-const base: Settings = { provider: "anthropic", anthropicApiKey: null, openaiApiKey: null };
+const base: Settings = {
+  provider: "anthropic",
+  anthropicApiKey: null,
+  openaiApiKey: null,
+  anthropicModel: "claude-haiku-4-5",
+  openaiModel: "gpt-5.4-mini",
+};
 const emptyProfile: Profile = { moreOf: "", lessOf: "", updatedAt: 0 };
 const someProfile: Profile = { moreOf: "deep technical dives", lessOf: "", updatedAt: 1 };
 
@@ -22,7 +28,7 @@ describe("applyKeyChange", () => {
   });
 
   it("should switch to the other provider when the selected provider's key is cleared", () => {
-    const s: Settings = { provider: "anthropic", anthropicApiKey: "sk-ant", openaiApiKey: "sk-openai" };
+    const s: Settings = { ...base, anthropicApiKey: "sk-ant", openaiApiKey: "sk-openai" };
     const next = applyKeyChange(s, "anthropic", null);
     expect(next.anthropicApiKey).toBeNull();
     expect(next.provider).toBe("openai");
@@ -39,6 +45,17 @@ describe("applyKeyChange", () => {
     const next = applyKeyChange(base, "anthropic", "sk-ant");
     expect(next.provider).toBe("anthropic");
     expect(next.anthropicApiKey).toBe("sk-ant");
+  });
+});
+
+describe("stored-settings migration", () => {
+  it("should fill model defaults when loading a pre-model-picker settings blob", () => {
+    // Spread-merge over DEFAULT_SETTINGS is the load path in settingsReady.
+    const legacy = { provider: "openai" as const, anthropicApiKey: null, openaiApiKey: "sk-openai" };
+    const merged: Settings = { ...DEFAULT_SETTINGS, ...legacy };
+    expect(merged.anthropicModel).toBe("claude-haiku-4-5");
+    expect(merged.openaiModel).toBe("gpt-5.4-mini");
+    expect(merged.openaiApiKey).toBe("sk-openai");
   });
 });
 

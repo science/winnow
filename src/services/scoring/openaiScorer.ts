@@ -9,18 +9,19 @@ import { structuredCall } from "./structuredCall";
 
 // Cheap-model names rotate at OpenAI — review this constant periodically.
 // Participates in the score-cache hash, so a swap cleanly re-scores.
-export const OPENAI_MODEL = "gpt-4o-mini";
+export const OPENAI_MODEL = "gpt-5.4-mini";
 
 export async function scoreBatchOpenai(
   videos: Video[],
   profile: Profile,
   apiKey: string,
   feedback: FeedbackExample[] = [],
+  model: string = OPENAI_MODEL,
 ): Promise<RawScore[]> {
   const result = await structuredCall<{ scores?: RawScore[] }>({
     provider: "openai",
     apiKey,
-    model: OPENAI_MODEL,
+    model,
     system: SYSTEM_PROMPT,
     user: buildUserMessage(videos, profile, feedback),
     schema: SCORES_SCHEMA,

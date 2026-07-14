@@ -58,6 +58,10 @@ export interface Settings {
   provider: Provider;
   anthropicApiKey: string | null;
   openaiApiKey: string | null;
+  /** Scoring model per provider; participates in the score-cache hash, so a
+   *  change cleanly invalidates and re-scores. */
+  anthropicModel: string;
+  openaiModel: string;
 }
 
 export interface Profile {

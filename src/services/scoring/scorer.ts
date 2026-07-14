@@ -228,12 +228,18 @@ export async function scoreFeed(): Promise<void> {
   if (!demo && (!realKey || (!$profile.moreOf.trim() && !$profile.lessOf.trim()))) return;
 
   const apiKey = demo ? "demo" : realKey!;
-  const adapter = demo
+  // The user-picked model (Settings) rides into both the adapter call and the
+  // cache hash, so switching models cleanly invalidates and re-scores.
+  const model = demo
+    ? DEMO_MODEL
+    : $settings.provider === "anthropic"
+      ? $settings.anthropicModel || ANTHROPIC_MODEL
+      : $settings.openaiModel || OPENAI_MODEL;
+  const adapter: ScoreBatchFn = demo
     ? scoreBatchDemo
     : $settings.provider === "anthropic"
-      ? scoreBatchAnthropic
-      : scoreBatchOpenai;
-  const model = demo ? DEMO_MODEL : $settings.provider === "anthropic" ? ANTHROPIC_MODEL : OPENAI_MODEL;
+      ? (v, p, k, f) => scoreBatchAnthropic(v, p, k, f, model)
+      : (v, p, k, f) => scoreBatchOpenai(v, p, k, f, model);
   const hash = profileHash($profile, PROMPT_VERSION, model);
 
   const stored = await storageGet<StoredScores>(KEYS.scores);

@@ -19,11 +19,12 @@ export async function scoreBatchAnthropic(
   profile: Profile,
   apiKey: string,
   feedback: FeedbackExample[] = [],
+  model: string = ANTHROPIC_MODEL,
 ): Promise<RawScore[]> {
   const result = await structuredCall<{ scores?: RawScore[] }>({
     provider: "anthropic",
     apiKey,
-    model: ANTHROPIC_MODEL,
+    model,
     system: SYSTEM_PROMPT,
     user: buildUserMessage(videos, profile, feedback),
     schema: SCORES_SCHEMA,
