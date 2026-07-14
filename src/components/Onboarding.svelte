@@ -1,7 +1,12 @@
 <script lang="ts">
   // First-run flow: no key or empty profile ⇒ App routes here instead of
   // the feed. It's just Settings with a welcome, so state lives in one place.
+  // The moment config completes, App swaps this view for the feed — so the
+  // footer's only job is saying what's still missing, visibly.
   import Settings from "./Settings.svelte";
+  import { missingConfig, profile, settings } from "../stores/settingsStore";
+
+  const missing = $derived(missingConfig($settings, $profile));
 </script>
 
 <div class="mx-auto max-w-2xl space-y-8" data-testid="onboarding">
@@ -25,8 +30,13 @@
   <Settings />
 
   <div class="text-center">
-    <a href="#/" class="inline-block rounded-md bg-accent-muted px-6 py-2 text-sm font-medium text-white hover:bg-accent"
-      >Open my feed →</a
-    >
+    {#if missing.length > 0}
+      <p
+        class="rounded-md border border-caution/40 bg-caution/10 px-4 py-3 text-sm text-caution"
+        data-testid="onboarding-missing"
+      >
+        Your feed opens automatically once winnow has {missing.join(" and ")}.
+      </p>
+    {/if}
   </div>
 </div>

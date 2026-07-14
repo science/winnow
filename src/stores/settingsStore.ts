@@ -3,7 +3,7 @@
 // that need loaded values await `settingsReady` first.
 
 import { writable } from "svelte/store";
-import type { Profile, Settings } from "../lib/types";
+import type { Profile, Provider, Settings } from "../lib/types";
 import { KEYS, storageGet, storageSet } from "../lib/storage";
 
 const DEFAULT_SETTINGS: Settings = {
@@ -41,4 +41,40 @@ profile.subscribe((value) => {
 export function isConfigured(s: Settings, p: Profile): boolean {
   const key = s.provider === "anthropic" ? s.anthropicApiKey : s.openaiApiKey;
   return Boolean(key) && Boolean(p.moreOf.trim() || p.lessOf.trim());
+}
+
+function keyFor(s: Settings, provider: Provider): string | null {
+  return provider === "anthropic" ? s.anthropicApiKey : s.openaiApiKey;
+}
+
+/** Set one provider's key, and keep `provider` pointing at a provider that
+ * actually has a key — entering only an OpenAI key must not leave the app
+ * silently unconfigured because the default provider is Anthropic. */
+export function applyKeyChange(s: Settings, provider: Provider, key: string | null): Settings {
+  const next: Settings =
+    provider === "anthropic" ? { ...s, anthropicApiKey: key } : { ...s, openaiApiKey: key };
+  if (!keyFor(next, next.provider)) {
+    const other: Provider = next.provider === "anthropic" ? "openai" : "anthropic";
+    if (keyFor(next, other)) next.provider = other;
+  }
+  return next;
+}
+
+const PROVIDER_LABELS: Record<Provider, string> = { anthropic: "Anthropic", openai: "OpenAI" };
+
+/** Human-readable list of what still blocks the feed; empty iff isConfigured. */
+export function missingConfig(s: Settings, p: Profile): string[] {
+  const missing: string[] = [];
+  if (!keyFor(s, s.provider)) {
+    const other: Provider = s.provider === "anthropic" ? "openai" : "anthropic";
+    missing.push(
+      keyFor(s, other)
+        ? `an API key for ${PROVIDER_LABELS[s.provider]} (your selected provider)`
+        : "an API key",
+    );
+  }
+  if (!p.moreOf.trim() && !p.lessOf.trim()) {
+    missing.push("a few words in your interest profile");
+  }
+  return missing;
 }

@@ -48,6 +48,16 @@ export async function expectOnboardingVisible(page: Page): Promise<void> {
   await expect(page.getByTestId("onboarding")).toBeVisible();
 }
 
+export async function getOnboardingMissingText(page: Page): Promise<string> {
+  return page.getByTestId("onboarding-missing").innerText();
+}
+
+/** The feed surface replaced onboarding (regardless of fetch outcome). */
+export async function expectFeedSurfaceVisible(page: Page): Promise<void> {
+  await expect(page.getByRole("button", { name: /refresh/i })).toBeVisible();
+  await expect(page.getByTestId("onboarding")).not.toBeVisible();
+}
+
 export async function expectFeedBottomMarker(page: Page): Promise<void> {
   await expect(page.getByText(/the page has a bottom/i)).toBeVisible();
 }

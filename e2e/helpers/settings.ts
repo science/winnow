@@ -15,6 +15,15 @@ export async function fillAnthropicKey(page: Page, key: string): Promise<void> {
   await page.getByLabel(/anthropic api key/i).blur();
 }
 
+export async function fillOpenAiKey(page: Page, key: string): Promise<void> {
+  await page.getByLabel(/openai api key/i).fill(key);
+  await page.getByLabel(/openai api key/i).blur();
+}
+
+export async function isProviderSelected(page: Page, name: "Anthropic" | "OpenAI"): Promise<boolean> {
+  return (await page.getByRole("radio", { name }).getAttribute("aria-checked")) === "true";
+}
+
 export async function selectProvider(page: Page, name: "Anthropic" | "OpenAI"): Promise<void> {
   await page.getByRole("radio", { name }).click();
 }

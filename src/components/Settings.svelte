@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { profile, settings } from "../stores/settingsStore";
+  import { applyKeyChange, profile, settings } from "../stores/settingsStore";
   import { KEYS, storageRemove } from "../lib/storage";
   import { scores } from "../stores/feedStore";
   import { scoreFeed } from "../services/scoring/scorer";
@@ -95,7 +95,7 @@
         placeholder="sk-ant-…"
         value={$settings.anthropicApiKey ?? ""}
         onchange={(e) => {
-          settings.update((s) => ({ ...s, anthropicApiKey: e.currentTarget.value.trim() || null }));
+          settings.update((s) => applyKeyChange(s, "anthropic", e.currentTarget.value.trim() || null));
           flashSaved();
         }}
       />
@@ -109,7 +109,7 @@
         placeholder="sk-…"
         value={$settings.openaiApiKey ?? ""}
         onchange={(e) => {
-          settings.update((s) => ({ ...s, openaiApiKey: e.currentTarget.value.trim() || null }));
+          settings.update((s) => applyKeyChange(s, "openai", e.currentTarget.value.trim() || null));
           flashSaved();
         }}
       />

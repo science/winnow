@@ -2,9 +2,13 @@ import { test, expect } from "@playwright/test";
 import {
   openOnboarding,
   expectOnboardingVisible,
+  expectFeedSurfaceVisible,
+  getOnboardingMissingText,
   openSettings,
   fillMoreOfProfile,
   fillAnthropicKey,
+  fillOpenAiKey,
+  isProviderSelected,
   readStoredJson,
 } from "../helpers";
 
@@ -22,4 +26,22 @@ test("should persist settings and profile edits", async ({ page }) => {
   expect(settings?.anthropicApiKey).toBe("sk-ant-test-not-real");
   const profile = await readStoredJson<{ moreOf: string }>(page, "winnow:profile:v1");
   expect(profile?.moreOf).toBe("long-form science explainers");
+});
+
+test("should open the feed when only an OpenAI key is configured", async ({ page }) => {
+  // Regression: provider defaults to anthropic; an OpenAI-only setup used to
+  // leave the app silently unconfigured with a dead "Open my feed" link.
+  await openOnboarding(page);
+  await expectOnboardingVisible(page);
+  await fillOpenAiKey(page, "sk-test-not-real");
+  expect(await isProviderSelected(page, "OpenAI")).toBe(true);
+  await fillMoreOfProfile(page, "long-form science explainers");
+  await expectFeedSurfaceVisible(page);
+});
+
+test("should say what is still missing instead of a dead button", async ({ page }) => {
+  await openOnboarding(page);
+  const missing = await getOnboardingMissingText(page);
+  expect(missing).toMatch(/api key/i);
+  expect(missing).toMatch(/interest profile/i);
 });
