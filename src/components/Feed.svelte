@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { collapsed, initFeed, refresh, status, tiers, videos, watched } from "../stores/feedStore";
+  import { collapsed, initFeed, refresh, status, tiers, transcriptCoverage, videos, watched } from "../stores/feedStore";
   import { scoreFeed } from "../services/scoring/scorer";
   import VideoCard from "./VideoCard.svelte";
 
@@ -40,6 +40,12 @@
       >Refresh</button
     >
   </div>
+
+  {#if $transcriptCoverage}
+    <p class="text-xs text-ink-faint" data-testid="transcript-coverage">
+      transcripts on {$transcriptCoverage.fetched}/{$transcriptCoverage.attempted} videos this run
+    </p>
+  {/if}
 
   {#each $status.warnings as warning (warning)}
     <p class="rounded-md border border-caution/40 bg-caution/10 px-3 py-2 text-sm text-caution">{warning}</p>

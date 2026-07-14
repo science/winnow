@@ -11,6 +11,7 @@ export const KEYS = {
   videos: "winnow:videos:v1",
   scores: "winnow:scores:v1",
   watched: "winnow:watched:v1",
+  transcripts: "winnow:transcripts:v1",
 } as const;
 
 type WebExtStorage = {

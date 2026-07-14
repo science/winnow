@@ -109,6 +109,10 @@ export async function expectScoringProgressHidden(page: Page): Promise<void> {
   await expect(page.getByTestId("scoring-progress")).not.toBeVisible({ timeout: 15_000 });
 }
 
+export async function expectTranscriptCoverageHidden(page: Page): Promise<void> {
+  await expect(page.getByTestId("transcript-coverage")).not.toBeVisible();
+}
+
 export async function expectWatchViewForSomeVideo(page: Page): Promise<void> {
   await expect(page.locator("iframe[src*='youtube-nocookie.com/embed/']")).toBeVisible();
 }

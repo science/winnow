@@ -12,6 +12,7 @@ import {
   expectRetryScoringInsideUnvettedFold,
   expectScoringProgressVisible,
   expectScoringProgressHidden,
+  expectTranscriptCoverageHidden,
   expectFeedBottomMarker,
 } from "../helpers";
 
@@ -68,4 +69,10 @@ test("should show scoring progress instead of unscored cards while a run is acti
   await expectScoringProgressHidden(page);
   // Vetted now — the videos appear in the scored tiers.
   await expectVideoCardVisible(page, NORMALS[0]!.title);
+});
+
+test("should not show a transcript coverage line in demo mode", async ({ page }) => {
+  await openFeedDemoWithSeed(page, NORMALS);
+  await expectVideoCardVisible(page, NORMALS[0]!.title);
+  await expectTranscriptCoverageHidden(page);
 });

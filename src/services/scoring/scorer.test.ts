@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
-import { runScoring } from "./scorer";
+import { enrichWithTranscripts, runScoring } from "./scorer";
 import { ProviderError, type RawScore, type ScoreBatchFn } from "./providerTypes";
-import type { Profile, Video } from "../../lib/types";
+import type { Profile, TranscriptCacheEntry, Video } from "../../lib/types";
 
 const profile: Profile = { moreOf: "science", lessOf: "drama", updatedAt: 0 };
 
@@ -159,5 +159,84 @@ describe("runScoring", () => {
       adapter: okAdapter(), model: "m", apiKey: "k", profile, cache: {}, sleep: noSleep, onBatch,
     });
     expect(onBatch).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("enrichWithTranscripts", () => {
+  const excerptOf = async (id: string) => ({ excerpt: `transcript of ${id}`, source: "timedtext" as const });
+  const emptyCache = async (): Promise<Record<string, TranscriptCacheEntry>> => ({});
+  const noSave = async (): Promise<void> => {};
+
+  it("should cap transcript fetches per run at 60", async () => {
+    const videos = ids(80).map(video);
+    const fetchExcerpt = vi.fn(excerptOf);
+    const result = await enrichWithTranscripts(videos, new Set(videos.map((v) => v.id)), {
+      fetchExcerpt, loadCache: emptyCache, saveCache: noSave,
+    });
+    expect(fetchExcerpt).toHaveBeenCalledTimes(60);
+    expect(result.attempted).toBe(60);
+    expect(result.fetched).toBe(60);
+  });
+
+  it("should skip live videos", async () => {
+    const live = { ...video("livenow0001"), isLive: true };
+    const fetchExcerpt = vi.fn(excerptOf);
+    const result = await enrichWithTranscripts([live, video("ordinary001")], new Set(["livenow0001", "ordinary001"]), {
+      fetchExcerpt, loadCache: emptyCache, saveCache: noSave,
+    });
+    expect(fetchExcerpt).toHaveBeenCalledTimes(1);
+    expect(fetchExcerpt).toHaveBeenCalledWith("ordinary001");
+    expect(result.videos.find((v) => v.id === "livenow0001")!.transcriptExcerpt).toBeUndefined();
+  });
+
+  it("should use cached excerpts without fetching", async () => {
+    const videos = [video("cachedvid01")];
+    const fetchExcerpt = vi.fn(excerptOf);
+    const cached: Record<string, TranscriptCacheEntry> = {
+      cachedvid01: { excerpt: "from the cache", source: "innertube", fetchedAt: 1 },
+    };
+    const result = await enrichWithTranscripts(videos, new Set(["cachedvid01"]), {
+      fetchExcerpt, loadCache: async () => cached, saveCache: noSave,
+    });
+    expect(fetchExcerpt).not.toHaveBeenCalled();
+    expect(result.videos[0]!.transcriptExcerpt).toBe("from the cache");
+    expect(result.fetched).toBe(1);
+    expect(result.attempted).toBe(1);
+  });
+
+  it("should persist newly fetched excerpts to the transcript cache", async () => {
+    const videos = [video("newfetch001")];
+    const saveCache = vi.fn<(cache: Record<string, TranscriptCacheEntry>) => Promise<void>>(
+      async () => {},
+    );
+    await enrichWithTranscripts(videos, new Set(["newfetch001"]), {
+      fetchExcerpt: excerptOf, loadCache: emptyCache, saveCache,
+    });
+    expect(saveCache).toHaveBeenCalledTimes(1);
+    const saved = saveCache.mock.calls[0]![0];
+    expect(saved["newfetch001"]!.excerpt).toBe("transcript of newfetch001");
+    expect(saved["newfetch001"]!.source).toBe("timedtext");
+  });
+
+  it("should report fetched/attempted coverage when some videos have no transcript", async () => {
+    const videos = [video("hastrans001"), video("notrans0001")];
+    const fetchExcerpt = async (id: string) =>
+      id === "hastrans001" ? { excerpt: "found", source: "timedtext" as const } : null;
+    const result = await enrichWithTranscripts(videos, new Set(["hastrans001", "notrans0001"]), {
+      fetchExcerpt, loadCache: emptyCache, saveCache: noSave,
+    });
+    expect(result.fetched).toBe(1);
+    expect(result.attempted).toBe(2);
+  });
+
+  it("should leave videos untouched when everything misses", async () => {
+    const videos = [video("nothing0001")];
+    const saveCache = vi.fn(noSave);
+    const result = await enrichWithTranscripts(videos, new Set(["nothing0001"]), {
+      fetchExcerpt: async () => null, loadCache: emptyCache, saveCache,
+    });
+    expect(result.videos[0]!.transcriptExcerpt).toBeUndefined();
+    expect(result.fetched).toBe(0);
+    expect(saveCache).not.toHaveBeenCalled();
   });
 });

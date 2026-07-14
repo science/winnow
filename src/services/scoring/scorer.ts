@@ -4,7 +4,7 @@
 // malformed responses; auth errors abort the whole run.
 
 import { get } from "svelte/store";
-import type { Profile, Video, VideoScore } from "../../lib/types";
+import type { Profile, TranscriptCacheEntry, Video, VideoScore } from "../../lib/types";
 import { profileHash } from "../../lib/profileHash";
 import { KEYS, storageGet, storageSet } from "../../lib/storage";
 import { log } from "../../lib/logger";
@@ -13,9 +13,15 @@ import { ProviderError, isRetryable, type ScoreBatchFn } from "./providerTypes";
 import { scoreBatchAnthropic, ANTHROPIC_MODEL } from "./anthropicScorer";
 import { scoreBatchOpenai, OPENAI_MODEL } from "./openaiScorer";
 import { scoreBatchDemo, DEMO_MODEL } from "./demoScorer";
-import { videos as videosStore, scores as scoresStore, pendingScores, status } from "../../stores/feedStore";
+import {
+  videos as videosStore,
+  scores as scoresStore,
+  pendingScores,
+  status,
+  transcriptCoverage,
+} from "../../stores/feedStore";
 import { settings, profile as profileStore, settingsReady } from "../../stores/settingsStore";
-import { fetchTranscriptExcerpt } from "../youtube/transcripts";
+import { fetchTranscriptExcerpt, type TranscriptResult } from "../youtube/transcripts";
 import { isDemoMode } from "../youtube/feedSource";
 
 const CONCURRENCY = 2;
@@ -133,32 +139,78 @@ interface StoredScores {
 }
 
 // Transcript enrichment is bounded: watch-page fetches are the heaviest
-// YouTube traffic we generate, so cap per scoring run and keep results
-// transient (scores persist; transcripts are only needed once per video).
+// YouTube traffic we generate, so cap per scoring run and cache successes
+// (winnow:transcripts:v1) so re-scores and feedback analysis never re-fetch.
 const TRANSCRIPT_CAP = 60;
 const TRANSCRIPT_CONCURRENCY = 2;
 
-async function enrichWithTranscripts(videos: Video[], missIds: Set<string>): Promise<Video[]> {
-  if (isDemoMode()) return videos;
+export interface EnrichResult {
+  videos: Video[];
+  /** Videos that ended up with an excerpt (cache hits + fresh fetches). */
+  fetched: number;
+  /** Videos we wanted an excerpt for this run (post-cap). */
+  attempted: number;
+}
+
+export interface EnrichDeps {
+  fetchExcerpt?: (videoId: string) => Promise<TranscriptResult | null>;
+  loadCache?: () => Promise<Record<string, TranscriptCacheEntry> | null>;
+  saveCache?: (cache: Record<string, TranscriptCacheEntry>) => Promise<void>;
+}
+
+export async function enrichWithTranscripts(
+  videos: Video[],
+  missIds: Set<string>,
+  deps: EnrichDeps = {},
+): Promise<EnrichResult> {
+  if (isDemoMode()) return { videos, fetched: 0, attempted: 0 };
+  const fetchExcerpt = deps.fetchExcerpt ?? ((id: string) => fetchTranscriptExcerpt(id));
+  const loadCache =
+    deps.loadCache ?? (() => storageGet<Record<string, TranscriptCacheEntry>>(KEYS.transcripts));
+  const saveCache =
+    deps.saveCache ??
+    ((cache: Record<string, TranscriptCacheEntry>) => storageSet(KEYS.transcripts, cache));
+
   const targets = videos.filter((v) => missIds.has(v.id) && !v.isLive).slice(0, TRANSCRIPT_CAP);
-  if (targets.length === 0) return videos;
+  if (targets.length === 0) return { videos, fetched: 0, attempted: 0 };
 
   status.update((s) => ({ ...s, detail: "Fetching transcripts…" }));
-  const excerpts = new Map<string, string | null>();
+  const cache = (await loadCache()) ?? {};
+  const excerpts = new Map<string, string>();
+  const fresh: Record<string, TranscriptCacheEntry> = {};
+
+  const toFetch: Video[] = [];
+  for (const v of targets) {
+    const hit = cache[v.id];
+    if (hit) excerpts.set(v.id, hit.excerpt);
+    else toFetch.push(v);
+  }
+
   let next = 0;
   async function worker(): Promise<void> {
-    while (next < targets.length) {
-      const v = targets[next++]!;
-      const result = await fetchTranscriptExcerpt(v.id);
-      excerpts.set(v.id, result?.excerpt ?? null);
+    while (next < toFetch.length) {
+      const v = toFetch[next++]!;
+      const result = await fetchExcerpt(v.id);
+      if (result) {
+        excerpts.set(v.id, result.excerpt);
+        fresh[v.id] = { excerpt: result.excerpt, source: result.source, fetchedAt: Date.now() };
+      }
     }
   }
   await Promise.all(Array.from({ length: TRANSCRIPT_CONCURRENCY }, worker));
   status.update((s) => ({ ...s, detail: "" }));
 
-  const found = [...excerpts.values()].filter(Boolean).length;
-  log.info(`transcripts: ${found}/${targets.length} fetched`);
-  return videos.map((v) => (excerpts.get(v.id) ? { ...v, transcriptExcerpt: excerpts.get(v.id) } : v));
+  if (Object.keys(fresh).length > 0) await saveCache({ ...cache, ...fresh });
+
+  log.info(`transcripts: ${excerpts.size}/${targets.length} fetched`);
+  return {
+    videos: videos.map((v) => {
+      const excerpt = excerpts.get(v.id);
+      return excerpt ? { ...v, transcriptExcerpt: excerpt } : v;
+    }),
+    fetched: excerpts.size,
+    attempted: targets.length,
+  };
 }
 
 /** Wire runScoring into the app stores. Safe to call any time; no-ops when
@@ -191,9 +243,14 @@ export async function scoreFeed(): Promise<void> {
   pendingScores.set(new Set(misses.map((v) => v.id)));
   status.update((s) => ({ ...s, phase: "scoring", scoredCount: 0, scoreTotal: misses.length }));
 
-  const enriched = await enrichWithTranscripts($videos, new Set(misses.map((v) => v.id)));
+  const enrichment = await enrichWithTranscripts($videos, new Set(misses.map((v) => v.id)));
+  transcriptCoverage.set(
+    enrichment.attempted > 0
+      ? { fetched: enrichment.fetched, attempted: enrichment.attempted }
+      : null,
+  );
 
-  const result = await runScoring(enriched, {
+  const result = await runScoring(enrichment.videos, {
     adapter,
     model,
     apiKey,

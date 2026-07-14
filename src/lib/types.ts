@@ -20,8 +20,17 @@ export interface Video {
   thumbnailUrl: string | null;
   descriptionSnippet: string | null;
   isLive: boolean;
-  /** Transient scoring enrichment — fetched at score time, never persisted. */
+  /** Scoring enrichment — attached at score time from the transcript cache
+   * or a fresh fetch; never persisted on the video itself. */
   transcriptExcerpt?: string | null;
+}
+
+/** One entry in the persisted transcript cache (winnow:transcripts:v1).
+ * Successes only — failures stay retryable on the next scoring run. */
+export interface TranscriptCacheEntry {
+  excerpt: string;
+  source: "timedtext" | "innertube";
+  fetchedAt: number;
 }
 
 export type ScoreState = "pending" | "scored" | "unknown";

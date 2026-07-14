@@ -1,5 +1,5 @@
 import { derived, get, writable } from "svelte/store";
-import type { Video, VideoScore, ScoredVideo } from "../lib/types";
+import type { TranscriptCacheEntry, Video, VideoScore, ScoredVideo } from "../lib/types";
 import { bucketVideos, scoresCollapse, type Tiers } from "../lib/tiers";
 import { KEYS, storageGet, storageSet } from "../lib/storage";
 import { loadFeeds } from "../services/youtube/feedSource";
@@ -33,6 +33,11 @@ export const status = writable<FeedStatus>({
   scoredCount: 0,
   scoreTotal: 0,
 });
+
+/** Session-only transcript coverage from the last scoring run — the
+ * production-visible signal that the transcript seam works (log.info is
+ * stripped from prod builds). Null until a run attempts transcripts. */
+export const transcriptCoverage = writable<{ fetched: number; attempted: number } | null>(null);
 
 export const scoredVideos = derived(
   [videos, scores, pendingScores],
@@ -107,13 +112,21 @@ export async function markWatched(videoId: string): Promise<void> {
   await storageSet(KEYS.watched, next);
 }
 
-/** Drop watched entries whose videos left the feed window. */
-async function pruneStaleEntries(current: Video[]): Promise<void> {
+/** Drop watched marks and transcript-cache entries whose videos left the
+ * feed window. Exported for tests. */
+export async function pruneStaleEntries(current: Video[]): Promise<void> {
   const ids = new Set(current.map((v) => v.id));
   const w = get(watched);
   const pruned = Object.fromEntries(Object.entries(w).filter(([id]) => ids.has(id)));
   if (Object.keys(pruned).length !== Object.keys(w).length) {
     watched.set(pruned);
     await storageSet(KEYS.watched, pruned);
+  }
+  const transcripts = await storageGet<Record<string, TranscriptCacheEntry>>(KEYS.transcripts);
+  if (transcripts) {
+    const kept = Object.fromEntries(Object.entries(transcripts).filter(([id]) => ids.has(id)));
+    if (Object.keys(kept).length !== Object.keys(transcripts).length) {
+      await storageSet(KEYS.transcripts, kept);
+    }
   }
 }
