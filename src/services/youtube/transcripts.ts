@@ -8,6 +8,8 @@
 // on metadata alone. In-browser verification tracked in QUESTIONS.md.
 
 import { log } from "../../lib/logger";
+import { sapisidHashHeader, YOUTUBE_ORIGIN } from "../../lib/sapisidHash";
+import { getSapisid } from "./authCookies";
 import { extractJsonBlob } from "./pageExtract";
 import { extractInnertubeConfig, extractYtInitialData } from "./ytPage";
 
@@ -145,26 +147,38 @@ export function parseInnertubeTranscript(data: unknown, maxChars: number): strin
   return parts.join(" ").slice(0, maxChars);
 }
 
-/** InnerTube get_transcript fallback. Cookies-only auth: a 401/403 here
- * means the endpoint wants SAPISIDHASH — logged distinctively, null returned
- * (the contingency is tracked in QUESTIONS.md, not silently attempted). */
+/** InnerTube get_transcript fallback, signed with SAPISIDHASH when the
+ * SAPISID cookie is readable (cookies permission; extension context only).
+ * Without it the request is cookies-only, which some sessions reject with
+ * 401/403 — logged distinctively, null returned. */
 export async function fetchTranscriptInnertube(
   html: string,
   videoId: string,
   maxChars: number,
   fetchFn: typeof fetch,
+  getSapisidFn: () => Promise<string | null> = getSapisid,
 ): Promise<string | null> {
   const cfg = extractInnertubeConfig(html);
   if (!cfg) return null;
   const params = extractTranscriptParams(extractYtInitialData(html));
   if (!params) return null;
 
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  const sapisid = await getSapisidFn();
+  if (sapisid) {
+    // The hash claims YOUTUBE_ORIGIN; the browser still sends the real
+    // moz-extension Origin (forbidden header), so X-Origin carries the claim.
+    headers["Authorization"] = await sapisidHashHeader(sapisid, YOUTUBE_ORIGIN);
+    headers["X-Origin"] = YOUTUBE_ORIGIN;
+    headers["X-Goog-AuthUser"] = "0";
+  }
+
   const res = await fetchFn(
     `https://www.youtube.com/youtubei/v1/get_transcript?key=${cfg.apiKey}&prettyPrint=false`,
     {
       method: "POST",
       credentials: "include",
-      headers: { "Content-Type": "application/json" },
+      headers,
       body: JSON.stringify({
         context: { client: { clientName: "WEB", clientVersion: cfg.clientVersion, hl: "en" } },
         params,
@@ -173,7 +187,9 @@ export async function fetchTranscriptInnertube(
   );
   if (res.status === 401 || res.status === 403) {
     log.warn(
-      `InnerTube get_transcript rejected (${res.status}) for ${videoId} — cookies-only auth may be insufficient (SAPISIDHASH contingency, see QUESTIONS.md)`,
+      `InnerTube get_transcript rejected (${res.status}) for ${videoId} — ${
+        sapisid ? "even with SAPISIDHASH auth (Origin-claim contingency, see QUESTIONS.md)" : "no SAPISID cookie readable, cookies-only auth insufficient"
+      }`,
     );
     return null;
   }
@@ -190,9 +206,10 @@ export async function fetchTranscriptInnertube(
 export async function fetchTranscriptExcerpt(
   videoId: string,
   maxChars: number = TRANSCRIPT_EXCERPT_CHARS,
-  deps: { fetchFn?: typeof fetch } = {},
+  deps: { fetchFn?: typeof fetch; getSapisidFn?: () => Promise<string | null> } = {},
 ): Promise<TranscriptResult | null> {
   const fetchFn = deps.fetchFn ?? fetch;
+  const getSapisidFn = deps.getSapisidFn ?? getSapisid;
   try {
     const pageRes = await fetchFn(`https://www.youtube.com/watch?v=${videoId}`, {
       credentials: "include",
@@ -224,7 +241,7 @@ export async function fetchTranscriptExcerpt(
       log.debug("timedtext path failed for", videoId, err);
     }
 
-    const excerpt = await fetchTranscriptInnertube(html, videoId, maxChars, fetchFn);
+    const excerpt = await fetchTranscriptInnertube(html, videoId, maxChars, fetchFn, getSapisidFn);
     if (excerpt) return { excerpt, source: "innertube" };
     return null;
   } catch (err) {

@@ -92,6 +92,17 @@ describe("extractTranscriptParams", () => {
   });
 });
 
+describe("SAPISIDHASH manifest wiring", () => {
+  it("should hold the cookies permission the SAPISID read requires", async () => {
+    const { readFileSync } = await import("node:fs");
+    const manifest = JSON.parse(
+      readFileSync(new URL("../../../public/manifest.json", import.meta.url), "utf8"),
+    ) as { permissions: string[]; host_permissions: string[] };
+    expect(manifest.permissions).toContain("cookies");
+    expect(manifest.host_permissions.some((h) => h.includes("youtube.com"))).toBe(true);
+  });
+});
+
 // Fixtures pruned from a real watch-page capture (2026-07-14): the shapes
 // YouTube actually serves, so synthetic drift can't hide a seam break.
 describe("real watch-page capture shapes", () => {
@@ -188,9 +199,11 @@ const INNERTUBE_RESPONSE = {
 
 function fetchStub(opts: { timedtextBody: string; innertubeStatus?: number }) {
   const calls: string[] = [];
-  const fetchFn = (async (url: RequestInfo | URL) => {
+  const headersByUrl = new Map<string, Record<string, string>>();
+  const fetchFn = (async (url: RequestInfo | URL, init?: RequestInit) => {
     const u = String(url);
     calls.push(u);
+    headersByUrl.set(u, (init?.headers as Record<string, string>) ?? {});
     if (u.includes("/watch?v=")) return new Response(CHAIN_WATCH_HTML, { status: 200 });
     if (u.includes("timedtext")) return new Response(opts.timedtextBody, { status: 200 });
     if (u.includes("youtubei/v1/get_transcript")) {
@@ -198,7 +211,11 @@ function fetchStub(opts: { timedtextBody: string; innertubeStatus?: number }) {
     }
     return new Response("", { status: 404 });
   }) as typeof fetch;
-  return { fetchFn, calls };
+  const innertubeHeaders = (): Record<string, string> | undefined => {
+    const url = calls.find((u) => u.includes("youtubei/v1/get_transcript"));
+    return url ? headersByUrl.get(url) : undefined;
+  };
+  return { fetchFn, calls, innertubeHeaders };
 }
 
 describe("fetchTranscriptExcerpt", () => {
@@ -221,5 +238,28 @@ describe("fetchTranscriptExcerpt", () => {
   it("should return null when both paths fail", async () => {
     const { fetchFn } = fetchStub({ timedtextBody: "", innertubeStatus: 403 });
     expect(await fetchTranscriptExcerpt("vid00000001", 2000, { fetchFn })).toBeNull();
+  });
+
+  it("should sign the InnerTube call with SAPISIDHASH when the cookie is readable", async () => {
+    const { fetchFn, innertubeHeaders } = fetchStub({ timedtextBody: "" });
+    const result = await fetchTranscriptExcerpt("vid00000001", 2000, {
+      fetchFn,
+      getSapisidFn: async () => "test-sapisid-value",
+    });
+    expect(result).toEqual({ excerpt: "From InnerTube", source: "innertube" });
+    const headers = innertubeHeaders()!;
+    expect(headers["Authorization"]).toMatch(/^SAPISIDHASH \d+_[0-9a-f]{40}$/);
+    expect(headers["X-Origin"]).toBe("https://www.youtube.com");
+  });
+
+  it("should degrade to cookies-only headers when no SAPISID is available", async () => {
+    const { fetchFn, innertubeHeaders } = fetchStub({ timedtextBody: "" });
+    await fetchTranscriptExcerpt("vid00000001", 2000, {
+      fetchFn,
+      getSapisidFn: async () => null,
+    });
+    const headers = innertubeHeaders()!;
+    expect(headers["Authorization"]).toBeUndefined();
+    expect(headers["X-Origin"]).toBeUndefined();
   });
 });

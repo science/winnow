@@ -29,7 +29,9 @@ Status as of 2026-07-14: MVP confirmed working by the user against real YouTube 
 | `src/services/youtube/ytPage.ts` | Credentialed page fetch, `ytInitialData` + ytcfg extraction (`extractInnertubeConfig`), signed-out detection, `lastCaptures` (feeds the "Copy debug fixture" button) | Fetch/extraction issues |
 | `src/services/youtube/feedParser.ts` | **The fragility boundary.** ytInitialData → `Video[]`; deep-walk over `videoRenderer`/`gridVideoRenderer`/`compactVideoRenderer` + `lockupViewModel` | YouTube changes shapes (see recipe 2) |
 | `src/services/youtube/feedSource.ts` | `isDemoMode()`, demo fixtures, `loadFeeds()` merge/dedupe/cap (300), partial-failure warnings | Feed sources, demo behavior |
-| `src/services/youtube/transcripts.ts` | Two-path excerpt fetch: timedtext json3 → InnerTube `get_transcript` fallback; null on ANY failure; `lastTranscriptCapture` debug capture | Transcript issues (in-browser verdict pending — QUESTIONS #4) |
+| `src/services/youtube/transcripts.ts` | Two-path excerpt fetch: timedtext json3 → InnerTube `get_transcript` (SAPISIDHASH-signed when the cookie is readable); null on ANY failure; `lastTranscriptCapture` debug capture | Transcript issues (in-browser verdict pending — QUESTIONS #4) |
+| `src/services/youtube/authCookies.ts` | Boundary: reads the youtube.com `SAPISID` cookie via `browser.cookies` (cookies permission); null outside extension contexts | SAPISIDHASH auth issues |
+| `src/lib/sapisidHash.ts` | Pure SAPISIDHASH header builder (SHA-1 via crypto.subtle, known-vector tested) | InnerTube 401/403 |
 | `src/services/scoring/prompt.ts` | `PROMPT_VERSION`, `BATCH_SIZE`, system prompt, shared JSON schema, user-message builder | Prompt changes (see recipe 7 — bump the version!) |
 | `src/services/scoring/providerTypes.ts` | `ScoreBatchFn` interface, `ProviderError` taxonomy (`auth/rate/server/network/bad_request/bad_response`), `isRetryable` | New provider or error kind |
 | `src/services/scoring/structuredCall.ts` | ONE structured-output call, either provider (forced tool / json_schema, headers, error taxonomy) | New call types (two-phase `translateProfile` goes here) |

@@ -25,6 +25,8 @@ User: I put a fixtures folder in ./e2e/fixtures with a json file there with like
 User: I see this item in the console log, after reloading the addon:
 `[winnow] InnerTube get_transcript rejected (403) for 0TILwM-FpLk — cookies-only auth may be insufficient (SAPISIDHASH contingency, see QUESTIONS.md)`
 
+→ **SAPISIDHASH implemented 2026-07-14** (you approved the `cookies` permission). InnerTube calls are now signed with `Authorization: SAPISIDHASH` derived from your youtube.com SAPISID cookie (read-only; only the SHA-1 hash travels, only to youtube.com). **Retest wanted:** rebuild, then **Remove the add-on entirely and Load Temporary Add-on again** (new permission — "Reload" is not enough; same trap as the error-153 fix), Settings → Re-score everything, and report the "transcripts on N/M videos this run" line. If N is still 0 and a dev-build console still shows 403s *with* SAPISIDHASH, the next contingency is a DNR rule claiming `Origin: https://www.youtube.com` on the get_transcript request (same pattern as the error-153 Referer rule) — currently we can only claim it via `X-Origin` because fetch can't set `Origin`.
+
 
 5. **Live scoring validation.** ~~No real Anthropic/OpenAI call has been made.~~ **Update 2026-07-14:** live e2e tests (`npm run test:e2e:live`, keys from `.env.production`) now exercise both providers against their real APIs — strict schemas accepted, scores valid, on-profile substance outscores drama bait, bait flagged clickbait. Still worth your eyeball: ~20 scores on your *real* feed against your own judgment, and whether `gpt-4o-mini` is still the right cheap OpenAI model (`src/services/scoring/openaiScorer.ts` — one constant).
 

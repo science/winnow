@@ -82,6 +82,7 @@ Cost (claude-haiku-4-5): cold start ~200 videos ≈ $0.10 without transcripts, r
 - YouTube sees ordinary page fetches from the user's own browser session.
 - The chosen AI provider receives video *metadata* (title/channel/stats) and transcript excerpts, plus the user's profile text — under the user's own API key.
 - Keys live in extension storage; readable by anything with debugger access to the browser profile. Accepted for a no-backend personal tool; stated in the README.
+- The `cookies` permission exists solely to read the youtube.com `SAPISID` cookie, which signs InnerTube transcript requests (`Authorization: SAPISIDHASH`, `src/lib/sapisidHash.ts`). The cookie value never leaves the browser — only its SHA-1 hash travels, and only to youtube.com.
 - `anthropic-dangerous-direct-browser-access` / direct Bearer fetches are the established house pattern for BYO-key client-only apps.
 
 ## Verification
