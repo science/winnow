@@ -35,10 +35,16 @@ jobs:
         with:
           name: winnow-extension
           path: web-ext-artifacts/*.zip
-      - name: Attach zip to release
+      - name: Sign for AMO (unlisted)
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          MOZILLA_ADDONS_JWT_ISSUER: ${{ secrets.MOZILLA_ADDONS_JWT_ISSUER }}
+          MOZILLA_ADDONS_JWT_SECRET: ${{ secrets.MOZILLA_ADDONS_JWT_SECRET }}
+        run: node scripts/sign.mjs
+      - name: Attach zip and signed xpi to release
         if: startsWith(github.ref, 'refs/tags/v')
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "${GITHUB_REF_NAME}" --generate-notes web-ext-artifacts/*.zip \
-            || gh release upload "${GITHUB_REF_NAME}" web-ext-artifacts/*.zip
+          gh release create "${GITHUB_REF_NAME}" --generate-notes web-ext-artifacts/*.zip web-ext-artifacts/*.xpi \
+            || gh release upload "${GITHUB_REF_NAME}" web-ext-artifacts/*.zip web-ext-artifacts/*.xpi

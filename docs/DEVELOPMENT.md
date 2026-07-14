@@ -89,6 +89,8 @@ npm run test:e2e:live         # real provider calls; when touching prompt/provid
 
 Manual smoke when the change affects real-YouTube behavior: `npm run build` (or `build:dev` for logs), reload the temporary add-on, refresh, compare against youtube.com. Before every commit: `git status` and account for every file. CI red on `main` is stop-the-line.
 
+**Signing (permanent installs):** `npm run sign` builds and signs `dist/` via AMO (unlisted channel, no review queue) → `web-ext-artifacts/*.xpi`, installable permanently via `about:addons`. Credentials: `credentials/env.production` locally (gitignored), repo secrets in CI (`v*` tags sign automatically and attach the xpi to the release). **AMO permanently rejects re-signing a version it has seen** — bump `package.json` AND `public/manifest.json` together before tagging (`src/lib/manifestVersion.test.ts` keeps them in sync with each other; the sign step failing on a duplicate is the intended loud signal).
+
 For pure UI iteration, skip the extension loop entirely: `npm run dev` → `http://<vm>:5173/feed.html?demo=1`.
 
 ## Debugging playbook
