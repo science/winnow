@@ -18,6 +18,12 @@ export function isDemoMode(): boolean {
   return typeof location !== "undefined" && new URLSearchParams(location.search).has("demo");
 }
 
+/** ?slow=1 alongside ?demo=1: the demo scorer delays each batch so e2e can
+ * observe in-progress scoring states (progress panel, hidden unvetted cards). */
+export function isSlowDemo(): boolean {
+  return typeof location !== "undefined" && new URLSearchParams(location.search).has("slow");
+}
+
 async function loadDemo(): Promise<FeedLoad> {
   const [subs, home] = await Promise.all([
     import("./fixtures/subscriptions-videorenderer.json"),

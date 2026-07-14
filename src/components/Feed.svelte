@@ -1,19 +1,20 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { collapsed, initFeed, refresh, status, tiers, watched } from "../stores/feedStore";
+  import { collapsed, initFeed, refresh, status, tiers, videos, watched } from "../stores/feedStore";
   import { scoreFeed } from "../services/scoring/scorer";
   import VideoCard from "./VideoCard.svelte";
 
   let showWinnowed = $state(false);
+  let showUnvetted = $state(false);
 
   onMount(() => {
     void initFeed().then(() => scoreFeed());
   });
 
   const watchedSet = $derived(new Set(Object.keys($watched)));
-  const totalShown = $derived(
-    $tiers.top.length + $tiers.worthALook.length + $tiers.winnowed.length + $tiers.unscored.length,
-  );
+  // Unvetted videos never render as browsable feed items; leftovers that a
+  // run couldn't score (failures, no key) stay reachable behind a fold.
+  const unvetted = $derived($tiers.unscored.filter((v) => v.scoreState === "unknown"));
 
   async function onRefresh(): Promise<void> {
     await refresh();
@@ -53,12 +54,16 @@
         sign in, then come back and refresh.
       </p>
     </section>
-  {:else if $status.phase === "error"}
-    <section class="rounded-lg border border-danger/40 bg-danger/10 p-6" data-testid="feed-error">
-      <h2 class="font-medium text-danger">Couldn't load your feed</h2>
-      <p class="mt-1 text-sm text-ink-muted">{$status.detail}</p>
-    </section>
-  {:else if $status.phase === "loading" || ($status.phase === "fetching" && totalShown === 0)}
+  {:else}
+    {#if $status.phase === "error"}
+      <!-- A banner, not a replacement: scored tiers and the unvetted fold stay
+           reachable after a failed refresh or an aborted scoring run. -->
+      <section class="rounded-lg border border-danger/40 bg-danger/10 p-6" data-testid="feed-error">
+        <h2 class="font-medium text-danger">Something went wrong</h2>
+        <p class="mt-1 text-sm text-ink-muted">{$status.detail}</p>
+      </section>
+    {/if}
+    {#if $status.phase === "loading" || ($status.phase === "fetching" && $videos.length === 0)}
     <div class="space-y-3" aria-hidden="true">
       {#each Array(5) as _unused, i (i)}
         <div class="flex animate-pulse gap-4 p-3">
@@ -70,11 +75,13 @@
         </div>
       {/each}
     </div>
-  {:else if totalShown === 0}
-    <section class="rounded-lg bg-surface-raised p-8 text-center">
-      <h2 class="text-lg font-medium">Nothing here yet</h2>
-      <p class="mt-2 text-sm text-ink-muted">Hit Refresh to pull your subscriptions and recommendations.</p>
-    </section>
+  {:else if $videos.length === 0}
+    {#if $status.phase !== "error"}
+      <section class="rounded-lg bg-surface-raised p-8 text-center">
+        <h2 class="text-lg font-medium">Nothing here yet</h2>
+        <p class="mt-2 text-sm text-ink-muted">Hit Refresh to pull your subscriptions and recommendations.</p>
+      </section>
+    {/if}
   {:else}
     {#if $collapsed}
       <p class="rounded-md border border-caution/40 bg-caution/10 px-3 py-2 text-sm text-caution" data-testid="collapse-hint">
@@ -101,18 +108,49 @@
       </section>
     {/if}
 
-    {#if $tiers.unscored.length > 0}
-      <section data-testid="tier-unscored">
-        <h2 class="mb-2 text-sm font-semibold uppercase tracking-wider text-ink-faint">Not scored yet</h2>
-        {#each $tiers.unscored as video (video.id)}
-          <VideoCard {video} watched={watchedSet.has(video.id)} />
-        {/each}
-        {#if $tiers.unscored.some((v) => v.scoreState === "unknown") && $status.phase === "idle"}
-          <button
-            onclick={() => scoreFeed()}
-            class="mt-2 rounded-md bg-surface-raised px-3 py-1.5 text-sm text-ink hover:bg-surface-hover"
-            data-testid="retry-scoring">Retry scoring</button
-          >
+    {#if $status.phase === "scoring"}
+      <section
+        class="rounded-lg bg-surface-raised p-6"
+        data-testid="scoring-progress"
+        aria-live="polite"
+      >
+        <p class="text-sm text-ink-muted">
+          Vetting {$status.scoredCount} of {$status.scoreTotal} videos…
+        </p>
+        {#if $status.detail}
+          <p class="mt-1 text-xs text-ink-faint">{$status.detail}</p>
+        {/if}
+        <div class="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-surface">
+          <div
+            class="h-full rounded-full bg-accent transition-all duration-300"
+            style="width: {$status.scoreTotal > 0 ? ($status.scoredCount / $status.scoreTotal) * 100 : 0}%"
+          ></div>
+        </div>
+      </section>
+    {:else if unvetted.length > 0}
+      <section data-testid="tier-unvetted">
+        <button
+          onclick={() => (showUnvetted = !showUnvetted)}
+          class="w-full rounded-md bg-surface-raised px-3 py-2 text-left text-sm text-ink-faint hover:bg-surface-hover"
+          data-testid="unvetted-fold"
+        >
+          {showUnvetted ? "▾" : "▸"}
+          {unvetted.length}
+          {unvetted.length === 1 ? "video" : "videos"} awaiting vetting — {showUnvetted ? "hide" : "show"}
+        </button>
+        {#if showUnvetted}
+          <div class="mt-2 opacity-70">
+            {#each unvetted as video (video.id)}
+              <VideoCard {video} watched={watchedSet.has(video.id)} />
+            {/each}
+            {#if $status.phase === "idle"}
+              <button
+                onclick={() => scoreFeed()}
+                class="mt-2 rounded-md bg-surface-raised px-3 py-1.5 text-sm text-ink hover:bg-surface-hover"
+                data-testid="retry-scoring">Retry scoring</button
+              >
+            {/if}
+          </div>
         {/if}
       </section>
     {/if}
@@ -141,5 +179,6 @@
     <p class="pt-4 text-center text-xs text-ink-faint">
       That's everything from your subscriptions and recommendations. The page has a bottom.
     </p>
+    {/if}
   {/if}
 </div>

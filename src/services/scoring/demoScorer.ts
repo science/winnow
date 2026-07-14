@@ -4,8 +4,15 @@
 import type { Profile, Video } from "../../lib/types";
 import { fnv1a } from "../../lib/profileHash";
 import type { RawScore } from "./providerTypes";
+import { isSlowDemo } from "../youtube/feedSource";
 
 export const DEMO_MODEL = "demo-stub";
+
+/** Ids with this prefix never get a demo score — the deterministic seam for
+ * exercising the awaiting-vetting fold in e2e. */
+export const DEMO_UNVETTED_PREFIX = "unvet";
+
+const SLOW_DEMO_DELAY_MS = 1500;
 
 const REASONS: Record<string, string> = {
   top: "Substantive and squarely in your interests.",
@@ -18,7 +25,8 @@ export async function scoreBatchDemo(
   _profile: Profile,
   _apiKey: string,
 ): Promise<RawScore[]> {
-  return videos.map((v) => {
+  if (isSlowDemo()) await new Promise((r) => setTimeout(r, SLOW_DEMO_DELAY_MS));
+  return videos.filter((v) => !v.id.startsWith(DEMO_UNVETTED_PREFIX)).map((v) => {
     const h = parseInt(fnv1a(v.id).slice(0, 4), 16) % 100;
     const tier = h >= 60 ? "top" : h >= 25 ? "mid" : "low";
     const score = tier === "top" ? 75 + (h % 25) : tier === "mid" ? 50 + (h % 25) : h;
