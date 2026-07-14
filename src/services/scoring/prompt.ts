@@ -6,7 +6,7 @@ export const PROMPT_VERSION = 1;
 
 export const BATCH_SIZE = 20;
 
-export const SYSTEM_PROMPT = `You curate a YouTube feed for one person. You will receive their interest profile (what they want more of and less of) and a batch of videos with metadata (title, channel, duration, age, view count, source, and sometimes a description snippet).
+export const SYSTEM_PROMPT = `You curate a YouTube feed for one person. You will receive their interest profile (what they want more of and less of) and a batch of videos with metadata (title, channel, duration, age, view count, source, and sometimes a description snippet or transcript excerpt). When a transcript excerpt is present, weigh it heavily — it reveals whether the content delivers on the title's promise.
 
 Score each video 0-100 for how likely watching it leaves this person genuinely satisfied and enriched afterward — not how likely they are to click it. Reward substance that matches the profile. Penalize clickbait, engagement bait, manufactured outrage, and titles or framing that overpromise (withheld subject, "you won't believe", all-caps hype, fear-mongering thumbnails). A video can be squarely on-topic for the profile and still be clickbait — score it accordingly and set the clickbait flag.
 
@@ -51,6 +51,7 @@ export function buildUserMessage(videos: Video[], profile: Profile): string {
     views: v.viewCountText ?? "unknown",
     source: v.source,
     ...(v.descriptionSnippet ? { description: v.descriptionSnippet.slice(0, 500) } : {}),
+    ...(v.transcriptExcerpt ? { transcript: v.transcriptExcerpt } : {}),
   }));
   return [
     "<profile>",

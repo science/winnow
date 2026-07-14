@@ -14,6 +14,8 @@ import { scoreBatchAnthropic, ANTHROPIC_MODEL } from "./anthropicScorer";
 import { scoreBatchOpenai, OPENAI_MODEL } from "./openaiScorer";
 import { videos as videosStore, scores as scoresStore, pendingScores, status } from "../../stores/feedStore";
 import { settings, profile as profileStore, settingsReady } from "../../stores/settingsStore";
+import { fetchTranscriptExcerpt } from "../youtube/transcripts";
+import { isDemoMode } from "../youtube/feedSource";
 
 const CONCURRENCY = 2;
 const RETRY_DELAY_MS = 2000;
@@ -129,6 +131,34 @@ interface StoredScores {
   scores: Record<string, VideoScore>;
 }
 
+// Transcript enrichment is bounded: watch-page fetches are the heaviest
+// YouTube traffic we generate, so cap per scoring run and keep results
+// transient (scores persist; transcripts are only needed once per video).
+const TRANSCRIPT_CAP = 60;
+const TRANSCRIPT_CONCURRENCY = 2;
+
+async function enrichWithTranscripts(videos: Video[], missIds: Set<string>): Promise<Video[]> {
+  if (isDemoMode()) return videos;
+  const targets = videos.filter((v) => missIds.has(v.id) && !v.isLive).slice(0, TRANSCRIPT_CAP);
+  if (targets.length === 0) return videos;
+
+  status.update((s) => ({ ...s, detail: "Fetching transcripts…" }));
+  const excerpts = new Map<string, string | null>();
+  let next = 0;
+  async function worker(): Promise<void> {
+    while (next < targets.length) {
+      const v = targets[next++]!;
+      excerpts.set(v.id, await fetchTranscriptExcerpt(v.id));
+    }
+  }
+  await Promise.all(Array.from({ length: TRANSCRIPT_CONCURRENCY }, worker));
+  status.update((s) => ({ ...s, detail: "" }));
+
+  const found = [...excerpts.values()].filter(Boolean).length;
+  log.info(`transcripts: ${found}/${targets.length} fetched`);
+  return videos.map((v) => (excerpts.get(v.id) ? { ...v, transcriptExcerpt: excerpts.get(v.id) } : v));
+}
+
 /** Wire runScoring into the app stores. Safe to call any time; no-ops when
  * unconfigured (no key / empty profile) or when nothing needs scoring. */
 export async function scoreFeed(): Promise<void> {
@@ -153,7 +183,9 @@ export async function scoreFeed(): Promise<void> {
   pendingScores.set(new Set(misses.map((v) => v.id)));
   status.update((s) => ({ ...s, phase: "scoring", scoredCount: 0, scoreTotal: misses.length }));
 
-  const result = await runScoring($videos, {
+  const enriched = await enrichWithTranscripts($videos, new Set(misses.map((v) => v.id)));
+
+  const result = await runScoring(enriched, {
     adapter,
     model,
     apiKey,

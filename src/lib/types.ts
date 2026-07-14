@@ -20,6 +20,8 @@ export interface Video {
   thumbnailUrl: string | null;
   descriptionSnippet: string | null;
   isLive: boolean;
+  /** Transient scoring enrichment — fetched at score time, never persisted. */
+  transcriptExcerpt?: string | null;
 }
 
 export type ScoreState = "pending" | "scored" | "unknown";
