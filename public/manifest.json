@@ -23,6 +23,11 @@
     "48": "icon-48.png",
     "96": "icon-96.png"
   },
-  "permissions": ["storage"],
-  "host_permissions": ["*://*.youtube.com/*"]
+  "permissions": ["storage", "declarativeNetRequestWithHostAccess"],
+  "host_permissions": ["*://*.youtube.com/*", "*://*.youtube-nocookie.com/*"],
+  "declarative_net_request": {
+    "rule_resources": [
+      { "id": "embed_referer", "enabled": true, "path": "dnr-rules.json" }
+    ]
+  }
 }

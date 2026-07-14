@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
+  import { embedUrl, watchUrl } from "../lib/embed";
   import { markWatched, scoredVideos } from "../stores/feedStore";
   import ScoreBadge from "./ScoreBadge.svelte";
   import VoteButtons from "./VoteButtons.svelte";
@@ -16,12 +17,12 @@
 <div class="space-y-4">
   <a href="#/" class="text-sm text-ink-muted hover:text-ink">← Back to feed</a>
 
-  <!-- youtube-nocookie + no autoplay: nothing plays until the user presses
-       play, and nothing queues after it ends. rel=0 limits end-screen
-       suggestions to the same channel (full suppression isn't possible). -->
+  <!-- embedUrl carries the no-autoplay/nocookie rationale; the DNR rule in
+       public/dnr-rules.json injects the Referer YouTube requires (error 153). -->
   <div class="aspect-video w-full overflow-hidden rounded-lg bg-black">
     <iframe
-      src={`https://www.youtube-nocookie.com/embed/${videoId}?rel=0&modestbranding=1`}
+      data-testid="watch-embed"
+      src={embedUrl(videoId)}
       title={video?.title ?? "YouTube video"}
       class="h-full w-full"
       allow="encrypted-media; picture-in-picture; fullscreen"
@@ -47,7 +48,7 @@
   <p class="text-xs text-ink-faint">
     Player not working? Some videos disable embedding —
     <a
-      href={`https://www.youtube.com/watch?v=${videoId}`}
+      href={watchUrl(videoId)}
       target="_blank"
       rel="noreferrer"
       class="text-accent">open it on YouTube</a
