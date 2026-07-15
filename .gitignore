@@ -14,3 +14,8 @@ playwright-report/
 
 # AMO signing credentials (never commit)
 credentials/
+
+# Unzipped copy of the committed .json.gz capture fixture (scripts/tests
+# gunzip on demand); raw captures must go through scripts/scrub-capture.ts
+src/services/youtube/fixtures/gotham-poor-ranking-capture.json
+src/services/youtube/fixtures/pii-warning-*
