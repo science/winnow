@@ -166,6 +166,25 @@ export async function expectedScoresHash(
   return scoresHashFor(canonicalizeTarget(stored.target), model);
 }
 
+/** Vote-independent identity of a two-phase run: profile text, prompt and
+ * ranker versions, model — everything except feedback. When only votes
+ * changed, expectedScoresHash is unknowable (the target re-translates) but
+ * stored scores matching this hash are still ~right and stay displayed while
+ * the re-rank lands in place; blanking the feed for a single vote reads as a
+ * full recalc (UAT 2026-07-15). */
+export function softScoresHashFor(profile: Profile, model: string): string {
+  return fnv1a(
+    [
+      profile.moreOf,
+      profile.lessOf,
+      String(TRANSLATOR_PROMPT_VERSION),
+      String(RANKER_VERSION),
+      String(ENRICHMENT_PROMPT_VERSION),
+      model,
+    ].join("|"),
+  );
+}
+
 export interface TwoPhaseDeps {
   provider: Provider;
   apiKey: string;

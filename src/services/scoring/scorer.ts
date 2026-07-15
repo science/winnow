@@ -25,7 +25,13 @@ import {
 import { settings, profile as profileStore, settingsReady } from "../../stores/settingsStore";
 import { fetchTranscriptExcerpt, type TranscriptOutcome } from "../youtube/transcripts";
 import { isDemoMode } from "../youtube/feedSource";
-import { enrichmentModelFor, expectedScoresHash, runTwoPhaseScoring } from "./twoPhase";
+import { coalesceRuns } from "../../lib/singleFlight";
+import {
+  enrichmentModelFor,
+  expectedScoresHash,
+  runTwoPhaseScoring,
+  softScoresHashFor,
+} from "./twoPhase";
 import type { Settings } from "../../lib/types";
 
 const CONCURRENCY = 2;
@@ -141,6 +147,8 @@ export async function runScoring(videos: Video[], deps: ScoringDeps): Promise<Sc
 
 interface StoredScores {
   profileHash: string;
+  /** Two-phase only: vote-independent run identity (softScoresHashFor). */
+  softHash?: string;
   scores: Record<string, VideoScore>;
 }
 
@@ -232,8 +240,13 @@ export async function enrichWithTranscripts(
 }
 
 /** Wire runScoring into the app stores. Safe to call any time; no-ops when
- * unconfigured (no key / empty profile) or when nothing needs scoring. */
-export async function scoreFeed(): Promise<void> {
+ * unconfigured (no key / empty profile) or when nothing needs scoring.
+ * Concurrent calls coalesce: the feed remounts on every watch → back
+ * navigation, and stacking a second pipeline on an in-flight one would
+ * double-fetch transcripts and double-spend provider calls. */
+export const scoreFeed: () => Promise<void> = coalesceRuns(scoreFeedOnce);
+
+async function scoreFeedOnce(): Promise<void> {
   await settingsReady;
   const $settings = get(settings);
   const $profile = get(profileStore);
@@ -340,12 +353,16 @@ async function scoreFeedTwoPhase(
   const feedbackExamples = recentExamples(get(feedbackStore), FEEDBACK_PROMPT_CAP);
 
   // Last run's scores stand (optimistic display) until the re-rank below —
-  // but ONLY when they're provably current (same target, versions, model).
-  // Stale scores (other engine, edited profile, new votes) render as pending
-  // instead: half-finished tiers mislead more than a progress bar does.
+  // when they're provably current (same target, versions, model), or merely
+  // vote-stale (same soft hash: only feedback changed, so last run's order is
+  // ~right and the vote-informed re-rank lands in place). Truly stale scores
+  // (other engine, edited profile, version bump) render as pending instead:
+  // half-finished tiers mislead more than a progress bar does.
   const stored = await storageGet<StoredScores>(KEYS.scores);
   const currentHash = await expectedScoresHash($profile, feedbackExamples, model);
-  const displayable = stored && currentHash && stored.profileHash === currentHash;
+  const softHash = softScoresHashFor($profile, model);
+  const displayable =
+    stored && (stored.profileHash === currentHash || stored.softHash === softHash);
   scoresStore.set(displayable ? stored.scores : {});
   const known = new Set(displayable ? Object.keys(stored.scores) : []);
   pendingScores.set(new Set($videos.filter((v) => !known.has(v.id)).map((v) => v.id)));
@@ -383,6 +400,7 @@ async function scoreFeedTwoPhase(
   pendingScores.set(new Set());
   await storageSet<StoredScores>(KEYS.scores, {
     profileHash: result.scoresHash,
+    softHash,
     scores: result.scores,
   });
 

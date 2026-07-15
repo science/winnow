@@ -9,6 +9,7 @@ import {
   enrichBatch,
   expectedScoresHash,
   runTwoPhaseScoring,
+  softScoresHashFor,
   type StoredTarget,
   type StructuredCallFn,
   type TwoPhaseDeps,
@@ -184,6 +185,19 @@ describe("runTwoPhaseScoring", () => {
     const edited: Profile = { ...profile, moreOf: "woodworking" };
     expect(await expectedScoresHash(edited, [], "stub-nano", deps.loadTarget!)).toBeNull();
     expect(await expectedScoresHash(profile, [], "other-model", deps.loadTarget!)).toBeNull();
+  });
+
+  it("should keep the soft scores hash stable across votes but not across profile or model changes", () => {
+    // A vote makes expectedScoresHash unknowable (the target re-translates),
+    // but last run's order is still ~right for the same profile/engine/model.
+    // The soft hash is the vote-independent identity the UI uses to keep
+    // showing stored scores instead of blanking the feed (UAT: returning
+    // from the watch page after an upvote looked like a full recalc).
+    const base = softScoresHashFor(profile, "stub-nano");
+    expect(softScoresHashFor({ ...profile, updatedAt: 99 }, "stub-nano")).toBe(base);
+    expect(softScoresHashFor({ ...profile, moreOf: "woodworking" }, "stub-nano")).not.toBe(base);
+    expect(softScoresHashFor({ ...profile, lessOf: "shorts" }, "stub-nano")).not.toBe(base);
+    expect(softScoresHashFor(profile, "other-model")).not.toBe(base);
   });
 
   it("should make a second run fully cache-served: no LLM calls, same scores", async () => {
