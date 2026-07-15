@@ -14,6 +14,8 @@ export const KEYS = {
   transcripts: "winnow:transcripts:v1",
   feedback: "winnow:feedback:v1",
   models: "winnow:models:v1",
+  enrichment: "winnow:enrichment:v1",
+  profileTarget: "winnow:profileTarget:v1",
 } as const;
 
 type WebExtStorage = {
