@@ -30,7 +30,8 @@ The transcript is ground truth: it is what the video actually says, while the ti
 
 Fields per video:
 - summary: 1-2 plain sentences on what the video contains and argues. No hype words, no marketing language.
-- topics: up to 8 lowercase tags, broad to specific (e.g. "chess", "rook endgames"). When the level, tier, or style of the subject is clearly identifiable, ALSO include a two-word qualified tag using exactly one of these qualifiers: ${DIGEST_TIER_QUALIFIERS.join(", ")} — e.g. "elite chess" (top players or strong engines), "comedic chess" (jokes/blunders as entertainment), "amateur chess" (low-rated players), "beginner tutorial". Profiles often seek or avoid a specific tier of a subject, and a bare tag cannot express that; use these exact qualifier words, not synonyms. Qualified tags need evidence: without a transcript, add one only when the title/description states the tier outright — never guess it from the channel name.
+- topics: up to 8 lowercase tags, broad to specific (e.g. "chess", "rook endgames"), the main subject first.
+- subjectTiers: EVERY tier/register of its main subject the video clearly shows, from: ${DIGEST_TIER_QUALIFIERS.join(", ")} (usually 0-2 apply). Judge from participant skill level (ratings, titles), who it's made for, and framing: top players or strong engines → elite; blunders/jokes played for laughs → comedic; low-rated hobbyists → amateur; first-steps teaching → beginner. A low-rated game played for laughs is BOTH ["comedic", "amateur"]. Profiles often seek or avoid one tier of a subject, so this matters. Empty array when the evidence doesn't show it (e.g. no transcript and the title/description don't say — never guess from the channel name).
 - format: one of ${DIGEST_FORMATS.join(", ")}.
 - emotionalTone: one of ${DIGEST_TONES.join(", ")}.
 - hypeSignals: concrete manipulation techniques you actually observed ("withheld subject in title", "manufactured urgency", "outrage framing", "teaser never resolved"). Empty array when clean.
@@ -50,6 +51,7 @@ const digestItemSchema = {
     "videoId",
     "summary",
     "topics",
+    "subjectTiers",
     "format",
     "emotionalTone",
     "hypeSignals",
@@ -64,6 +66,7 @@ const digestItemSchema = {
     videoId: { type: "string" },
     summary: { type: "string" },
     topics: { type: "array", items: { type: "string" } },
+    subjectTiers: { type: "array", items: { type: "string", enum: [...DIGEST_TIER_QUALIFIERS] } },
     format: { type: "string", enum: [...DIGEST_FORMATS] },
     emotionalTone: { type: "string", enum: [...DIGEST_TONES] },
     hypeSignals: { type: "array", items: { type: "string" } },

@@ -71,10 +71,27 @@ export function clampDigest(raw: unknown): VideoDigest | null {
 
   const format = String(obj["format"] ?? "").trim().toLowerCase();
   const tone = String(obj["emotionalTone"] ?? "").trim().toLowerCase();
+
+  // subjectTiers are schema-forced enum answers, folded into qualified
+  // leading topics here (["comedic","amateur"] + ["chess", …] → "comedic
+  // chess", "amateur chess") — cheap models answer a forced enum far more
+  // reliably than they volunteer a correctly-composed qualified tag in
+  // free text, and multi-select covers content that is legitimately both
+  // (a low-elo blunder recap is comedic AND amateur).
+  let topics = cleanStrings(obj["topics"], TOPICS_MAX);
+  const tiers = cleanStrings(obj["subjectTiers"], DIGEST_TIER_QUALIFIERS.length).filter((t) =>
+    (DIGEST_TIER_QUALIFIERS as readonly string[]).includes(t),
+  );
+  if (tiers.length > 0 && topics.length > 0) {
+    const subject = topics.find((t) => !t.includes(" ")) ?? topics[0]!;
+    const qualified = tiers.map((tier) => `${tier} ${subject}`);
+    topics = [...qualified, ...topics.filter((t) => !qualified.includes(t))].slice(0, TOPICS_MAX);
+  }
+
   return {
     ...(numerics as Record<(typeof DIGEST_NUMERIC_FIELDS)[number], number>),
     summary: typeof obj["summary"] === "string" ? obj["summary"].slice(0, SUMMARY_MAX_CHARS) : "",
-    topics: cleanStrings(obj["topics"], TOPICS_MAX),
+    topics,
     format: (DIGEST_FORMATS as readonly string[]).includes(format) ? format : "other",
     emotionalTone: (DIGEST_TONES as readonly string[]).includes(tone) ? tone : "neutral",
     hypeSignals: cleanStrings(obj["hypeSignals"], 8),

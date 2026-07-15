@@ -23,6 +23,40 @@ describe("clampDigest", () => {
     expect(d.format).toBe("tutorial");
   });
 
+  it("should fold every valid subjectTier into qualified leading topics", () => {
+    // The tier enums are schema-forced (nano won't compose qualified tags
+    // reliably as free text); the deterministic fold here is what lets
+    // profile tags like "comedic chess" match. Multi-select because a
+    // low-elo blunder recap is BOTH comedic and amateur, and the translator
+    // may pick either word for "low tier comic chess".
+    const d = clampDigest({
+      ...RAW_OK,
+      subjectTiers: ["comedic", "amateur"],
+      topics: ["Chess", "blunders"],
+    })!;
+    expect(d.topics.slice(0, 2)).toEqual(["comedic chess", "amateur chess"]);
+    expect(d.topics).toContain("chess");
+  });
+
+  it("should ignore invalid, empty, or absent subjectTiers", () => {
+    expect(clampDigest({ ...RAW_OK, subjectTiers: [] })!.topics).toEqual(["chess", "endgames"]);
+    expect(clampDigest({ ...RAW_OK, subjectTiers: ["funny"] })!.topics).toEqual(["chess", "endgames"]);
+    expect(clampDigest({ ...RAW_OK, subjectTiers: "elite" })!.topics).toEqual(["chess", "endgames"]);
+    expect(clampDigest(RAW_OK)!.topics).toEqual(["chess", "endgames"]);
+  });
+
+  it("should not duplicate an existing qualified tag and should respect the topics cap", () => {
+    const dupe = clampDigest({ ...RAW_OK, subjectTiers: ["elite"], topics: ["elite chess", "chess"] })!;
+    expect(dupe.topics.filter((t) => t === "elite chess")).toHaveLength(1);
+    const full = clampDigest({
+      ...RAW_OK,
+      subjectTiers: ["amateur", "comedic"],
+      topics: ["chess", "b", "c", "d", "e", "f", "g", "h"],
+    })!;
+    expect(full.topics.slice(0, 2)).toEqual(["amateur chess", "comedic chess"]);
+    expect(full.topics).toHaveLength(8);
+  });
+
   it("should clamp numeric fields into 1-5 and round to integers", () => {
     const d = clampDigest({ ...RAW_OK, substanceDensity: 9, novelty: 0, claimOverreach: 3.6 })!;
     expect(d.substanceDensity).toBe(5);
