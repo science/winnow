@@ -72,6 +72,67 @@ export interface Profile {
   updatedAt: number;
 }
 
+// --- Two-phase scoring (docs/TWO_PHASE_SCORING.md) ----------------------
+
+/** Numeric 1-5 taxonomy axes shared by the enrichment digest and the
+ * profile target. Order is presentation order in reasons. */
+export const DIGEST_NUMERIC_FIELDS = [
+  "substanceDensity",
+  "clickbaitSeverity",
+  "claimOverreach",
+  "intellectualDemand",
+  "productionEffort",
+  "novelty",
+] as const;
+export type DigestNumericField = (typeof DIGEST_NUMERIC_FIELDS)[number];
+
+/** Phase-1 output: a profile-independent digest of one video, produced by a
+ * cheap model reading the full transcript (when available) plus metadata.
+ * `claimOverreach` is the BS axis: claims stated beyond the support shown. */
+export interface VideoDigest extends Record<DigestNumericField, number> {
+  /** What the video actually contains/argues — grounded in the transcript. */
+  summary: string;
+  topics: string[];
+  format: string;
+  emotionalTone: string;
+  /** Concrete manipulation techniques observed (withheld subject, outrage
+   * framing, manufactured urgency, …). Empty when clean. */
+  hypeSignals: string[];
+}
+
+/** One entry in winnow:enrichment:v1. Cached ~forever: invalidated only by
+ * content change (new transcript), prompt version bump, or model change. */
+export interface EnrichmentEntry {
+  digest: VideoDigest;
+  contentHash: string;
+  model: string;
+  promptVersion: number;
+  hadTranscript: boolean;
+  enrichedAt: number;
+}
+
+export interface FieldTarget {
+  /** Desired value on the 1-5 axis. */
+  target: number;
+  /** 0-10; 0 means unconstrained. */
+  importance: number;
+}
+
+export interface ListTarget {
+  items: string[];
+  importance: number;
+}
+
+/** Phase-2 output: the profile translated into constraints over digest
+ * fields. Only constrained fields participate in ranking. */
+export interface ProfileTarget {
+  fields: Partial<Record<DigestNumericField, FieldTarget>>;
+  topicsMore: ListTarget;
+  topicsLess: ListTarget;
+  formatsAvoid: ListTarget;
+  tonesAvoid: ListTarget;
+}
+
 export type Vote = "up" | "down";
 
 /** One persisted user verdict (winnow:feedback:v1). Snapshots the video's
