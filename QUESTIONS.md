@@ -12,9 +12,12 @@ All items from the 2026-07-13/14 sessions (repo visibility, signing, fixtures, t
 
 3. **Score-quality eyeball.** Scoring now defaults to `gpt-5.4-mini` (OpenAI) / `claude-haiku-4-5` (Anthropic), both switchable in Settings. Worth ~20 real-feed scores against your own judgment.
 
+4. **Two-phase quality eyeball (shipped 2026-07-15, now the default engine).** Your "sniff out promo-artists" build: a cheap model (fixed `claude-haiku-4-5` / `gpt-5.4-nano`) reads each video's **full transcript** once and rates it on six axes — including `claimOverreach`, claims made vs. evidence actually shown — then your profile is translated into constraints and the feed ranks locally. To make "no science provocateurs" bite, put words like that (or "no overclaiming hype") in your **Less of** profile text. Compare against the old engine anytime: Settings → Scoring engine → Direct. Worth ~20 real-feed scores of eyeballing before we retire direct mode (reasons are now deterministic and terser — that's by design, they can't hallucinate). Cold-run cost is roughly a few cents on nano; enrichment is cached forever after.
+
 ## Standing decisions — veto anytime
 
 - **Brand promo shelves are skipped.** Your home capture contained a "FIFA World Cup 2026™" advertiser shelf whose 12 videos the parser was ingesting as recommendations; it now ignores `brandVideoShelfRenderer` subtrees entirely (fits "no engagement bait").
 - **The Settings model picker governs scoring only.** Profile suggestions stay on fixed stronger constants (`claude-sonnet-5` / `gpt-5.4-mini`).
 - **Start-on-open is unmuted.** Stock Firefox may block audible autoplay, showing a Play button instead — allow autoplay for the extension via the URL-bar permissions icon (we deliberately don't mute to sneak past the policy).
-- **Feedback staleness** (your "fine for now", 2026-07-14): votes steer newly scored videos; "Re-score everything" is the feed-wide apply gesture. A cheaper "re-score stale only" mode is possible on request.
+- **Feedback staleness** (your "fine for now", 2026-07-14): in **direct** mode votes steer newly scored videos only; "Re-score everything" is the feed-wide apply gesture. In **two-phase** mode this gap is closed: every vote feeds the profile translation, so the next run re-ranks the whole feed for ~$0.001.
+- **Two-phase is the default engine; its models are fixed** (`claude-haiku-4-5` / `gpt-5.4-nano`), not governed by the Settings model picker (which now affects direct mode only). Both decisions vetoable.

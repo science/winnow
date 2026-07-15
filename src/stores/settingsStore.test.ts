@@ -8,6 +8,7 @@ const base: Settings = {
   openaiApiKey: null,
   anthropicModel: "claude-haiku-4-5",
   openaiModel: "gpt-5.4-mini",
+  scoringStrategy: "two-phase",
 };
 const emptyProfile: Profile = { moreOf: "", lessOf: "", updatedAt: 0 };
 const someProfile: Profile = { moreOf: "deep technical dives", lessOf: "", updatedAt: 1 };

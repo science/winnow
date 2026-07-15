@@ -56,14 +56,21 @@ export type ScoreTier = "top" | "worthALook" | "winnowed" | "unscored";
 
 export type Provider = "anthropic" | "openai";
 
+/** "two-phase": cheap-model digest per video (full transcript) + instant
+ * local ranking. "direct": single-pass LLM scoring, kept for A/B during the
+ * two-phase transition (docs/TWO_PHASE_SCORING.md). */
+export type ScoringStrategy = "two-phase" | "direct";
+
 export interface Settings {
   provider: Provider;
   anthropicApiKey: string | null;
   openaiApiKey: string | null;
-  /** Scoring model per provider; participates in the score-cache hash, so a
-   *  change cleanly invalidates and re-scores. */
+  /** Direct-mode scoring model per provider; participates in the score-cache
+   *  hash, so a change cleanly invalidates and re-scores. Two-phase mode uses
+   *  fixed cheap-tier constants instead (twoPhase.ts). */
   anthropicModel: string;
   openaiModel: string;
+  scoringStrategy: ScoringStrategy;
 }
 
 export interface Profile {

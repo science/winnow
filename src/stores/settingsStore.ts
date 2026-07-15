@@ -16,6 +16,7 @@ export const DEFAULT_SETTINGS: Settings = {
   openaiApiKey: null,
   anthropicModel: ANTHROPIC_MODEL,
   openaiModel: OPENAI_MODEL,
+  scoringStrategy: "two-phase",
 };
 
 const DEFAULT_PROFILE: Profile = { moreOf: "", lessOf: "", updatedAt: 0 };

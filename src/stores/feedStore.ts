@@ -132,14 +132,15 @@ export async function pruneStaleEntries(current: Video[]): Promise<void> {
     watched.set(pruned);
     await storageSet(KEYS.watched, pruned);
   }
-  const transcripts = await storageGet<Record<string, TranscriptCacheEntry>>(KEYS.transcripts);
-  if (transcripts) {
-    const votedIds = new Set(Object.keys(get(feedback)));
+  const votedIds = new Set(Object.keys(get(feedback)));
+  for (const key of [KEYS.transcripts, KEYS.enrichment]) {
+    const cache = await storageGet<Record<string, unknown>>(key);
+    if (!cache) continue;
     const kept = Object.fromEntries(
-      Object.entries(transcripts).filter(([id]) => ids.has(id) || votedIds.has(id)),
+      Object.entries(cache).filter(([id]) => ids.has(id) || votedIds.has(id)),
     );
-    if (Object.keys(kept).length !== Object.keys(transcripts).length) {
-      await storageSet(KEYS.transcripts, kept);
+    if (Object.keys(kept).length !== Object.keys(cache).length) {
+      await storageSet(key, kept);
     }
   }
 }

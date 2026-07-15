@@ -34,6 +34,11 @@ Status as of 2026-07-14: MVP confirmed working by the user against real YouTube 
 | `src/services/scoring/providerTypes.ts` | `ScoreBatchFn` interface, `ProviderError` taxonomy (`auth/rate/server/network/bad_request/bad_response`), `isRetryable` | New provider or error kind |
 | `src/services/scoring/structuredCall.ts` | ONE structured-output call, either provider (forced tool / json_schema, headers, error taxonomy) | New call types (two-phase `translateProfile` goes here) |
 | `src/services/scoring/{anthropic,openai,demo}Scorer.ts` | One `ScoreBatchFn` each (thin wrappers over structuredCall); model IDs are single reviewed constants | Provider/model changes |
+| `src/lib/digest.ts` | Pure digest clamp/normalize + format/tone vocabularies | Taxonomy changes |
+| `src/lib/rubricScorer.ts` | Pure two-phase ranker: weighted ordinal credit, topic overlap, deterministic reasons, `canonicalizeTarget`, `targetHash` | Ranking behavior |
+| `src/services/scoring/enrichPrompt.ts` | Phase-1 prompt/schema (`claimOverreach` BS axis, full-transcript budget), `ENRICHMENT_PROMPT_VERSION` | Digest quality |
+| `src/services/scoring/translatePrompt.ts` | Phase-2 prompt/schema (nullable-field strict-schema workaround), `TRANSLATOR_PROMPT_VERSION` | Target translation |
+| `src/services/scoring/twoPhase.ts` | Two-phase orchestrator: enrichment cache, transcript pass, translation cache, ranking; fixed cheap models (`claude-haiku-4-5`/`gpt-5.4-nano`) | Two-phase pipeline |
 | `src/services/scoring/scorer.ts` | `runScoring` (pure-ish orchestrator: batching, concurrency 2, retry, clamping, hallucinated-id filtering) + `scoreFeed` (store wiring, cache, transcript enrichment + coverage) | Scoring pipeline changes |
 | `src/services/scoring/profileSuggest.ts` | Feedback → suggested moreOf/lessOf replacement (uncached structured call, demo stub, `MIN_VOTES_FOR_SUGGESTION`) | Suggestion quality/flow |
 | `src/services/scoring/modelCatalog.ts` | Boundary: `fetchProviderModels` via SDK `models.list()` for the Settings picker (fail fast, no retry) | Model picker fetch issues |
@@ -50,7 +55,7 @@ Status as of 2026-07-14: MVP confirmed working by the user against real YouTube 
 
 ## Data flow (one refresh, end to end)
 
-`Feed.svelte` onMount → `initFeed()` loads stored videos/watched (refetch if TTL-stale) → `refresh()` → `loadFeeds()` fetches `/feed/subscriptions` + `/` with session cookies via `ytPage.fetchFeedPage` → `feedParser.parseFeedPage` → merged/deduped `Video[]` into `feedStore.videos` + storage → `scoreFeed()` → cache check against `profileHash(profile, PROMPT_VERSION, modelId)` → misses enriched with transcripts (cap 60) → `runScoring` batches of 20 at concurrency 2 → scores persist per batch and stream into `feedStore.scores` → `tiers` derived re-buckets → UI fills in incrementally.
+`Feed.svelte` onMount → `initFeed()` loads stored videos/watched (refetch if TTL-stale) → `refresh()` → `loadFeeds()` fetches `/feed/subscriptions` + `/` with session cookies via `ytPage.fetchFeedPage` → `feedParser.parseFeedPage` → merged/deduped `Video[]` into `feedStore.videos` + storage → `scoreFeed()` → strategy branch: **two-phase** (default) runs `runTwoPhaseScoring` (cached digests → transcript pass → enrich misses → translate profile → pure rank, scores land at once); **direct** does cache check against `profileHash(profile, PROMPT_VERSION, modelId)` → misses enriched with transcripts (cap 60) → `runScoring` batches of 20 at concurrency 2 → scores persist per batch and stream into `feedStore.scores`. Either way `tiers` derived re-buckets.
 
 Demo mode (`?demo=1`) short-circuits: fixture videos, deterministic stub scorer, zero network. All nonlive e2e runs this path.
 

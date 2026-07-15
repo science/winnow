@@ -25,6 +25,8 @@ import {
 import { settings, profile as profileStore, settingsReady } from "../../stores/settingsStore";
 import { fetchTranscriptExcerpt, type TranscriptOutcome } from "../youtube/transcripts";
 import { isDemoMode } from "../youtube/feedSource";
+import { enrichmentModelFor, runTwoPhaseScoring } from "./twoPhase";
+import type { Settings } from "../../lib/types";
 
 const CONCURRENCY = 2;
 const RETRY_DELAY_MS = 2000;
@@ -239,6 +241,11 @@ export async function scoreFeed(): Promise<void> {
   const realKey = $settings.provider === "anthropic" ? $settings.anthropicApiKey : $settings.openaiApiKey;
   if (!demo && (!realKey || (!$profile.moreOf.trim() && !$profile.lessOf.trim()))) return;
 
+  // Demo mode always uses the direct path (stub scorer, no network).
+  if (!demo && $settings.scoringStrategy === "two-phase") {
+    return scoreFeedTwoPhase($settings, $profile, realKey!);
+  }
+
   const apiKey = demo ? "demo" : realKey!;
   // The user-picked model (Settings) rides into both the adapter call and the
   // cache hash, so switching models cleanly invalidates and re-scores.
@@ -303,6 +310,74 @@ export async function scoreFeed(): Promise<void> {
 
   pendingScores.set(new Set());
   await storageSet<StoredScores>(KEYS.scores, { profileHash: hash, scores: result.scores });
+
+  if (result.fatalError) {
+    status.update((s) => ({
+      ...s,
+      phase: "error",
+      detail:
+        "Your AI provider rejected the API key (401). Check it in Settings — scoring is paused until then.",
+    }));
+  } else {
+    status.update((s) => ({ ...s, phase: "idle", detail: "" }));
+  }
+}
+
+/** Two-phase wiring: digests cached per video, profile+votes translated
+ * once, the whole feed re-ranked locally every run (docs/TWO_PHASE_SCORING.md).
+ * Ranked scores persist in the same store/shape direct mode uses, so
+ * everything downstream (tiers, watch page, votes) is strategy-blind. */
+async function scoreFeedTwoPhase(
+  $settings: Settings,
+  $profile: Profile,
+  apiKey: string,
+): Promise<void> {
+  const $videos = get(videosStore);
+  if ($videos.length === 0) return;
+  const model = enrichmentModelFor($settings.provider);
+
+  // Last run's scores stand (optimistic display) until the re-rank below.
+  const stored = await storageGet<StoredScores>(KEYS.scores);
+  if (stored) scoresStore.set(stored.scores);
+  const known = new Set(Object.keys(stored?.scores ?? {}));
+  pendingScores.set(new Set($videos.filter((v) => !known.has(v.id)).map((v) => v.id)));
+  status.update((s) => ({
+    ...s,
+    phase: "scoring",
+    scoredCount: 0,
+    scoreTotal: 0,
+    detail: "Analyzing videos…",
+  }));
+
+  await feedbackReady;
+  // Transcript excerpts buffered here and merged once — the fetch workers
+  // run concurrently and must not race on the stored cache.
+  const excerptBuffer: Record<string, TranscriptCacheEntry> = {};
+  const result = await runTwoPhaseScoring($videos, {
+    provider: $settings.provider,
+    apiKey,
+    model,
+    profile: $profile,
+    feedback: recentExamples(get(feedbackStore), FEEDBACK_PROMPT_CAP),
+    saveExcerpt: async (videoId, excerpt) => {
+      excerptBuffer[videoId] = { excerpt, source: "player", fetchedAt: Date.now() };
+    },
+    onProgress: (scoredCount, scoreTotal) =>
+      status.update((s) => ({ ...s, scoredCount, scoreTotal })),
+  });
+
+  if (Object.keys(excerptBuffer).length > 0) {
+    const cache = (await storageGet<Record<string, TranscriptCacheEntry>>(KEYS.transcripts)) ?? {};
+    await storageSet(KEYS.transcripts, { ...cache, ...excerptBuffer });
+  }
+
+  transcriptCoverage.set(result.transcripts.attempted > 0 ? result.transcripts : null);
+  scoresStore.set(result.scores);
+  pendingScores.set(new Set());
+  await storageSet<StoredScores>(KEYS.scores, {
+    profileHash: result.scoresHash,
+    scores: result.scores,
+  });
 
   if (result.fatalError) {
     status.update((s) => ({

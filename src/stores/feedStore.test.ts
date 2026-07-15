@@ -45,6 +45,22 @@ describe("pruneStaleEntries", () => {
     expect(cache).toEqual({ stays0000001: entry("kept") });
   });
 
+  it("should prune enrichment digests with the feed window, keeping voted videos", async () => {
+    watched.set({});
+    await toggleVote({ ...video("votedenrich"), scoreState: "unknown" }, "up");
+    const digestEntry = { digest: {}, contentHash: "x", model: "m", promptVersion: 1, hadTranscript: true, enrichedAt: 1 };
+    await storageSet(KEYS.enrichment, {
+      stays0000001: digestEntry,
+      votedenrich: digestEntry,
+      leaves000001: digestEntry,
+    });
+
+    await pruneStaleEntries([video("stays0000001")]);
+
+    const cache = await storageGet<Record<string, unknown>>(KEYS.enrichment);
+    expect(Object.keys(cache!).sort()).toEqual(["stays0000001", "votedenrich"]);
+  });
+
   it("should keep transcript-cache entries for voted videos even after they leave the feed window", async () => {
     watched.set({});
     await toggleVote({ ...video("votedgone01"), scoreState: "unknown" }, "up");

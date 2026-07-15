@@ -51,7 +51,7 @@ All persistence via `src/lib/storage.ts` (browser.storage.local → localStorage
 
 | Key | Shape | Lifecycle |
 |---|---|---|
-| `winnow:settings:v1` | `{ provider, anthropicApiKey, openaiApiKey, anthropicModel, openaiModel }` | persisted on change; missing model fields fill from defaults on load |
+| `winnow:settings:v1` | `{ provider, anthropicApiKey, openaiApiKey, anthropicModel, openaiModel, scoringStrategy }` | persisted on change; missing fields fill from defaults on load |
 | `winnow:profile:v1` | `{ moreOf, lessOf, updatedAt }` | free-text interest profile |
 | `winnow:videos:v1` | `{ fetchedAt, videos[] }` | merged+deduped subs+home, cap 300, TTL 30 min |
 | `winnow:scores:v1` | `{ profileHash, scores: {videoId: {score, reason, clickbait, scoredAt, model}} }` | invalidated whole when profileHash mismatches |
@@ -59,10 +59,18 @@ All persistence via `src/lib/storage.ts` (browser.storage.local → localStorage
 | `winnow:transcripts:v1` | `{videoId: {excerpt, source: "player" ("timedtext"\|"innertube" in pre-2026-07-14 entries), fetchedAt}}` | successes only; pruned with videos (voted ids kept) |
 | `winnow:feedback:v1` | `{videoId: FeedbackEntry}` — vote + votedAt + display-field snapshot + score-at-vote | cap 200 (oldest evicted); never pruned with videos |
 | `winnow:models:v1` | `{ anthropic: string[], openai: string[], fetchedAt }` — model catalog for the Settings picker | refreshed only on explicit "Refresh model list"; picker works offline from this |
+| `winnow:enrichment:v1` | `{videoId: {digest: VideoDigest, contentHash, model, promptVersion, hadTranscript, enrichedAt}}` — phase-1 taxonomy digests | invalidated per entry by content/model/prompt-version change; transcript-backed entries are final, metadata-only ones stay provisional; pruned with videos (voted kept) |
+| `winnow:profileTarget:v1` | `{ inputHash, target: ProfileTarget }` — phase-2 profile translation | re-translated when profile text, votes, translator version, or model change |
 
 `profileHash = fnv1a(moreOf, lessOf, PROMPT_VERSION, modelId)` — editing the profile, bumping the prompt, or swapping models cleanly re-scores everything (movie-night's versioned-cache pattern). Transcript excerpts are cached by videoId (bounded by the 300-video window via pruning) so re-scores and feedback analysis don't re-fetch; fetch failures are never cached, staying retryable.
 
 ## Scoring pipeline
+
+Two engines, switchable in Settings (`scoringStrategy`, default **two-phase**; direct kept for A/B during the transition — see `TWO_PHASE_SCORING.md` for the full design):
+
+**Two-phase (default):** (1) *enrich* — cheap fixed model (`claude-haiku-4-5` / `gpt-5.4-nano`) reads metadata + the full transcript (20k-char budget) once per video and emits a `VideoDigest`: summary, topics, format, tone, hypeSignals, and six 1-5 axes including `claimOverreach` — claims made vs. evidence shown, the BS detector. Batches of 4, concurrency 2, cached in `winnow:enrichment:v1`. (2) *translate* — one call turns profile + recent votes into a `ProfileTarget` (cached). (3) *rank* — pure `lib/rubricScorer.ts`, instant: weighted ordinal credit over constrained axes, fuzzy topic overlap, avoid-lists; deterministic reasons from top contributors; clickbait flag at severity/overreach ≥ 4. Profile edits and votes re-rank for the cost of one small translation call. Ranked scores persist in `winnow:scores:v1` under `fnv1a(targetHash, RANKER_VERSION, ENRICHMENT_PROMPT_VERSION, model)` — downstream (tiers, watch, votes) is strategy-blind.
+
+**Direct (legacy single-pass):**
 
 1. Cache-miss videos (per-item, so partial hits save calls) are enriched with transcript excerpts (cap 60/run, concurrency 2, best-effort).
 2. Batches of 20 → provider adapter, concurrency 2; the feed fills in incrementally per batch and scores persist per batch (mid-run close loses nothing).
@@ -73,7 +81,7 @@ Tiers: **Top picks** (≥75, not clickbait) / **Worth a look** (50–74, clickba
 
 ### Feedback (Good pick / Not for me)
 
-Per-video votes have two effects. **Instant and local:** the voted video moves tiers deterministically — a downvote winnows it regardless of score; an upvote pins it to the head of Top picks, outranking even the clickbait demotion (an explicit user verdict IS vetting). **Future scoring:** the most recent votes per direction (`FEEDBACK_PROMPT_CAP`) ride along in every scoring prompt as taste examples. Feedback is deliberately **not** a profileHash input: a vote never invalidates cached scores (a per-vote full re-score would cost real money per click and fight the two-phase evolution — prompt-append feedback is an acknowledged bridge, see `TWO_PHASE_SCORING.md`). New votes therefore influence only future cache misses; **"Re-score everything" in Settings is the feed-wide apply**. The accepted tradeoff: existing scores may predate recent votes.
+Per-video votes have two effects. **Instant and local:** the voted video moves tiers deterministically — a downvote winnows it regardless of score; an upvote pins it to the head of Top picks, outranking even the clickbait demotion (an explicit user verdict IS vetting). **Future scoring:** the most recent votes per direction (`FEEDBACK_PROMPT_CAP`) ride along in every scoring prompt as taste examples. Feedback is deliberately **not** a profileHash input: a vote never invalidates cached scores (a per-vote full re-score would cost real money per click in direct mode — prompt-append feedback is the direct-mode bridge; in two-phase mode votes feed the profile translation, so the next run re-ranks the whole feed for ~$0.001). New votes therefore influence only future cache misses; **"Re-score everything" in Settings is the feed-wide apply**. The accepted tradeoff: existing scores may predate recent votes.
 
 Cost (claude-haiku-4-5): cold start ~200 videos ≈ $0.10 without transcripts, roughly 3–5× that with transcript excerpts; incremental daily refresh is cents. Profile edit ⇒ full re-score (accepted for MVP; see TWO_PHASE_SCORING.md for the fix).
 
@@ -95,7 +103,7 @@ Cost (claude-haiku-4-5): cold start ~200 videos ≈ $0.10 without transcripts, r
 
 ## Post-MVP roadmap
 
-1. **Two-phase scoring** (`TWO_PHASE_SCORING.md`) — profile edits become instant re-ranks.
+1. ~~**Two-phase scoring**~~ — **shipped 2026-07-15** as the default engine (`TWO_PHASE_SCORING.md`); direct scoring kept behind the Settings toggle for A/B until quality is confirmed on a real feed.
 2. InnerTube continuations for deeper feeds (likely needs SAPISIDHASH signing — the reverted 2026-07-14 implementation is in git history at `0c61760^..`).
 3. ~~Per-video feedback appended to the scoring prompt~~ — **shipped** (Good pick / Not for me; see Feedback section above).
 4. ~~Feedback-informed profile suggestions (suggested, never silent)~~ — **shipped** (Settings → "Suggest profile updates from my feedback"). Watch-history-informed suggestions remain future work.

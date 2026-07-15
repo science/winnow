@@ -14,7 +14,7 @@
   import { fetchProviderModels } from "../services/scoring/modelCatalog";
   import { modelCatalog } from "../stores/modelCatalogStore";
   import { isDemoMode } from "../services/youtube/feedSource";
-  import type { Provider } from "../lib/types";
+  import type { Provider, ScoringStrategy } from "../lib/types";
 
   let saved = $state(false);
   let captureMessage = $state("");
@@ -222,6 +222,29 @@
         }}
       />
     </label>
+    <div class="space-y-2">
+      <span class="block text-sm font-medium text-ink-muted">Scoring engine</span>
+      <div class="flex gap-2" role="radiogroup" aria-label="Scoring engine">
+        {#each [["two-phase", "Two-phase (analyze + rank)"], ["direct", "Direct (single pass)"]] as [value, label] (value)}
+          <button
+            role="radio"
+            aria-checked={$settings.scoringStrategy === value}
+            onclick={() => {
+              settings.update((s) => ({ ...s, scoringStrategy: value as ScoringStrategy }));
+              flashSaved();
+            }}
+            class={`rounded-md px-4 py-2 text-sm ${$settings.scoringStrategy === value ? "bg-accent-muted text-white" : "bg-surface-raised text-ink-muted hover:bg-surface-hover"}`}
+            >{label}</button
+          >
+        {/each}
+      </div>
+      <p class="text-xs text-ink-faint">
+        Two-phase reads each video's full transcript once with a fixed cheap model
+        (claude-haiku-4-5 / gpt-5.4-nano) to judge substance, hype, and whether claims outrun the
+        evidence — then ranks instantly against your profile; edits re-rank without re-paying.
+        Direct sends metadata plus a transcript intro to the model picked below on every score.
+      </p>
+    </div>
     <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
       <label class="block text-sm">
         <span class="mb-1 block font-medium text-ink-muted">Anthropic model</span>
