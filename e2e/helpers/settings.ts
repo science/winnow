@@ -14,11 +14,16 @@ export async function openSettingsDemoWithState(
     feedback?: FeedbackEntry[];
     profile?: Pick<Profile, "moreOf" | "lessOf">;
     models?: { anthropic: string[]; openai: string[] };
+    /** StoredTarget shape: { inputHash, target } (winnow:profileTarget:v1). */
+    profileTarget?: unknown;
   } = {},
 ): Promise<void> {
   await page.addInitScript(
     (s) => {
       localStorage.clear();
+      if (s.profileTarget) {
+        localStorage.setItem("winnow:profileTarget:v1", JSON.stringify(s.profileTarget));
+      }
       if (s.feedback) {
         localStorage.setItem(
           "winnow:feedback:v1",
@@ -107,6 +112,15 @@ export async function getOpenAiModelOptions(page: Page): Promise<string[]> {
 export async function expectRefreshModelsEnabled(page: Page, enabled: boolean): Promise<void> {
   if (enabled) await expect(page.getByTestId("refresh-models")).toBeEnabled();
   else await expect(page.getByTestId("refresh-models")).toBeDisabled();
+}
+
+export async function getTargetViewerLines(page: Page): Promise<string[]> {
+  await expect(page.getByTestId("target-viewer")).toBeVisible();
+  return page.getByTestId("target-viewer").locator("li").allTextContents();
+}
+
+export async function expectTargetViewerEmpty(page: Page): Promise<void> {
+  await expect(page.getByTestId("target-viewer-empty")).toBeVisible();
 }
 
 /** Read persisted state straight from the localStorage fallback. */

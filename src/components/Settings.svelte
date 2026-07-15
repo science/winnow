@@ -13,6 +13,8 @@
   } from "../services/scoring/profileSuggest";
   import { lastCaptures } from "../services/youtube/ytPage";
   import { lastTranscriptCapture } from "../services/youtube/transcripts";
+  import { describeTarget } from "../lib/targetDisplay";
+  import type { StoredTarget } from "../services/scoring/twoPhase";
   import { fetchProviderModels } from "../services/scoring/modelCatalog";
   import { modelCatalog } from "../stores/modelCatalogStore";
   import { isDemoMode } from "../services/youtube/feedSource";
@@ -20,6 +22,8 @@
 
   let saved = $state(false);
   let captureMessage = $state("");
+  let targetLines = $state<string[] | null>(null);
+  let retranslating = $state(false);
   let suggesting = $state(false);
   let suggestion = $state<ProfileSuggestion | null>(null);
   let suggestError = $state("");
@@ -112,6 +116,25 @@
     await scoreFeed();
   }
 
+  async function loadTarget(): Promise<void> {
+    const stored = await storageGet<StoredTarget>(KEYS.profileTarget);
+    targetLines = stored ? describeTarget(stored.target) : null;
+  }
+  void loadTarget();
+
+  // Dropping the stored target makes the next scoring run miss the input
+  // hash and re-translate the profile from scratch (one small call).
+  async function retranslate(): Promise<void> {
+    retranslating = true;
+    try {
+      await storageRemove(KEYS.profileTarget);
+      await scoreFeed();
+      await loadTarget();
+    } finally {
+      retranslating = false;
+    }
+  }
+
   async function copyFixture(): Promise<void> {
     const parts = Object.entries(lastCaptures);
     const transcript = lastTranscriptCapture.current;
@@ -187,6 +210,33 @@
       model). Your Good pick / Not for me votes steer future scoring automatically; “Re-score
       everything” below applies them to the whole feed at once.
     </p>
+  </section>
+
+  <section class="space-y-3">
+    <h2 class="text-lg font-medium">How Winnow read your profile</h2>
+    <p class="text-sm text-ink-muted">
+      Ranking uses these constraints, translated from your own words above — nothing else is
+      hard-coded. If something here misreads you, sharpen the profile text and re-translate.
+    </p>
+    {#if targetLines && targetLines.length > 0}
+      <ul class="space-y-1 rounded-md bg-surface-raised p-3 text-sm" data-testid="target-viewer">
+        {#each targetLines as line (line)}
+          <li class="text-ink-muted">{line}</li>
+        {/each}
+      </ul>
+    {:else}
+      <p class="text-sm text-ink-faint" data-testid="target-viewer-empty">
+        No translated profile yet — it appears after the first scoring run with the two-phase
+        engine.
+      </p>
+    {/if}
+    <button
+      class="rounded-md bg-surface-raised px-4 py-2 text-sm text-ink-muted hover:bg-surface-hover disabled:opacity-50"
+      disabled={retranslating}
+      onclick={retranslate}
+      data-testid="retranslate"
+      >{retranslating ? "Re-translating…" : "Re-translate now"}</button
+    >
   </section>
 
   <section class="space-y-3">
