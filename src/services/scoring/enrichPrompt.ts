@@ -8,7 +8,7 @@ import { DIGEST_FORMATS, DIGEST_TONES } from "../../lib/digest";
 
 // Bump on any prompt or schema change — participates in the enrichment
 // cache key, so a bump cleanly re-enriches everything.
-export const ENRICHMENT_PROMPT_VERSION = 1;
+export const ENRICHMENT_PROMPT_VERSION = 2;
 
 /** Full transcripts are big; batches stay small so a batch fits comfortably
  * in a cheap model's context and one failure loses little. */
@@ -30,7 +30,7 @@ The transcript is ground truth: it is what the video actually says, while the ti
 
 Fields per video:
 - summary: 1-2 plain sentences on what the video contains and argues. No hype words, no marketing language.
-- topics: up to 8 lowercase tags, broad to specific (e.g. "chess", "rook endgames").
+- topics: up to 8 lowercase tags, broad to specific (e.g. "chess", "rook endgames"). When the level, tier, or style of the subject is clearly identifiable, include a qualified tag for it too (e.g. "comic chess", "elite chess", "beginner tutorial", "amateur game recap") — profiles often seek or avoid a specific tier of a subject, and a bare tag cannot express that.
 - format: one of ${DIGEST_FORMATS.join(", ")}.
 - emotionalTone: one of ${DIGEST_TONES.join(", ")}.
 - hypeSignals: concrete manipulation techniques you actually observed ("withheld subject in title", "manufactured urgency", "outrage framing", "teaser never resolved"). Empty array when clean.

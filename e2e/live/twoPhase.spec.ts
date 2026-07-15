@@ -88,4 +88,28 @@ for (const { provider, envVar, model } of PROVIDERS) {
     expect(overreach!.target).toBeLessThanOrEqual(2);
     expect(overreach!.importance).toBeGreaterThanOrEqual(5);
   });
+
+  test(`should keep tier qualifiers and skip the bare parent tag via ${provider}`, async () => {
+    const apiKey = process.env[envVar];
+    test.skip(!apiKey, `${envVar} not set — live tier needs .env.production or env keys`);
+
+    // The gotham mis-ranking profile: interest restricted to a tier of
+    // chess, the opposite tier avoided. A bare "chess" seek tag would make
+    // every chess video on-profile (translator prompt v3 forbids it).
+    const target = await translateProfile(
+      {
+        moreOf: "Chess videos featuring top tier play or top computer engine games of note.",
+        lessOf: "Low tier comic chess games.",
+        updatedAt: 0,
+      },
+      [],
+      provider,
+      apiKey!,
+      model,
+    );
+
+    expect(target.topicsMore.items.length).toBeGreaterThan(0);
+    expect(target.topicsMore.items).not.toContain("chess");
+    expect(target.topicsLess.items.length).toBeGreaterThan(0);
+  });
 }
