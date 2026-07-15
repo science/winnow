@@ -29,7 +29,9 @@ export interface Video {
  * Successes only — failures stay retryable on the next scoring run. */
 export interface TranscriptCacheEntry {
   excerpt: string;
-  source: "timedtext" | "innertube";
+  /** "timedtext"/"innertube" only appear in caches written before the
+   * ANDROID-player route (2026-07-14); new entries are always "player". */
+  source: "timedtext" | "innertube" | "player";
   fetchedAt: number;
 }
 

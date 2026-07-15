@@ -1,24 +1,42 @@
-// Transcript enrichment, two paths tried in order per video:
-//   1. timedtext — watch page → ytInitialPlayerResponse → captionTracks →
-//      timedtext json3 (known to return an empty body in some sessions,
-//      suspected proof-of-origin gating);
-//   2. InnerTube get_transcript — ytcfg apiKey/clientVersion + the watch
-//      page's getTranscriptEndpoint params, cookies-only auth.
-// Every step is best-effort; any failure returns null and scoring proceeds
-// on metadata alone. In-browser verification tracked in QUESTIONS.md.
+// Transcript enrichment via InnerTube player (ANDROID client) → timedtext.
+//
+// Why this route (established empirically, scripts/transcript-diag.ts):
+//   - WEB-client caption URLs are proof-of-origin gated: timedtext answers
+//     HTTP 200 with an empty body unless the request carries a `pot` token
+//     only the real player's BotGuard can mint.
+//   - InnerTube get_transcript now answers 400 FAILED_PRECONDITION for
+//     every request shape we can produce — dead endpoint for us.
+//   - The ANDROID-client player endpoint returns ungated caption URLs and
+//     needs no API key, no cookies, and no watch-page fetch.
+// Extension caveat: Firefox stamps our moz-extension:// Origin on the POST,
+// which Google's anti-abuse layer rejects with a bot-block 403 — a DNR rule
+// (public/dnr-rules.json) rewrites Origin to https://www.youtube.com.
+// Both calls are cookie-less on purpose: the session adds nothing and a
+// logged-in cookie jar with an ANDROID client claim looks anomalous.
 
 import { log } from "../../lib/logger";
-import { sapisidHashHeader, YOUTUBE_ORIGIN } from "../../lib/sapisidHash";
-import { getSapisid } from "./authCookies";
-import { extractJsonBlob } from "./pageExtract";
-import { extractInnertubeConfig, extractYtInitialData } from "./ytPage";
 
 export const TRANSCRIPT_EXCERPT_CHARS = 2000;
 
+// Reviewed constant (like model IDs). If YouTube retires this client
+// version, the live e2e spec and scripts/transcript-diag.ts surface it.
+export const ANDROID_CLIENT = {
+  clientName: "ANDROID",
+  clientVersion: "20.10.38",
+  androidSdkVersion: 30,
+} as const;
+
 export interface TranscriptResult {
   excerpt: string;
-  source: "timedtext" | "innertube";
+  source: "player";
 }
+
+/** Per-stage failure marker so a 0/N run is self-diagnosing in the UI. */
+export interface TranscriptFailure {
+  failure: string;
+}
+
+export type TranscriptOutcome = TranscriptResult | TranscriptFailure;
 
 /** Raw payloads from the most recent real transcript fetch — feeds the
  * Settings "Copy debug fixture" button so real shapes can become fixtures. */
@@ -26,8 +44,7 @@ export const lastTranscriptCapture: {
   current: {
     videoId: string;
     playerResponseRaw: string | null;
-    ytInitialDataRaw: string | null;
-    innertubeResponseRaw: string | null;
+    timedtextRaw: string | null;
   } | null;
 } = { current: null };
 
@@ -35,17 +52,6 @@ interface CaptionTrack {
   baseUrl?: string;
   languageCode?: string;
   kind?: string; // "asr" for auto-generated
-}
-
-/** Pull `var ytInitialPlayerResponse = {...}` from a watch page. */
-export function extractPlayerResponse(html: string): unknown {
-  const raw = extractJsonBlob(html, /var ytInitialPlayerResponse\s*=\s*/);
-  if (!raw) return null;
-  try {
-    return JSON.parse(raw);
-  } catch {
-    return null;
-  }
 }
 
 /** Prefer a human-made English track, then ASR English, then anything. */
@@ -75,6 +81,37 @@ export function parseJson3Transcript(data: unknown, maxChars: number): string | 
   return parts.join(" ").slice(0, maxChars);
 }
 
+function decodeXmlEntities(text: string): string {
+  return text
+    .replace(/&#(\d+);/g, (_, n: string) => String.fromCodePoint(Number(n)))
+    .replace(/&#x([0-9a-fA-F]+);/g, (_, n: string) => String.fromCodePoint(parseInt(n, 16)))
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&amp;/g, "&");
+}
+
+/** Flatten timedtext XML (`<timedtext format="3">`, the shape ANDROID-client
+ * caption URLs serve regardless of fmt param) into plain text. Regex-based:
+ * lib code must run without DOMParser (Node unit tests, workers). */
+export function parseTimedtextXml(xml: string, maxChars: number): string | null {
+  if (!xml.includes("<timedtext")) return null;
+  const parts: string[] = [];
+  let length = 0;
+  for (const m of xml.matchAll(/<p[^>]*>([\s\S]*?)<\/p>/g)) {
+    const text = decodeXmlEntities(m[1]!.replace(/<[^>]+>/g, ""))
+      .replace(/\s+/g, " ")
+      .trim();
+    if (!text) continue;
+    parts.push(text);
+    length += text.length + 1;
+    if (length >= maxChars) break;
+  }
+  if (parts.length === 0) return null;
+  return parts.join(" ").slice(0, maxChars);
+}
+
 export function captionTracksFrom(playerResponse: unknown): CaptionTrack[] {
   const tracks = (
     playerResponse as {
@@ -84,168 +121,61 @@ export function captionTracksFrom(playerResponse: unknown): CaptionTrack[] {
   return Array.isArray(tracks) ? tracks : [];
 }
 
-/** Deep-walk the watch page's ytInitialData for the transcript panel's
- * getTranscriptEndpoint params (needed by InnerTube get_transcript). */
-export function extractTranscriptParams(ytInitialData: unknown): string | null {
-  let found: string | null = null;
-  const walk = (node: unknown): void => {
-    if (found || node === null || typeof node !== "object") return;
-    if (Array.isArray(node)) {
-      for (const item of node) walk(item);
-      return;
-    }
-    const obj = node as Record<string, unknown>;
-    const endpoint = obj["getTranscriptEndpoint"] as { params?: unknown } | undefined;
-    if (endpoint && typeof endpoint.params === "string" && endpoint.params) {
-      found = endpoint.params;
-      return;
-    }
-    for (const value of Object.values(obj)) walk(value);
-  };
-  walk(ytInitialData);
-  return found;
-}
-
-/** Flatten an InnerTube get_transcript response into plain text. Tolerant
- * deep-walk over both the current segment shape and the older cue shape. */
-export function parseInnertubeTranscript(data: unknown, maxChars: number): string | null {
-  const parts: string[] = [];
-  let length = 0;
-  const push = (text: string): void => {
-    const cleaned = text.replace(/\n/g, " ").trim();
-    if (!cleaned) return;
-    parts.push(cleaned);
-    length += cleaned.length + 1;
-  };
-  const walk = (node: unknown): void => {
-    if (length >= maxChars || node === null || typeof node !== "object") return;
-    if (Array.isArray(node)) {
-      for (const item of node) walk(item);
-      return;
-    }
-    const obj = node as Record<string, unknown>;
-    const segment = obj["transcriptSegmentRenderer"] as
-      | { snippet?: { runs?: Array<{ text?: string }>; simpleText?: string } }
-      | undefined;
-    if (segment?.snippet) {
-      const runs = segment.snippet.runs;
-      const text = Array.isArray(runs)
-        ? runs.map((r) => r.text ?? "").join("")
-        : (segment.snippet.simpleText ?? "");
-      push(text);
-      return;
-    }
-    const cue = obj["transcriptCueRenderer"] as { cue?: { simpleText?: string } } | undefined;
-    if (cue?.cue?.simpleText) {
-      push(cue.cue.simpleText);
-      return;
-    }
-    for (const value of Object.values(obj)) walk(value);
-  };
-  walk(data);
-  if (parts.length === 0) return null;
-  return parts.join(" ").slice(0, maxChars);
-}
-
-/** InnerTube get_transcript fallback, signed with SAPISIDHASH when the
- * SAPISID cookie is readable (cookies permission; extension context only).
- * Without it the request is cookies-only, which some sessions reject with
- * 401/403 — logged distinctively, null returned. */
-export async function fetchTranscriptInnertube(
-  html: string,
-  videoId: string,
-  maxChars: number,
-  fetchFn: typeof fetch,
-  getSapisidFn: () => Promise<string | null> = getSapisid,
-): Promise<string | null> {
-  const cfg = extractInnertubeConfig(html);
-  if (!cfg) return null;
-  const params = extractTranscriptParams(extractYtInitialData(html));
-  if (!params) return null;
-
-  const headers: Record<string, string> = { "Content-Type": "application/json" };
-  const sapisid = await getSapisidFn();
-  if (sapisid) {
-    // The hash claims YOUTUBE_ORIGIN; the browser still sends the real
-    // moz-extension Origin (forbidden header), so X-Origin carries the claim.
-    headers["Authorization"] = await sapisidHashHeader(sapisid, YOUTUBE_ORIGIN);
-    headers["X-Origin"] = YOUTUBE_ORIGIN;
-    headers["X-Goog-AuthUser"] = "0";
-  }
-
-  const res = await fetchFn(
-    `https://www.youtube.com/youtubei/v1/get_transcript?key=${cfg.apiKey}&prettyPrint=false`,
-    {
-      method: "POST",
-      credentials: "include",
-      headers,
-      body: JSON.stringify({
-        context: { client: { clientName: "WEB", clientVersion: cfg.clientVersion, hl: "en" } },
-        params,
-      }),
-    },
-  );
-  if (res.status === 401 || res.status === 403) {
-    log.warn(
-      `InnerTube get_transcript rejected (${res.status}) for ${videoId} — ${
-        sapisid ? "even with SAPISIDHASH auth (Origin-claim contingency, see QUESTIONS.md)" : "no SAPISID cookie readable, cookies-only auth insufficient"
-      }`,
-    );
-    return null;
-  }
-  if (!res.ok) return null;
-  const raw = await res.text();
-  if (lastTranscriptCapture.current?.videoId === videoId) {
-    lastTranscriptCapture.current.innertubeResponseRaw = raw;
-  }
-  return parseInnertubeTranscript(JSON.parse(raw), maxChars);
-}
-
-/** Fetch a transcript excerpt for one video: timedtext first, InnerTube
- * fallback. Null on any failure. `deps.fetchFn` is injectable for tests. */
+/** Fetch a transcript excerpt for one video. Never throws; failures come
+ * back as `{ failure: <stage> }` so callers can aggregate a breakdown.
+ * `deps.fetchFn` is injectable for tests. */
 export async function fetchTranscriptExcerpt(
   videoId: string,
   maxChars: number = TRANSCRIPT_EXCERPT_CHARS,
-  deps: { fetchFn?: typeof fetch; getSapisidFn?: () => Promise<string | null> } = {},
-): Promise<TranscriptResult | null> {
+  deps: { fetchFn?: typeof fetch } = {},
+): Promise<TranscriptOutcome> {
   const fetchFn = deps.fetchFn ?? fetch;
-  const getSapisidFn = deps.getSapisidFn ?? getSapisid;
   try {
-    const pageRes = await fetchFn(`https://www.youtube.com/watch?v=${videoId}`, {
-      credentials: "include",
-      headers: { "Accept-Language": "en-US,en;q=0.9" },
-    });
-    if (!pageRes.ok) return null;
-    const html = await pageRes.text();
-    lastTranscriptCapture.current = {
-      videoId,
-      playerResponseRaw: extractJsonBlob(html, /var ytInitialPlayerResponse\s*=\s*/),
-      ytInitialDataRaw: extractJsonBlob(html, /var ytInitialData\s*=\s*/),
-      innertubeResponseRaw: null,
-    };
-
-    try {
-      const player = extractPlayerResponse(html);
-      const track = pickCaptionTrack(captionTracksFrom(player));
-      if (track?.baseUrl) {
-        const ttRes = await fetchFn(`${track.baseUrl}&fmt=json3`, { credentials: "include" });
-        if (ttRes.ok) {
-          const body = await ttRes.text();
-          if (body) {
-            const excerpt = parseJson3Transcript(JSON.parse(body), maxChars);
-            if (excerpt) return { excerpt, source: "timedtext" };
-          }
-        }
-      }
-    } catch (err) {
-      log.debug("timedtext path failed for", videoId, err);
+    const playerRes = await fetchFn(
+      "https://www.youtube.com/youtubei/v1/player?prettyPrint=false",
+      {
+        method: "POST",
+        credentials: "omit",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ context: { client: { ...ANDROID_CLIENT, hl: "en" } }, videoId }),
+      },
+    );
+    if (!playerRes.ok) {
+      log.warn(`InnerTube player rejected (${playerRes.status}) for ${videoId}`);
+      return { failure: `player-http-${playerRes.status}` };
     }
+    const playerRaw = await playerRes.text();
+    let player: unknown;
+    try {
+      player = JSON.parse(playerRaw);
+    } catch {
+      return { failure: "player-parse" };
+    }
+    lastTranscriptCapture.current = { videoId, playerResponseRaw: playerRaw, timedtextRaw: null };
 
-    const excerpt = await fetchTranscriptInnertube(html, videoId, maxChars, fetchFn, getSapisidFn);
-    if (excerpt) return { excerpt, source: "innertube" };
-    return null;
+    const track = pickCaptionTrack(captionTracksFrom(player));
+    if (!track?.baseUrl) return { failure: "no-tracks" };
+
+    const ttRes = await fetchFn(`${track.baseUrl}&fmt=json3`, { credentials: "omit" });
+    if (!ttRes.ok) return { failure: `timedtext-http-${ttRes.status}` };
+    const body = await ttRes.text();
+    if (!body) return { failure: "empty-body" };
+    lastTranscriptCapture.current.timedtextRaw = body;
+
+    let excerpt: string | null = null;
+    if (body.trimStart().startsWith("{")) {
+      try {
+        excerpt = parseJson3Transcript(JSON.parse(body), maxChars);
+      } catch {
+        excerpt = null;
+      }
+    } else {
+      excerpt = parseTimedtextXml(body, maxChars);
+    }
+    if (!excerpt) return { failure: "parse-null" };
+    return { excerpt, source: "player" };
   } catch (err) {
     log.debug("transcript fetch failed for", videoId, err);
-    return null;
+    return { failure: "network" };
   }
 }

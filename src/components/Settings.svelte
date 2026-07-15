@@ -124,8 +124,7 @@
       bundle["transcript"] = {
         videoId: transcript.videoId,
         playerResponse: safeParse(transcript.playerResponseRaw),
-        ytInitialData: safeParse(transcript.ytInitialDataRaw),
-        innertubeResponse: safeParse(transcript.innertubeResponseRaw),
+        timedtext: transcript.timedtextRaw,
       };
     }
     const captured = [...parts.map(([k]) => k), ...(transcript ? ["transcript"] : [])];

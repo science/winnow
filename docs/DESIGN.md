@@ -20,7 +20,7 @@ toolbar button ─► feed.html (Svelte SPA, hash routes #/, #/watch/<id>, #/set
                     │
                     ├─ services/youtube/ytPage.ts ──── fetch(youtube.com, credentials:include)
                     │     └─ feedParser.ts             ytInitialData → Video[]   (subscriptions + home)
-                    │     └─ transcripts.ts            watch page → caption track → excerpt
+                    │     └─ transcripts.ts            InnerTube player → caption track → excerpt
                     │
                     ├─ services/scoring/scorer.ts ──── batches → provider adapter → VideoScore
                     │     ├─ anthropicScorer.ts        claude-haiku-4-5, strict forced tool
@@ -56,11 +56,11 @@ All persistence via `src/lib/storage.ts` (browser.storage.local → localStorage
 | `winnow:videos:v1` | `{ fetchedAt, videos[] }` | merged+deduped subs+home, cap 300, TTL 30 min |
 | `winnow:scores:v1` | `{ profileHash, scores: {videoId: {score, reason, clickbait, scoredAt, model}} }` | invalidated whole when profileHash mismatches |
 | `winnow:watched:v1` | `{videoId: watchedAt}` | written on Watch open; pruned with videos |
-| `winnow:transcripts:v1` | `{videoId: {excerpt, source: "timedtext"\|"innertube", fetchedAt}}` | successes only; pruned with videos (voted ids kept) |
+| `winnow:transcripts:v1` | `{videoId: {excerpt, source: "player" ("timedtext"\|"innertube" in pre-2026-07-14 entries), fetchedAt}}` | successes only; pruned with videos (voted ids kept) |
 | `winnow:feedback:v1` | `{videoId: FeedbackEntry}` — vote + votedAt + display-field snapshot + score-at-vote | cap 200 (oldest evicted); never pruned with videos |
 | `winnow:models:v1` | `{ anthropic: string[], openai: string[], fetchedAt }` — model catalog for the Settings picker | refreshed only on explicit "Refresh model list"; picker works offline from this |
 
-`profileHash = fnv1a(moreOf, lessOf, PROMPT_VERSION, modelId)` — editing the profile, bumping the prompt, or swapping models cleanly re-scores everything (movie-night's versioned-cache pattern). Transcript excerpts are cached by videoId (bounded by the 300-video window via pruning) so re-scores and feedback analysis don't re-fetch watch pages; fetch failures are never cached, staying retryable.
+`profileHash = fnv1a(moreOf, lessOf, PROMPT_VERSION, modelId)` — editing the profile, bumping the prompt, or swapping models cleanly re-scores everything (movie-night's versioned-cache pattern). Transcript excerpts are cached by videoId (bounded by the 300-video window via pruning) so re-scores and feedback analysis don't re-fetch; fetch failures are never cached, staying retryable.
 
 ## Scoring pipeline
 
@@ -83,7 +83,7 @@ Cost (claude-haiku-4-5): cold start ~200 videos ≈ $0.10 without transcripts, r
 - YouTube sees ordinary page fetches from the user's own browser session.
 - The chosen AI provider receives video *metadata* (title/channel/stats) and transcript excerpts, plus the user's profile text — under the user's own API key.
 - Keys live in extension storage; readable by anything with debugger access to the browser profile. Accepted for a no-backend personal tool; stated in the README.
-- The `cookies` permission exists solely to read the youtube.com `SAPISID` cookie, which signs InnerTube transcript requests (`Authorization: SAPISIDHASH`, `src/lib/sapisidHash.ts`). The cookie value never leaves the browser — only its SHA-1 hash travels, and only to youtube.com.
+- Transcript fetches are deliberately cookie-less InnerTube calls (ANDROID client) — the session adds nothing there. A DNR rule rewrites the `Origin` header on `/youtubei/` requests to `https://www.youtube.com`, because Google's anti-abuse layer bot-blocks the `moz-extension://` origin Firefox would otherwise send.
 - `anthropic-dangerous-direct-browser-access` / direct Bearer fetches are the established house pattern for BYO-key client-only apps.
 
 ## Verification
@@ -96,7 +96,7 @@ Cost (claude-haiku-4-5): cold start ~200 videos ≈ $0.10 without transcripts, r
 ## Post-MVP roadmap
 
 1. **Two-phase scoring** (`TWO_PHASE_SCORING.md`) — profile edits become instant re-ranks.
-2. InnerTube continuations for deeper feeds (needs SAPISIDHASH auth header).
+2. InnerTube continuations for deeper feeds (likely needs SAPISIDHASH signing — the reverted 2026-07-14 implementation is in git history at `0c61760^..`).
 3. ~~Per-video feedback appended to the scoring prompt~~ — **shipped** (Good pick / Not for me; see Feedback section above).
 4. ~~Feedback-informed profile suggestions (suggested, never silent)~~ — **shipped** (Settings → "Suggest profile updates from my feedback"). Watch-history-informed suggestions remain future work.
 5. Takeover mode: redirect youtube.com's homepage to winnow.

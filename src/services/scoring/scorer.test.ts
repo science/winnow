@@ -173,7 +173,7 @@ describe("runScoring", () => {
 });
 
 describe("enrichWithTranscripts", () => {
-  const excerptOf = async (id: string) => ({ excerpt: `transcript of ${id}`, source: "timedtext" as const });
+  const excerptOf = async (id: string) => ({ excerpt: `transcript of ${id}`, source: "player" as const });
   const emptyCache = async (): Promise<Record<string, TranscriptCacheEntry>> => ({});
   const noSave = async (): Promise<void> => {};
 
@@ -225,25 +225,40 @@ describe("enrichWithTranscripts", () => {
     expect(saveCache).toHaveBeenCalledTimes(1);
     const saved = saveCache.mock.calls[0]![0];
     expect(saved["newfetch001"]!.excerpt).toBe("transcript of newfetch001");
-    expect(saved["newfetch001"]!.source).toBe("timedtext");
+    expect(saved["newfetch001"]!.source).toBe("player");
   });
 
   it("should report fetched/attempted coverage when some videos have no transcript", async () => {
     const videos = [video("hastrans001"), video("notrans0001")];
     const fetchExcerpt = async (id: string) =>
-      id === "hastrans001" ? { excerpt: "found", source: "timedtext" as const } : null;
+      id === "hastrans001"
+        ? { excerpt: "found", source: "player" as const }
+        : { failure: "no-tracks" };
     const result = await enrichWithTranscripts(videos, new Set(["hastrans001", "notrans0001"]), {
       fetchExcerpt, loadCache: emptyCache, saveCache: noSave,
     });
     expect(result.fetched).toBe(1);
     expect(result.attempted).toBe(2);
+    expect(result.failures).toEqual({ "no-tracks": 1 });
+  });
+
+  it("should aggregate failure stages so a zero run is self-diagnosing", async () => {
+    const videos = [video("failvideo01"), video("failvideo02"), video("failvideo03")];
+    const outcomes = ["player-http-403", "player-http-403", "no-tracks"];
+    let call = 0;
+    const result = await enrichWithTranscripts(videos, new Set(videos.map((v) => v.id)), {
+      fetchExcerpt: async () => ({ failure: outcomes[call++]! }),
+      loadCache: emptyCache, saveCache: noSave,
+    });
+    expect(result.fetched).toBe(0);
+    expect(result.failures).toEqual({ "player-http-403": 2, "no-tracks": 1 });
   });
 
   it("should leave videos untouched when everything misses", async () => {
     const videos = [video("nothing0001")];
     const saveCache = vi.fn(noSave);
     const result = await enrichWithTranscripts(videos, new Set(["nothing0001"]), {
-      fetchExcerpt: async () => null, loadCache: emptyCache, saveCache,
+      fetchExcerpt: async () => ({ failure: "empty-body" }), loadCache: emptyCache, saveCache,
     });
     expect(result.videos[0]!.transcriptExcerpt).toBeUndefined();
     expect(result.fetched).toBe(0);

@@ -81,6 +81,7 @@ describe("embed Referer rule (YouTube error 153 guard)", () => {
     const rules = readPublicJson<DnrRule[]>(path);
     for (const rule of rules) {
       for (const h of rule.action.requestHeaders ?? []) {
+        if (h.header.toLowerCase() !== "referer") continue;
         expect(new URL(h.value!).hostname).not.toMatch(/(^|\.)youtube\.com$/);
       }
     }

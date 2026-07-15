@@ -25,13 +25,11 @@ Status as of 2026-07-14: MVP confirmed working by the user against real YouTube 
 | `src/lib/router.ts` | Hash routes `#/`, `#/watch/<id>`, `#/settings` | New route |
 | `src/lib/embed.ts` | `embedUrl`/`watchUrl`; unit tests hold these in sync with `public/dnr-rules.json` | Embed/player changes (see the error-153 invariant) |
 | `src/lib/logger.ts` | `log.debug/info` (dev-only, tree-shaken) vs `log.warn/error` (ship) | Never add bare `console.*` |
-| `src/services/youtube/pageExtract.ts` | Balanced-brace JSON-blob extraction (string/escape-aware) shared by ytPage and transcripts | Blob extraction breaks |
+| `src/services/youtube/pageExtract.ts` | Balanced-brace JSON-blob extraction (string/escape-aware) used by ytPage | Blob extraction breaks |
 | `src/services/youtube/ytPage.ts` | Credentialed page fetch, `ytInitialData` + ytcfg extraction (`extractInnertubeConfig`), signed-out detection, `lastCaptures` (feeds the "Copy debug fixture" button) | Fetch/extraction issues |
 | `src/services/youtube/feedParser.ts` | **The fragility boundary.** ytInitialData → `Video[]`; deep-walk over `videoRenderer`/`gridVideoRenderer`/`compactVideoRenderer` + `lockupViewModel` | YouTube changes shapes (see recipe 2) |
 | `src/services/youtube/feedSource.ts` | `isDemoMode()`, demo fixtures, `loadFeeds()` merge/dedupe/cap (300), partial-failure warnings | Feed sources, demo behavior |
-| `src/services/youtube/transcripts.ts` | Two-path excerpt fetch: timedtext json3 → InnerTube `get_transcript` (SAPISIDHASH-signed when the cookie is readable); null on ANY failure; `lastTranscriptCapture` debug capture | Transcript issues (in-browser verdict pending — QUESTIONS #4) |
-| `src/services/youtube/authCookies.ts` | Boundary: reads the youtube.com `SAPISID` cookie via `browser.cookies` (cookies permission); null outside extension contexts | SAPISIDHASH auth issues |
-| `src/lib/sapisidHash.ts` | Pure SAPISIDHASH header builder (SHA-1 via crypto.subtle, known-vector tested) | InnerTube 401/403 |
+| `src/services/youtube/transcripts.ts` | Cookie-less excerpt fetch: InnerTube `player` (ANDROID client) → caption track → timedtext XML/json3; never throws, failures return a per-stage `{failure}` marker; `lastTranscriptCapture` debug capture. Needs the DNR Origin rewrite in extension contexts (see file header). Diagnose regressions with `npx vite-node scripts/transcript-diag.ts` | Transcript issues |
 | `src/services/scoring/prompt.ts` | `PROMPT_VERSION`, `BATCH_SIZE`, system prompt, shared JSON schema, user-message builder | Prompt changes (see recipe 7 — bump the version!) |
 | `src/services/scoring/providerTypes.ts` | `ScoreBatchFn` interface, `ProviderError` taxonomy (`auth/rate/server/network/bad_request/bad_response`), `isRetryable` | New provider or error kind |
 | `src/services/scoring/structuredCall.ts` | ONE structured-output call, either provider (forced tool / json_schema, headers, error taxonomy) | New call types (two-phase `translateProfile` goes here) |
@@ -101,6 +99,6 @@ For pure UI iteration, skip the extension loop entirely: `npm run dev` → `http
 ## Debugging playbook
 
 - **Feed empty or missing videos** → warnings banner under the refresh row shows per-feed parse failures; Settings → "Copy debug fixture" exports the raw `ytInitialData` that produced them (also in `ytPage.lastCaptures`).
-- **Scoring silently does nothing** → `scoreFeed` no-ops when unconfigured: check provider/key pairing and profile text (`missingConfig` logic). In a `build:dev` build the console shows batch retries and the `transcripts: N/M fetched` line.
+- **Scoring silently does nothing** → `scoreFeed` no-ops when unconfigured: check provider/key pairing and profile text (`missingConfig` logic). In a `build:dev` build the console shows batch retries and the `transcripts: N/M fetched` line (with a per-stage failure breakdown, also rendered under the feed header).
 - **Inspect stored state** → extension: F12 on the winnow tab → `await browser.storage.local.get(null)`. Plain browser/e2e: `localStorage` with the same `winnow:*` keys.
 - **Score cache confusion** → compare `winnow:scores:v1`.profileHash against `profileHash(profile, PROMPT_VERSION, model)`; a mismatch means the whole cache is intentionally dead. Settings → "Re-score everything" nukes it.

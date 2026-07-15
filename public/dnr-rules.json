@@ -12,5 +12,19 @@
       "urlFilter": "||www.youtube-nocookie.com/embed/",
       "resourceTypes": ["sub_frame"]
     }
+  },
+  {
+    "id": 2,
+    "priority": 1,
+    "action": {
+      "type": "modifyHeaders",
+      "requestHeaders": [
+        { "header": "Origin", "operation": "set", "value": "https://www.youtube.com" }
+      ]
+    },
+    "condition": {
+      "urlFilter": "||www.youtube.com/youtubei/",
+      "resourceTypes": ["xmlhttprequest"]
+    }
   }
 ]

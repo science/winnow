@@ -23,7 +23,7 @@ import {
   transcriptCoverage,
 } from "../../stores/feedStore";
 import { settings, profile as profileStore, settingsReady } from "../../stores/settingsStore";
-import { fetchTranscriptExcerpt, type TranscriptResult } from "../youtube/transcripts";
+import { fetchTranscriptExcerpt, type TranscriptOutcome } from "../youtube/transcripts";
 import { isDemoMode } from "../youtube/feedSource";
 
 const CONCURRENCY = 2;
@@ -154,10 +154,13 @@ export interface EnrichResult {
   fetched: number;
   /** Videos we wanted an excerpt for this run (post-cap). */
   attempted: number;
+  /** Failure-stage counts (e.g. "player-http-403" → 48) so a zero run
+   * names its cause in the UI instead of just reading 0/60. */
+  failures: Record<string, number>;
 }
 
 export interface EnrichDeps {
-  fetchExcerpt?: (videoId: string) => Promise<TranscriptResult | null>;
+  fetchExcerpt?: (videoId: string) => Promise<TranscriptOutcome>;
   loadCache?: () => Promise<Record<string, TranscriptCacheEntry> | null>;
   saveCache?: (cache: Record<string, TranscriptCacheEntry>) => Promise<void>;
 }
@@ -167,7 +170,7 @@ export async function enrichWithTranscripts(
   missIds: Set<string>,
   deps: EnrichDeps = {},
 ): Promise<EnrichResult> {
-  if (isDemoMode()) return { videos, fetched: 0, attempted: 0 };
+  if (isDemoMode()) return { videos, fetched: 0, attempted: 0, failures: {} };
   const fetchExcerpt = deps.fetchExcerpt ?? ((id: string) => fetchTranscriptExcerpt(id));
   const loadCache =
     deps.loadCache ?? (() => storageGet<Record<string, TranscriptCacheEntry>>(KEYS.transcripts));
@@ -176,12 +179,13 @@ export async function enrichWithTranscripts(
     ((cache: Record<string, TranscriptCacheEntry>) => storageSet(KEYS.transcripts, cache));
 
   const targets = videos.filter((v) => missIds.has(v.id) && !v.isLive).slice(0, TRANSCRIPT_CAP);
-  if (targets.length === 0) return { videos, fetched: 0, attempted: 0 };
+  if (targets.length === 0) return { videos, fetched: 0, attempted: 0, failures: {} };
 
   status.update((s) => ({ ...s, detail: "Fetching transcripts…" }));
   const cache = (await loadCache()) ?? {};
   const excerpts = new Map<string, string>();
   const fresh: Record<string, TranscriptCacheEntry> = {};
+  const failures: Record<string, number> = {};
 
   const toFetch: Video[] = [];
   for (const v of targets) {
@@ -194,10 +198,12 @@ export async function enrichWithTranscripts(
   async function worker(): Promise<void> {
     while (next < toFetch.length) {
       const v = toFetch[next++]!;
-      const result = await fetchExcerpt(v.id);
-      if (result) {
-        excerpts.set(v.id, result.excerpt);
-        fresh[v.id] = { excerpt: result.excerpt, source: result.source, fetchedAt: Date.now() };
+      const outcome = await fetchExcerpt(v.id);
+      if ("excerpt" in outcome) {
+        excerpts.set(v.id, outcome.excerpt);
+        fresh[v.id] = { excerpt: outcome.excerpt, source: outcome.source, fetchedAt: Date.now() };
+      } else {
+        failures[outcome.failure] = (failures[outcome.failure] ?? 0) + 1;
       }
     }
   }
@@ -206,7 +212,12 @@ export async function enrichWithTranscripts(
 
   if (Object.keys(fresh).length > 0) await saveCache({ ...cache, ...fresh });
 
-  log.info(`transcripts: ${excerpts.size}/${targets.length} fetched`);
+  const breakdown = Object.entries(failures)
+    .map(([stage, n]) => `${stage} ×${n}`)
+    .join(", ");
+  log.info(
+    `transcripts: ${excerpts.size}/${targets.length} fetched${breakdown ? ` (failures: ${breakdown})` : ""}`,
+  );
   return {
     videos: videos.map((v) => {
       const excerpt = excerpts.get(v.id);
@@ -214,6 +225,7 @@ export async function enrichWithTranscripts(
     }),
     fetched: excerpts.size,
     attempted: targets.length,
+    failures,
   };
 }
 
@@ -256,7 +268,11 @@ export async function scoreFeed(): Promise<void> {
   const enrichment = await enrichWithTranscripts($videos, new Set(misses.map((v) => v.id)));
   transcriptCoverage.set(
     enrichment.attempted > 0
-      ? { fetched: enrichment.fetched, attempted: enrichment.attempted }
+      ? {
+          fetched: enrichment.fetched,
+          attempted: enrichment.attempted,
+          failures: enrichment.failures,
+        }
       : null,
   );
 

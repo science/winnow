@@ -38,7 +38,11 @@ export const status = writable<FeedStatus>({
 /** Session-only transcript coverage from the last scoring run — the
  * production-visible signal that the transcript seam works (log.info is
  * stripped from prod builds). Null until a run attempts transcripts. */
-export const transcriptCoverage = writable<{ fetched: number; attempted: number } | null>(null);
+export const transcriptCoverage = writable<{
+  fetched: number;
+  attempted: number;
+  failures: Record<string, number>;
+} | null>(null);
 
 export const scoredVideos = derived(
   [videos, scores, pendingScores],

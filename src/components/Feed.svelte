@@ -43,7 +43,10 @@
 
   {#if $transcriptCoverage}
     <p class="text-xs text-ink-faint" data-testid="transcript-coverage">
-      transcripts on {$transcriptCoverage.fetched}/{$transcriptCoverage.attempted} videos this run
+      transcripts on {$transcriptCoverage.fetched}/{$transcriptCoverage.attempted} videos this run{#if Object.keys($transcriptCoverage.failures).length > 0}
+        — failures: {Object.entries($transcriptCoverage.failures)
+          .map(([stage, n]) => `${stage} ×${n}`)
+          .join(", ")}{/if}
     </p>
   {/if}
 

@@ -1,27 +1,12 @@
 import { describe, it, expect } from "vitest";
 import {
-  extractPlayerResponse,
-  extractTranscriptParams,
+  ANDROID_CLIENT,
   fetchTranscriptExcerpt,
-  parseInnertubeTranscript,
+  parseTimedtextXml,
   pickCaptionTrack,
   parseJson3Transcript,
   captionTracksFrom,
 } from "./transcripts";
-
-const WATCH_HTML = `<html><script>var ytInitialPlayerResponse = {"captions":{"playerCaptionsTracklistRenderer":{"captionTracks":[{"baseUrl":"https://www.youtube.com/api/timedtext?v=x","languageCode":"en","kind":"asr"},{"baseUrl":"https://www.youtube.com/api/timedtext?v=y","languageCode":"en"}]}}};var meta = {};</script></html>`;
-
-describe("extractPlayerResponse", () => {
-  it("should extract the player response blob from a watch page", () => {
-    const pr = extractPlayerResponse(WATCH_HTML);
-    expect(captionTracksFrom(pr)).toHaveLength(2);
-  });
-
-  it("should return null when absent or malformed", () => {
-    expect(extractPlayerResponse("<html></html>")).toBeNull();
-    expect(extractPlayerResponse("var ytInitialPlayerResponse = {broken;</script>")).toBeNull();
-  });
-});
 
 describe("pickCaptionTrack", () => {
   it("should prefer human-made English over auto-generated", () => {
@@ -54,8 +39,7 @@ describe("parseJson3Transcript", () => {
   });
 
   it("should cap at maxChars", () => {
-    const result = parseJson3Transcript(json3, 8);
-    expect(result).toBe("Hello wo");
+    expect(parseJson3Transcript(json3, 8)).toBe("Hello wo");
   });
 
   it("should return null for empty or malformed input", () => {
@@ -65,47 +49,42 @@ describe("parseJson3Transcript", () => {
   });
 });
 
-const WATCH_INITIAL_DATA = {
-  engagementPanels: [
-    { engagementPanelSectionListRenderer: { panelIdentifier: "unrelated" } },
-    {
-      engagementPanelSectionListRenderer: {
-        content: {
-          continuationItemRenderer: {
-            continuationEndpoint: { getTranscriptEndpoint: { params: "TESTPARAMS==" } },
-          },
-        },
-      },
-    },
-  ],
-};
+describe("parseTimedtextXml", () => {
+  const XML = [
+    `<?xml version="1.0" encoding="utf-8" ?><timedtext format="3">`,
+    `<body>`,
+    `<p t="1200" d="2160">All right, so here we are,\nin front of the elephants</p>`,
+    `<p t="3400" d="100"></p>`,
+    `<p t="5000" d="900">they have really, really, really long trunks &amp; that&#39;s cool</p>`,
+    `</body></timedtext>`,
+  ].join("\n");
 
-describe("extractTranscriptParams", () => {
-  it("should find getTranscriptEndpoint params in watch-page ytInitialData", () => {
-    expect(extractTranscriptParams(WATCH_INITIAL_DATA)).toBe("TESTPARAMS==");
+  it("should flatten <p> lines into plain text with entities decoded", () => {
+    expect(parseTimedtextXml(XML, 2000)).toBe(
+      "All right, so here we are, in front of the elephants they have really, really, really long trunks & that's cool",
+    );
   });
 
-  it("should return null when no transcript panel exists", () => {
-    expect(extractTranscriptParams({ engagementPanels: [] })).toBeNull();
-    expect(extractTranscriptParams(null)).toBeNull();
-    expect(extractTranscriptParams({ getTranscriptEndpoint: { params: 42 } })).toBeNull();
+  it("should strip word-level <s> tags", () => {
+    const xml = `<timedtext format="3"><body><p t="0" d="1"><s>Hello</s><s> world</s></p></body></timedtext>`;
+    expect(parseTimedtextXml(xml, 2000)).toBe("Hello world");
   });
-});
 
-describe("SAPISIDHASH manifest wiring", () => {
-  it("should hold the cookies permission the SAPISID read requires", async () => {
-    const { readFileSync } = await import("node:fs");
-    const manifest = JSON.parse(
-      readFileSync(new URL("../../../public/manifest.json", import.meta.url), "utf8"),
-    ) as { permissions: string[]; host_permissions: string[] };
-    expect(manifest.permissions).toContain("cookies");
-    expect(manifest.host_permissions.some((h) => h.includes("youtube.com"))).toBe(true);
+  it("should cap at maxChars", () => {
+    expect(parseTimedtextXml(XML, 10)).toBe("All right,");
+  });
+
+  it("should return null for empty or non-timedtext input", () => {
+    expect(parseTimedtextXml("", 100)).toBeNull();
+    expect(parseTimedtextXml("<html>Sorry...</html>", 100)).toBeNull();
+    expect(parseTimedtextXml(`<timedtext format="3"><body></body></timedtext>`, 100)).toBeNull();
   });
 });
 
-// Fixtures pruned from a real watch-page capture (2026-07-14): the shapes
-// YouTube actually serves, so synthetic drift can't hide a seam break.
-describe("real watch-page capture shapes", () => {
+// The real player-response shape (captured 2026-07-14) — the same
+// captions.playerCaptionsTracklistRenderer subtree the InnerTube player
+// endpoint returns, so synthetic drift can't hide a seam break.
+describe("real player-response capture shape", () => {
   it("should pick the ASR English track from the real captionTracks shape", async () => {
     const player = (await import("./fixtures/watch-captiontracks-real.json")).default;
     const tracks = captionTracksFrom(player);
@@ -114,152 +93,153 @@ describe("real watch-page capture shapes", () => {
     expect(picked?.languageCode).toBe("en");
     expect(picked?.baseUrl).toContain("timedtext");
   });
+});
 
-  it("should find getTranscriptEndpoint params in the real engagement-panel shape", async () => {
-    const data = (await import("./fixtures/watch-transcript-params-real.json")).default;
-    const params = extractTranscriptParams(data);
-    expect(params).toMatch(/^Cgsw/);
-    expect(params!.length).toBeGreaterThan(100);
+// Extension wiring: the InnerTube POST carries a moz-extension:// Origin,
+// which Google's anti-abuse layer rejects with a bot-block 403. A DNR rule
+// must rewrite Origin to https://www.youtube.com on /youtubei/ calls.
+describe("Origin-rewrite manifest wiring", () => {
+  it("should rewrite Origin on youtubei requests via DNR", async () => {
+    const { readFileSync } = await import("node:fs");
+    const rules = JSON.parse(
+      readFileSync(new URL("../../../public/dnr-rules.json", import.meta.url), "utf8"),
+    ) as Array<{
+      action: { type: string; requestHeaders?: Array<{ header: string; operation: string; value?: string }> };
+      condition: { urlFilter?: string; resourceTypes?: string[] };
+    }>;
+    const rule = rules.find((r) => r.condition.urlFilter?.includes("youtubei"));
+    expect(rule).toBeDefined();
+    expect(rule!.action.type).toBe("modifyHeaders");
+    const origin = rule!.action.requestHeaders?.find((h) => h.header === "Origin");
+    expect(origin).toEqual({ header: "Origin", operation: "set", value: "https://www.youtube.com" });
+    expect(rule!.condition.resourceTypes).toContain("xmlhttprequest");
+  });
+
+  it("should not request the cookies permission (SAPISID auth is gone)", async () => {
+    const { readFileSync } = await import("node:fs");
+    const manifest = JSON.parse(
+      readFileSync(new URL("../../../public/manifest.json", import.meta.url), "utf8"),
+    ) as { permissions: string[]; host_permissions: string[] };
+    expect(manifest.permissions).not.toContain("cookies");
+    expect(manifest.permissions).toContain("declarativeNetRequestWithHostAccess");
+    expect(manifest.host_permissions.some((h) => h.includes("youtube.com"))).toBe(true);
   });
 });
 
-describe("parseInnertubeTranscript", () => {
-  const modern = {
-    actions: [
-      {
-        updateEngagementPanelAction: {
-          content: {
-            transcriptRenderer: {
-              body: {
-                transcriptSegmentListRenderer: {
-                  initialSegments: [
-                    { transcriptSegmentRenderer: { snippet: { runs: [{ text: "Hello" }, { text: " world" }] } } },
-                    { transcriptSegmentRenderer: { snippet: { runs: [{ text: "second\nline" }] } } },
-                  ],
-                },
-              },
-            },
-          },
-        },
-      },
-    ],
-  };
+// --- fetch chain: player (ANDROID client) → caption track → timedtext ----
 
-  it("should flatten InnerTube transcript segments into an excerpt", () => {
-    expect(parseInnertubeTranscript(modern, 2000)).toBe("Hello world second line");
-  });
-
-  it("should read the older cue-renderer shape", () => {
-    const older = {
-      cueGroups: [
-        { transcriptCueGroupRenderer: { cues: [{ transcriptCueRenderer: { cue: { simpleText: "Old shape" } } }] } },
-        { transcriptCueGroupRenderer: { cues: [{ transcriptCueRenderer: { cue: { simpleText: "text" } } }] } },
+const PLAYER_RESPONSE = {
+  playabilityStatus: { status: "OK" },
+  captions: {
+    playerCaptionsTracklistRenderer: {
+      captionTracks: [
+        { baseUrl: "https://www.youtube.com/api/timedtext?v=x&lang=en", languageCode: "en", kind: "asr" },
       ],
-    };
-    expect(parseInnertubeTranscript(older, 2000)).toBe("Old shape text");
-  });
-
-  it("should cap at maxChars", () => {
-    expect(parseInnertubeTranscript(modern, 8)).toBe("Hello wo");
-  });
-
-  it("should return null for malformed input", () => {
-    expect(parseInnertubeTranscript({}, 100)).toBeNull();
-    expect(parseInnertubeTranscript(null, 100)).toBeNull();
-  });
-});
-
-// --- fetch chain: timedtext first, InnerTube fallback -------------------
-
-const CHAIN_WATCH_HTML = [
-  `<html><script>ytcfg.set({"INNERTUBE_API_KEY":"AIzaChain","INNERTUBE_CONTEXT_CLIENT_VERSION":"2.20260101.00.00","LOGGED_IN":true});</script>`,
-  `<script>var ytInitialData = ${JSON.stringify(WATCH_INITIAL_DATA)};</script>`,
-  `<script>var ytInitialPlayerResponse = {"captions":{"playerCaptionsTracklistRenderer":{"captionTracks":[{"baseUrl":"https://www.youtube.com/api/timedtext?v=x","languageCode":"en"}]}}};var meta = {};</script></html>`,
-].join("\n");
-
-const INNERTUBE_RESPONSE = {
-  actions: [
-    {
-      updateEngagementPanelAction: {
-        content: {
-          transcriptRenderer: {
-            body: {
-              transcriptSegmentListRenderer: {
-                initialSegments: [
-                  { transcriptSegmentRenderer: { snippet: { runs: [{ text: "From InnerTube" }] } } },
-                ],
-              },
-            },
-          },
-        },
-      },
     },
-  ],
+  },
 };
 
-function fetchStub(opts: { timedtextBody: string; innertubeStatus?: number }) {
-  const calls: string[] = [];
-  const headersByUrl = new Map<string, Record<string, string>>();
+const TIMEDTEXT_XML = `<?xml version="1.0" encoding="utf-8" ?><timedtext format="3"><body><p t="0" d="1">From timedtext XML</p></body></timedtext>`;
+
+interface StubOpts {
+  playerStatus?: number;
+  playerBody?: unknown;
+  timedtextStatus?: number;
+  timedtextBody?: string;
+}
+
+function fetchStub(opts: StubOpts = {}) {
+  const calls: Array<{ url: string; init?: RequestInit }> = [];
   const fetchFn = (async (url: RequestInfo | URL, init?: RequestInit) => {
     const u = String(url);
-    calls.push(u);
-    headersByUrl.set(u, (init?.headers as Record<string, string>) ?? {});
-    if (u.includes("/watch?v=")) return new Response(CHAIN_WATCH_HTML, { status: 200 });
-    if (u.includes("timedtext")) return new Response(opts.timedtextBody, { status: 200 });
-    if (u.includes("youtubei/v1/get_transcript")) {
-      return new Response(JSON.stringify(INNERTUBE_RESPONSE), { status: opts.innertubeStatus ?? 200 });
+    calls.push({ url: u, init });
+    if (u.includes("youtubei/v1/player")) {
+      return new Response(JSON.stringify(opts.playerBody ?? PLAYER_RESPONSE), {
+        status: opts.playerStatus ?? 200,
+      });
+    }
+    if (u.includes("timedtext")) {
+      return new Response(opts.timedtextBody ?? TIMEDTEXT_XML, {
+        status: opts.timedtextStatus ?? 200,
+      });
     }
     return new Response("", { status: 404 });
   }) as typeof fetch;
-  const innertubeHeaders = (): Record<string, string> | undefined => {
-    const url = calls.find((u) => u.includes("youtubei/v1/get_transcript"));
-    return url ? headersByUrl.get(url) : undefined;
-  };
-  return { fetchFn, calls, innertubeHeaders };
+  return { fetchFn, calls };
 }
 
 describe("fetchTranscriptExcerpt", () => {
-  it("should return the timedtext excerpt without calling InnerTube when it works", async () => {
-    const { fetchFn, calls } = fetchStub({
-      timedtextBody: JSON.stringify({ events: [{ segs: [{ utf8: "From timedtext" }] }] }),
+  it("should fetch player with the ANDROID client and return the timedtext excerpt", async () => {
+    const { fetchFn, calls } = fetchStub();
+    const result = await fetchTranscriptExcerpt("vid00000001", 2000, { fetchFn });
+    expect(result).toEqual({ excerpt: "From timedtext XML", source: "player" });
+
+    const player = calls.find((c) => c.url.includes("youtubei/v1/player"))!;
+    const body = JSON.parse(String(player.init?.body)) as {
+      context: { client: Record<string, unknown> };
+      videoId: string;
+    };
+    expect(body.videoId).toBe("vid00000001");
+    expect(body.context.client["clientName"]).toBe(ANDROID_CLIENT.clientName);
+    expect(body.context.client["clientVersion"]).toBe(ANDROID_CLIENT.clientVersion);
+  });
+
+  it("should send both requests cookie-less (credentials omit)", async () => {
+    const { fetchFn, calls } = fetchStub();
+    await fetchTranscriptExcerpt("vid00000001", 2000, { fetchFn });
+    expect(calls.length).toBe(2);
+    for (const c of calls) expect(c.init?.credentials).toBe("omit");
+  });
+
+  it("should parse a json3 timedtext body when YouTube honors fmt=json3", async () => {
+    const { fetchFn } = fetchStub({
+      timedtextBody: JSON.stringify({ events: [{ segs: [{ utf8: "From json3" }] }] }),
     });
     const result = await fetchTranscriptExcerpt("vid00000001", 2000, { fetchFn });
-    expect(result).toEqual({ excerpt: "From timedtext", source: "timedtext" });
-    expect(calls.some((u) => u.includes("youtubei"))).toBe(false);
+    expect(result).toEqual({ excerpt: "From json3", source: "player" });
   });
 
-  it("should fall back to InnerTube when timedtext returns an empty body", async () => {
-    const { fetchFn, calls } = fetchStub({ timedtextBody: "" });
-    const result = await fetchTranscriptExcerpt("vid00000001", 2000, { fetchFn });
-    expect(result).toEqual({ excerpt: "From InnerTube", source: "innertube" });
-    expect(calls.some((u) => u.includes("youtubei/v1/get_transcript"))).toBe(true);
-  });
-
-  it("should return null when both paths fail", async () => {
-    const { fetchFn } = fetchStub({ timedtextBody: "", innertubeStatus: 403 });
-    expect(await fetchTranscriptExcerpt("vid00000001", 2000, { fetchFn })).toBeNull();
-  });
-
-  it("should sign the InnerTube call with SAPISIDHASH when the cookie is readable", async () => {
-    const { fetchFn, innertubeHeaders } = fetchStub({ timedtextBody: "" });
-    const result = await fetchTranscriptExcerpt("vid00000001", 2000, {
-      fetchFn,
-      getSapisidFn: async () => "test-sapisid-value",
+  it("should report the player HTTP status when the player call is rejected", async () => {
+    const { fetchFn } = fetchStub({ playerStatus: 403 });
+    expect(await fetchTranscriptExcerpt("vid00000001", 2000, { fetchFn })).toEqual({
+      failure: "player-http-403",
     });
-    expect(result).toEqual({ excerpt: "From InnerTube", source: "innertube" });
-    const headers = innertubeHeaders()!;
-    expect(headers["Authorization"]).toMatch(/^SAPISIDHASH \d+_[0-9a-f]{40}$/);
-    expect(headers["X-Origin"]).toBe("https://www.youtube.com");
   });
 
-  it("should degrade to cookies-only headers when no SAPISID is available", async () => {
-    const { fetchFn, innertubeHeaders } = fetchStub({ timedtextBody: "" });
-    await fetchTranscriptExcerpt("vid00000001", 2000, {
-      fetchFn,
-      getSapisidFn: async () => null,
+  it("should report no-tracks when the video has no captions", async () => {
+    const { fetchFn } = fetchStub({ playerBody: { playabilityStatus: { status: "OK" } } });
+    expect(await fetchTranscriptExcerpt("vid00000001", 2000, { fetchFn })).toEqual({
+      failure: "no-tracks",
     });
-    const headers = innertubeHeaders()!;
-    expect(headers["Authorization"]).toBeUndefined();
-    expect(headers["X-Origin"]).toBeUndefined();
+  });
+
+  it("should report the timedtext HTTP status when the caption fetch fails", async () => {
+    const { fetchFn } = fetchStub({ timedtextStatus: 404 });
+    expect(await fetchTranscriptExcerpt("vid00000001", 2000, { fetchFn })).toEqual({
+      failure: "timedtext-http-404",
+    });
+  });
+
+  it("should report empty-body when timedtext returns nothing (pot gating)", async () => {
+    const { fetchFn } = fetchStub({ timedtextBody: "" });
+    expect(await fetchTranscriptExcerpt("vid00000001", 2000, { fetchFn })).toEqual({
+      failure: "empty-body",
+    });
+  });
+
+  it("should report parse-null for an unrecognized body", async () => {
+    const { fetchFn } = fetchStub({ timedtextBody: "<html>Sorry...</html>" });
+    expect(await fetchTranscriptExcerpt("vid00000001", 2000, { fetchFn })).toEqual({
+      failure: "parse-null",
+    });
+  });
+
+  it("should report network when the fetch itself throws", async () => {
+    const fetchFn = (async () => {
+      throw new TypeError("NetworkError");
+    }) as typeof fetch;
+    expect(await fetchTranscriptExcerpt("vid00000001", 2000, { fetchFn })).toEqual({
+      failure: "network",
+    });
   });
 });
