@@ -17,10 +17,17 @@ import {
 
 /** Participates in the two-phase score-cache hash — bump when ranking or
  * reason-composition semantics change. */
-export const RANKER_VERSION = 2;
+export const RANKER_VERSION = 3;
 
 /** Digest axes ≥ this value set the clickbait flag regardless of profile. */
 const CLICKBAIT_FLAG_THRESHOLD = 4;
+
+/** Ceiling for any video hitting an avoided topic — just under the
+ * Worth-a-look threshold (50, src/lib/tiers.ts), so an explicit "less of"
+ * always lands behind the fold no matter how well the quality axes score.
+ * Only topics cap: formats/tones are too common to be a veto (a "humorous"
+ * cap would collapse whole feeds, cf. the 2026-07 feed-collapse bug). */
+const AVOID_TOPIC_SCORE_CAP = 45;
 
 // Binary constraints carry asymmetric evidence. Missing the more-of list is
 // weak negative signal (a broad feed matches any list rarely — v1's credit 0
@@ -62,13 +69,36 @@ const FIELD_PHRASES: Record<DigestNumericField, { good: string; bad: string }> =
 
 const norm = (s: string): string => s.trim().toLowerCase();
 
-/** Fuzzy topic equality: case-insensitive substring in either direction, so
- * profile "chess openings" matches digest topic "chess" and vice versa. */
+/** "chess engines" → {chess, engine}: split on non-alphanumerics, lightly
+ * singularized so plural/singular variants agree. */
+function tokens(s: string): Set<string> {
+  const out = new Set<string>();
+  for (const raw of s.toLowerCase().split(/[^a-z0-9]+/)) {
+    if (!raw) continue;
+    out.add(raw.length > 3 && raw.endsWith("s") && !raw.endsWith("ss") ? raw.slice(0, -1) : raw);
+  }
+  return out;
+}
+
+function isSubset(a: Set<string>, b: Set<string>): boolean {
+  for (const t of a) if (!b.has(t)) return false;
+  return true;
+}
+
+/** A profile item matches a digest topic iff every item token appears in
+ * that single topic — broad "chess" covers "chess openings", but never the
+ * reverse: a digest topic missing the qualifier ("chess" vs avoid item
+ * "comic chess") proves nothing about the video. Bidirectional substring
+ * here is what made every chess video hit both the seek and avoid lists
+ * (the 2026-07 gotham mis-ranking). No token union across digest topics:
+ * "computer science" must not match ["computer engine", "science"].
+ * Returns the matched PROFILE item so reasons name the user's own words. */
 function topicMatch(digestTopics: string[], items: string[]): string | null {
-  for (const topic of digestTopics.map(norm)) {
-    for (const item of items.map(norm)) {
-      if (topic.includes(item) || item.includes(topic)) return topic;
-    }
+  const topicTokenSets = digestTopics.map(tokens);
+  for (const item of items) {
+    const itemTokens = tokens(item);
+    if (itemTokens.size === 0) continue;
+    if (topicTokenSets.some((tt) => isSubset(itemTokens, tt))) return norm(item);
   }
   return null;
 }
@@ -81,8 +111,12 @@ interface Contribution {
   bad: string | null;
 }
 
-function contributions(digest: VideoDigest, target: ProfileTarget): Contribution[] {
+function contributions(
+  digest: VideoDigest,
+  target: ProfileTarget,
+): { parts: Contribution[]; avoidedTopic: string | null } {
   const out: Contribution[] = [];
+  let avoidedTopic: string | null = null;
   for (const field of DIGEST_NUMERIC_FIELDS) {
     const ft = target.fields[field];
     if (!ft || ft.importance <= 0) continue;
@@ -104,11 +138,12 @@ function contributions(digest: VideoDigest, target: ProfileTarget): Contribution
   if (target.topicsLess.items.length > 0 && target.topicsLess.importance > 0) {
     const matched = topicMatch(digest.topics, target.topicsLess.items);
     if (matched) {
+      avoidedTopic = matched;
       out.push({
         weight: target.topicsLess.importance,
         credit: 0,
         good: null,
-        bad: `avoided topic: ${matched}`,
+        bad: `avoided: ${matched}`,
       });
     }
   }
@@ -132,18 +167,20 @@ function contributions(digest: VideoDigest, target: ProfileTarget): Contribution
       });
     }
   }
-  return out;
+  return { parts: out, avoidedTopic };
 }
 
-function composeReason(parts: Contribution[]): string {
+function composeReason(parts: Contribution[], lead: string | null): string {
   const phrased = parts
     .map((c) => ({ signed: c.weight * (c.credit - 0.5), phrase: c.credit >= 0.5 ? c.good : c.bad }))
     .filter((c): c is { signed: number; phrase: string } => c.phrase !== null)
     .sort((a, b) => Math.abs(b.signed) - Math.abs(a.signed))
-    .slice(0, 3)
     .map((c) => c.phrase);
-  if (phrased.length === 0) return "No strong signals either way for your profile";
-  return phrased.join("; ").slice(0, 120);
+  // A capping avoid-hit leads regardless of weight — it decided the tier.
+  const ordered = lead === null ? phrased : [lead, ...phrased.filter((p) => p !== lead)];
+  const top = ordered.slice(0, 3);
+  if (top.length === 0) return "No strong signals either way for your profile";
+  return top.join("; ").slice(0, 120);
 }
 
 /** Rank one digest against the target. Pure and instant — safe to run over
@@ -152,15 +189,20 @@ export function rankVideo(digest: VideoDigest, target: ProfileTarget): RankedSco
   const clickbait =
     digest.clickbaitSeverity >= CLICKBAIT_FLAG_THRESHOLD ||
     digest.claimOverreach >= CLICKBAIT_FLAG_THRESHOLD;
-  const parts = contributions(digest, target);
+  const { parts, avoidedTopic } = contributions(digest, target);
   const totalWeight = parts.reduce((sum, c) => sum + c.weight, 0);
   if (totalWeight === 0) {
     return { score: 50, reason: "No profile constraints to rank against yet", clickbait };
   }
-  const score = Math.round(
+  let score = Math.round(
     (100 * parts.reduce((sum, c) => sum + c.weight * c.credit, 0)) / totalWeight,
   );
-  return { score: Math.max(0, Math.min(100, score)), reason: composeReason(parts), clickbait };
+  if (avoidedTopic !== null) score = Math.min(score, AVOID_TOPIC_SCORE_CAP);
+  return {
+    score: Math.max(0, Math.min(100, score)),
+    reason: composeReason(parts, avoidedTopic === null ? null : `avoided: ${avoidedTopic}`),
+    clickbait,
+  };
 }
 
 // --- target canonicalization (strict-schema null workaround) --------------
@@ -174,13 +216,29 @@ function cleanItems(value: unknown): string[] {
     .slice(0, 12);
 }
 
+/** Translator synonym spam ("engineering" ×5 variants) adds no matching
+ * power under token-subset matching: if Y's tokens ⊆ X's tokens, X can only
+ * match topics Y already matches — so drop X. Equal token sets keep the
+ * first occurrence. */
+function dedupeSupersets(items: string[]): string[] {
+  const sets = items.map(tokens);
+  return items.filter((_, i) => {
+    for (let j = 0; j < items.length; j++) {
+      if (j === i || !isSubset(sets[j]!, sets[i]!)) continue;
+      if (!isSubset(sets[i]!, sets[j]!)) return false; // j strictly more general
+      if (j < i) return false; // same token set — keep the first
+    }
+    return true;
+  });
+}
+
 function cleanList(
   value: unknown,
   opts: { dropItems?: readonly string[]; maxItems?: number } = {},
 ): ListTarget {
   if (value === null || typeof value !== "object") return EMPTY_LIST;
   const obj = value as { items?: unknown; importance?: unknown };
-  const items = cleanItems(obj.items)
+  const items = dedupeSupersets(cleanItems(obj.items))
     .filter((i) => !(opts.dropItems ?? []).includes(i))
     .slice(0, opts.maxItems ?? 12);
   const importance =

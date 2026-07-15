@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import type { ProfileTarget, VideoDigest } from "./types";
 import { canonicalizeTarget, EMPTY_TARGET, isEmptyTarget, rankVideo, targetHash } from "./rubricScorer";
+import gothamTargetRaw from "./fixtures/gotham-target.json";
 
 const DIGEST: VideoDigest = {
   summary: "Careful walkthrough of rook endgames.",
@@ -49,9 +50,60 @@ describe("rankVideo", () => {
     expect(r.score).toBe(75);
   });
 
-  it("should credit topic matches case-insensitively and by substring", () => {
-    const hit = rankVideo(DIGEST, target({ topicsMore: { items: ["Chess openings"], importance: 5 } }));
-    expect(hit.score).toBe(100); // "chess" ⊂ "chess openings"
+  it("should match a broad profile item against a more specific digest topic", () => {
+    const hit = rankVideo(
+      { ...DIGEST, topics: ["chess openings"] },
+      target({ topicsMore: { items: ["Chess"], importance: 5 } }),
+    );
+    expect(hit.score).toBe(100); // broad "chess" covers specific "chess openings"
+  });
+
+  it("should match profile items regardless of token order or plural form", () => {
+    const hit = rankVideo(
+      { ...DIGEST, topics: ["chess engines"] },
+      target({ topicsMore: { items: ["engine chess"], importance: 5 } }),
+    );
+    expect(hit.score).toBe(100);
+  });
+
+  it("should not match a qualified avoid item against its bare parent topic", () => {
+    // "Low tier comic chess games" in the avoid list must not fire on every
+    // chess video — the 2026-07 gotham bug: bidirectional substring matching
+    // reduced "comic chess" to "chess" and contradicted the seek list.
+    const r = rankVideo(DIGEST, target({ topicsLess: { items: ["comic chess"], importance: 8 } }));
+    expect(r.score).toBe(50); // no avoid contribution — no evidence either way
+  });
+
+  it("should not match a qualified seek item against its bare parent topic", () => {
+    const r = rankVideo(DIGEST, target({ topicsMore: { items: ["top tier chess"], importance: 5 } }));
+    expect(r.score).toBeLessThan(50); // qualified interest ⊅ generic chess video
+  });
+
+  it("should name the profile item, not the digest topic, in avoid reasons", () => {
+    const r = rankVideo(
+      { ...DIGEST, topics: ["gothamchess comic chess recap"] },
+      target({ topicsLess: { items: ["comic chess"], importance: 8 } }),
+    );
+    expect(r.reason).toContain("avoided: comic chess");
+    expect(r.reason).not.toContain("recap");
+  });
+
+  it("should cap a video below Worth-a-look when an avoided topic genuinely matches", () => {
+    // Averaging alone let avoid hits drown in quality-axis credit (the
+    // gotham bug rode "clean packaging" into the top tier).
+    const r = rankVideo(
+      { ...DIGEST, topics: ["chess", "comic chess"] },
+      target({
+        fields: {
+          substanceDensity: { target: 5, importance: 9 },
+          clickbaitSeverity: { target: 1, importance: 8 },
+        },
+        topicsMore: { items: ["chess"], importance: 9 },
+        topicsLess: { items: ["comic chess"], importance: 8 },
+      }),
+    );
+    expect(r.score).toBeLessThanOrEqual(45);
+    expect(r.reason.startsWith("avoided: comic chess")).toBe(true);
   });
 
   it("should treat a topicsMore miss as mildly negative, not catastrophic", () => {
@@ -105,6 +157,48 @@ describe("rankVideo", () => {
     expect(r.reason).toContain("chess");
     const bad = rankVideo({ ...DIGEST, claimOverreach: 5 }, target({ fields: { claimOverreach: { target: 1, importance: 10 } } }));
     expect(bad.reason).toContain("overclaims");
+  });
+
+  it("should winnow low-tier comic chess and top-rank elite play for the captured gotham target", () => {
+    // The real translated target behind the 2026-07 mis-ranking (fixture
+    // extracted from the debug capture): "chess" sought broadly, "comic
+    // chess" avoided. The comic video must land behind the fold; elite
+    // play must stay on top.
+    const gotham = canonicalizeTarget(gothamTargetRaw);
+    const comic = rankVideo(
+      {
+        summary: "Comedic recap of a low-rated players' blunder-filled game.",
+        topics: ["chess", "comic chess", "blunders"],
+        format: "entertainment",
+        emotionalTone: "humorous",
+        hypeSignals: [],
+        substanceDensity: 3,
+        clickbaitSeverity: 2,
+        claimOverreach: 1,
+        intellectualDemand: 2,
+        productionEffort: 3,
+        novelty: 2,
+      },
+      gotham,
+    );
+    expect(comic.score).toBeLessThan(50);
+    const elite = rankVideo(
+      {
+        summary: "Deep analysis of a world-championship game.",
+        topics: ["chess", "top tier play", "chess engine"],
+        format: "explainer",
+        emotionalTone: "calm",
+        hypeSignals: [],
+        substanceDensity: 5,
+        clickbaitSeverity: 1,
+        claimOverreach: 1,
+        intellectualDemand: 4,
+        productionEffort: 4,
+        novelty: 3,
+      },
+      gotham,
+    );
+    expect(elite.score).toBeGreaterThanOrEqual(75);
   });
 });
 
@@ -168,6 +262,24 @@ describe("canonicalizeTarget", () => {
       tonesAvoid: null,
     });
     expect(t.formatsAvoid.items).toEqual(["news", "review", "interview"]);
+  });
+
+  it("should drop list items whose tokens strictly contain another item's tokens", () => {
+    // Translator synonym spam ("engineering" ×5 variants) adds no matching
+    // power under token-subset matching: if Y's tokens ⊆ X's tokens, every
+    // topic X matches, Y already matches.
+    const t = canonicalizeTarget({
+      fields: {},
+      topicsMore: {
+        items: ["engineering", "engineering applications", "engineering practice"],
+        importance: 9,
+      },
+      topicsLess: { items: ["comic chess", "low tier comic chess"], importance: 8 },
+      formatsAvoid: null,
+      tonesAvoid: null,
+    });
+    expect(t.topicsMore.items).toEqual(["engineering"]);
+    expect(t.topicsLess.items).toEqual(["comic chess"]);
   });
 
   it("should produce the empty target from a fully null translation", () => {
