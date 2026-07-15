@@ -1,5 +1,8 @@
-// Temp probe (deleted after use): enrich one capture video live and rank it
-// against the gotham target — shows exactly what the digest says.
+// Diagnostic: enrich ONE video from the committed gotham capture with a
+// live nano call and rank it against the capture's stored target — shows
+// exactly what the digest says when a single ranking looks wrong.
+//
+//   npx vite-node scripts/probe-video.ts [videoId]
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { gunzipSync } from "node:zlib";
 import { fileURLToPath } from "node:url";
