@@ -4,10 +4,14 @@
 // Reproduces the production add-on run without a browser.
 //
 //   npx vite-node scripts/twophase-diag.ts [maxVideos] [provider]
+//     --fixtures  score the committed parser fixtures instead of live pages
+//     --capture   replay the committed gotham capture (pairs with
+//                 DIAG_PROFILE=gotham for the exact mis-ranking feed)
 //
 // Keys from .env.production (gitignored) or the environment.
 
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { gunzipSync } from "node:zlib";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { parseFeedPage } from "../src/services/youtube/feedParser";
@@ -44,7 +48,9 @@ if (!apiKey) {
 }
 
 // Approximation of a real profile of the kind the user runs; DIAG_PROFILE=nomatch
-// swaps in a worst-case profile whose topics match nothing in the feed.
+// swaps in a worst-case profile whose topics match nothing in the feed;
+// DIAG_PROFILE=gotham is the verbatim profile behind the 2026-07 comic-chess
+// mis-ranking (pair with --capture for the exact feed).
 const profile =
   process.env["DIAG_PROFILE"] === "nomatch"
     ? {
@@ -52,7 +58,15 @@ const profile =
         lessOf: "science provocateurs, overclaiming hype, clickbait",
         updatedAt: 0,
       }
-    : {
+    : process.env["DIAG_PROFILE"] === "gotham"
+      ? {
+          moreOf:
+            "Chess videos featuring top tier play or top computer engine games of note.  Science and civil/mechanical/real-world engineering that is practical, professional or serious.",
+          lessOf:
+            "Computer science content, video games, sports, politics. Low tier comic chess games. Drama narratives on any subject. Click-bait subjects or attention grabbing material. Standup comedy. Science provocateurs, overclaiming hype.",
+          updatedAt: 0,
+        }
+      : {
         moreOf:
           "deep chess analysis and lessons, careful science and engineering explainers, programming and systems design deep dives, history documentaries",
         lessOf:
@@ -72,6 +86,28 @@ function fixtureVideos(): Video[] {
       readFileSync(join(here, "..", "src", "services", "youtube", "fixtures", file), "utf8"),
     ) as unknown;
     for (const v of parseFeedPage(data, source)) {
+      if (!seen.has(v.id)) {
+        seen.add(v.id);
+        all.push(v);
+      }
+    }
+  }
+  return all.slice(0, maxVideos);
+}
+
+// The committed production-scale capture (126 videos around the gotham
+// mis-ranking), gunzipped to a gitignored local copy on first use.
+function captureVideos(): Video[] {
+  const dir = join(here, "..", "src", "services", "youtube", "fixtures");
+  const jsonPath = join(dir, "gotham-poor-ranking-capture.json");
+  if (!existsSync(jsonPath)) {
+    writeFileSync(jsonPath, gunzipSync(readFileSync(`${jsonPath}.gz`)));
+  }
+  const bundle = JSON.parse(readFileSync(jsonPath, "utf8")) as Record<string, unknown>;
+  const all: Video[] = [];
+  const seen = new Set<string>();
+  for (const source of ["home", "subscriptions"] as const) {
+    for (const v of parseFeedPage(bundle[source], source)) {
       if (!seen.has(v.id)) {
         seen.add(v.id);
         all.push(v);
@@ -117,7 +153,11 @@ async function liveVideos(): Promise<Video[]> {
 }
 
 async function main(): Promise<void> {
-  const videos = process.argv.includes("--fixtures") ? fixtureVideos() : await liveVideos();
+  const videos = process.argv.includes("--capture")
+    ? captureVideos()
+    : process.argv.includes("--fixtures")
+      ? fixtureVideos()
+      : await liveVideos();
   const model = enrichmentModelFor(provider);
   console.log(`${videos.length} fixture videos, provider=${provider}, model=${model}\n`);
 

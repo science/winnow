@@ -9,7 +9,7 @@
 
 import type { Profile } from "../../lib/types";
 import type { FeedbackExample } from "../../lib/feedback";
-import { DIGEST_FORMATS, DIGEST_TONES } from "../../lib/digest";
+import { DIGEST_FORMATS, DIGEST_TIER_QUALIFIERS, DIGEST_TONES } from "../../lib/digest";
 
 // Bump on any prompt or schema change — participates in the target cache
 // key, so a bump cleanly re-translates and re-ranks.
@@ -26,7 +26,7 @@ export const TRANSLATE_SYSTEM_PROMPT = `You translate a person's free-text YouTu
 
 Constrain ONLY what the person actually expressed — emit null for every axis and list their words don't touch. Each constraint gets the axis's desired value (target, 1-5) and an importance 1-10 reflecting how emphatically they expressed it. Anyone asking for "substance", "depth", or "no BS" wants high substanceDensity; complaints about hype, provocateurs, overclaiming, or "is this true?" content mean claimOverreach target 1 at high importance; complaints about clickbait mean clickbaitSeverity target 1.
 
-topicsMore / topicsLess: SUBJECT tags only (lowercase) they want more/less of — things a video can be about, like "chess" or "rook endgames". At most 6 per list; no near-synonym variants ("engineering" already covers "engineering practice"). When they qualify a subject by tier, level, or style, KEEP the qualifier and do NOT emit the bare parent tag: "chess videos featuring top tier play" → topicsMore "top tier chess", "elite chess" — never bare "chess"; "low tier comic chess games" → topicsLess "comic chess", "low tier chess". Emit the bare subject only when their interest genuinely spans all of it. Quality complaints are NOT topics: "clickbait", "hype", "overclaiming", "science provocateurs" and similar describe how a video is made, not what it is about — they belong in the numeric axes above (claimOverreach, clickbaitSeverity), never in topicsLess.
+topicsMore / topicsLess: SUBJECT tags only (lowercase) they want more/less of — things a video can be about, like "chess" or "rook endgames". At most 6 per list; no near-synonym variants ("engineering" already covers "engineering practice"). When they qualify a subject by tier, level, or style, keep it as a two-word tag "<qualifier> <subject>" using exactly one of these qualifier words: ${DIGEST_TIER_QUALIFIERS.join(", ")} — and do NOT emit the bare parent tag: "chess videos featuring top tier play" → topicsMore "elite chess" — never bare "chess" and never free-form qualifiers like "top tier chess"; "low tier comic chess games" → topicsLess "comedic chess", "amateur chess". Videos are tagged with these exact qualifier words, so synonyms will not match. Emit the bare subject only when their interest genuinely spans all of it. Quality complaints are NOT topics: "clickbait", "hype", "overclaiming", "science provocateurs" and similar describe how a video is made, not what it is about — they belong in the numeric axes above (claimOverreach, clickbaitSeverity), never in topicsLess.
 formatsAvoid: at most 3 formats their words EXPLICITLY reject (e.g. "no reaction videos" → reaction), from: ${DIGEST_FORMATS.join(", ")}. Never include "other" — it is the catch-all for unclassifiable videos, not a real format. Wanting some subjects does not imply rejecting formats; when unsure, emit null.
 tonesAvoid: at most 3 tones their words explicitly reject, from: ${DIGEST_TONES.join(", ")}.
 

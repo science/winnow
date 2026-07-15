@@ -4,7 +4,7 @@
 // (movie-night taxonomy pattern) — vague axes produce noise, not signal.
 
 import type { Video } from "../../lib/types";
-import { DIGEST_FORMATS, DIGEST_TONES } from "../../lib/digest";
+import { DIGEST_FORMATS, DIGEST_TIER_QUALIFIERS, DIGEST_TONES } from "../../lib/digest";
 
 // Bump on any prompt or schema change — participates in the enrichment
 // cache key, so a bump cleanly re-enriches everything.
@@ -30,7 +30,7 @@ The transcript is ground truth: it is what the video actually says, while the ti
 
 Fields per video:
 - summary: 1-2 plain sentences on what the video contains and argues. No hype words, no marketing language.
-- topics: up to 8 lowercase tags, broad to specific (e.g. "chess", "rook endgames"). When the level, tier, or style of the subject is clearly identifiable, include a qualified tag for it too (e.g. "comic chess", "elite chess", "beginner tutorial", "amateur game recap") — profiles often seek or avoid a specific tier of a subject, and a bare tag cannot express that.
+- topics: up to 8 lowercase tags, broad to specific (e.g. "chess", "rook endgames"). When the level, tier, or style of the subject is clearly identifiable, ALSO include a two-word qualified tag using exactly one of these qualifiers: ${DIGEST_TIER_QUALIFIERS.join(", ")} — e.g. "elite chess" (top players or strong engines), "comedic chess" (jokes/blunders as entertainment), "amateur chess" (low-rated players), "beginner tutorial". Profiles often seek or avoid a specific tier of a subject, and a bare tag cannot express that; use these exact qualifier words, not synonyms. Qualified tags need evidence: without a transcript, add one only when the title/description states the tier outright — never guess it from the channel name.
 - format: one of ${DIGEST_FORMATS.join(", ")}.
 - emotionalTone: one of ${DIGEST_TONES.join(", ")}.
 - hypeSignals: concrete manipulation techniques you actually observed ("withheld subject in title", "manufactured urgency", "outrage framing", "teaser never resolved"). Empty array when clean.

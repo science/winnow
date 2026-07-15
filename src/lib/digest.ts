@@ -29,6 +29,20 @@ export const DIGEST_TONES = [
   "neutral",
 ] as const;
 
+/** Canonical tier/style qualifiers for topic tags ("elite chess", "comedic
+ * chess"). The translator and the enricher are independent LLM calls whose
+ * qualified tags must token-match each other — free-choice qualifiers don't
+ * ("top tier chess" vs "elite chess"), so both prompts interpolate this
+ * exact list. */
+export const DIGEST_TIER_QUALIFIERS = [
+  "elite",
+  "professional",
+  "amateur",
+  "beginner",
+  "comedic",
+  "casual",
+] as const;
+
 export const SUMMARY_MAX_CHARS = 400;
 export const TOPICS_MAX = 8;
 
