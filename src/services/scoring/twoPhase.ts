@@ -129,6 +129,43 @@ export interface StoredTarget {
   target: ProfileTarget;
 }
 
+/** Cache key for the translated target: every input that changes what the
+ * translator would say. */
+function targetInputHashFor(profile: Profile, feedback: FeedbackExample[], model: string): string {
+  return fnv1a(
+    [
+      profile.moreOf,
+      profile.lessOf,
+      String(TRANSLATOR_PROMPT_VERSION),
+      model,
+      JSON.stringify(feedback),
+    ].join("|"),
+  );
+}
+
+/** Cache key for ranked scores: target semantics + every version that changes
+ * ranking or digests. */
+function scoresHashFor(target: ProfileTarget, model: string): string {
+  return fnv1a(
+    [targetHash(target), String(RANKER_VERSION), String(ENRICHMENT_PROMPT_VERSION), model].join("|"),
+  );
+}
+
+/** Predict the scoresHash the next run will produce, or null when the cached
+ * translation is stale (profile/votes/model changed) and the hash cannot be
+ * known without an LLM call. Lets the UI decide whether last run's stored
+ * scores are still current enough to display while a run is in flight. */
+export async function expectedScoresHash(
+  profile: Profile,
+  feedback: FeedbackExample[],
+  model: string,
+  loadTarget: () => Promise<StoredTarget | null> = () => storageGet<StoredTarget>(KEYS.profileTarget),
+): Promise<string | null> {
+  const stored = await loadTarget();
+  if (stored?.inputHash !== targetInputHashFor(profile, feedback, model)) return null;
+  return scoresHashFor(canonicalizeTarget(stored.target), model);
+}
+
 export interface TwoPhaseDeps {
   provider: Provider;
   apiKey: string;
@@ -207,15 +244,7 @@ export async function runTwoPhaseScoring(
 
   // Phase 2a first — it's one cheap call, and an auth failure here aborts
   // before we spend anything on enrichment.
-  const targetInputHash = fnv1a(
-    [
-      deps.profile.moreOf,
-      deps.profile.lessOf,
-      String(TRANSLATOR_PROMPT_VERSION),
-      deps.model,
-      JSON.stringify(feedback),
-    ].join("|"),
-  );
+  const targetInputHash = targetInputHashFor(deps.profile, feedback, deps.model);
   const storedTarget = await loadTarget();
   let target: ProfileTarget;
   if (storedTarget?.inputHash === targetInputHash) {
@@ -243,9 +272,7 @@ export async function runTwoPhaseScoring(
     await saveTarget({ inputHash: targetInputHash, target });
   }
   result.target = target;
-  result.scoresHash = fnv1a(
-    [targetHash(target), String(RANKER_VERSION), String(ENRICHMENT_PROMPT_VERSION), deps.model].join("|"),
-  );
+  result.scoresHash = scoresHashFor(target, deps.model);
 
   // Phase 1 — figure out which videos need work.
   const cache = (await loadEnrichment()) ?? {};

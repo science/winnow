@@ -17,10 +17,17 @@ import {
 
 /** Participates in the two-phase score-cache hash — bump when ranking or
  * reason-composition semantics change. */
-export const RANKER_VERSION = 1;
+export const RANKER_VERSION = 2;
 
 /** Digest axes ≥ this value set the clickbait flag regardless of profile. */
 const CLICKBAIT_FLAG_THRESHOLD = 4;
+
+// Binary constraints carry asymmetric evidence. Missing the more-of list is
+// weak negative signal (a broad feed matches any list rarely — v1's credit 0
+// here sank entire feeds below the winnowed threshold). Avoid-lists only
+// subtract: not hitting one says nothing, so it contributes no weight at all
+// (v1's credit 1 floated junk into the feed; a 0.5 draft diluted matches).
+const TOPICS_MORE_MISS_CREDIT = 0.35;
 
 const EMPTY_LIST: ListTarget = { items: [], importance: 0 };
 
@@ -89,37 +96,41 @@ function contributions(digest: VideoDigest, target: ProfileTarget): Contribution
     const matched = topicMatch(digest.topics, target.topicsMore.items);
     out.push({
       weight: target.topicsMore.importance,
-      credit: matched ? 1 : 0,
+      credit: matched ? 1 : TOPICS_MORE_MISS_CREDIT,
       good: matched ? `on-profile: ${matched}` : null,
       bad: "off your stated interests",
     });
   }
   if (target.topicsLess.items.length > 0 && target.topicsLess.importance > 0) {
     const matched = topicMatch(digest.topics, target.topicsLess.items);
-    out.push({
-      weight: target.topicsLess.importance,
-      credit: matched ? 0 : 1,
-      good: null,
-      bad: matched ? `avoided topic: ${matched}` : null,
-    });
+    if (matched) {
+      out.push({
+        weight: target.topicsLess.importance,
+        credit: 0,
+        good: null,
+        bad: `avoided topic: ${matched}`,
+      });
+    }
   }
   if (target.formatsAvoid.items.length > 0 && target.formatsAvoid.importance > 0) {
-    const hit = target.formatsAvoid.items.map(norm).includes(norm(digest.format));
-    out.push({
-      weight: target.formatsAvoid.importance,
-      credit: hit ? 0 : 1,
-      good: null,
-      bad: hit ? `format you avoid: ${digest.format}` : null,
-    });
+    if (target.formatsAvoid.items.map(norm).includes(norm(digest.format))) {
+      out.push({
+        weight: target.formatsAvoid.importance,
+        credit: 0,
+        good: null,
+        bad: `format you avoid: ${digest.format}`,
+      });
+    }
   }
   if (target.tonesAvoid.items.length > 0 && target.tonesAvoid.importance > 0) {
-    const hit = target.tonesAvoid.items.map(norm).includes(norm(digest.emotionalTone));
-    out.push({
-      weight: target.tonesAvoid.importance,
-      credit: hit ? 0 : 1,
-      good: null,
-      bad: hit ? `tone you avoid: ${digest.emotionalTone}` : null,
-    });
+    if (target.tonesAvoid.items.map(norm).includes(norm(digest.emotionalTone))) {
+      out.push({
+        weight: target.tonesAvoid.importance,
+        credit: 0,
+        good: null,
+        bad: `tone you avoid: ${digest.emotionalTone}`,
+      });
+    }
   }
   return out;
 }
@@ -163,16 +174,26 @@ function cleanItems(value: unknown): string[] {
     .slice(0, 12);
 }
 
-function cleanList(value: unknown): ListTarget {
+function cleanList(
+  value: unknown,
+  opts: { dropItems?: readonly string[]; maxItems?: number } = {},
+): ListTarget {
   if (value === null || typeof value !== "object") return EMPTY_LIST;
   const obj = value as { items?: unknown; importance?: unknown };
-  const items = cleanItems(obj.items);
+  const items = cleanItems(obj.items)
+    .filter((i) => !(opts.dropItems ?? []).includes(i))
+    .slice(0, opts.maxItems ?? 12);
   const importance =
     typeof obj.importance === "number" && items.length > 0
       ? Math.max(0, Math.min(10, Math.round(obj.importance)))
       : 0;
   return items.length > 0 ? { items, importance } : EMPTY_LIST;
 }
+
+/** A person rejects a couple of formats/tones; a translator emitting half
+ * the vocabulary is hallucinating taste (observed live with nano). Model
+ * item order roughly tracks salience, so keeping the head is safe. */
+const AVOID_LIST_MAX = 3;
 
 /** Strict structured outputs can't mark fields optional, so the translator
  * emits null for unconstrained fields (movie-night workaround); this strips
@@ -194,8 +215,10 @@ export function canonicalizeTarget(raw: unknown): ProfileTarget {
     fields,
     topicsMore: cleanList(obj["topicsMore"]),
     topicsLess: cleanList(obj["topicsLess"]),
-    formatsAvoid: cleanList(obj["formatsAvoid"]),
-    tonesAvoid: cleanList(obj["tonesAvoid"]),
+    // "other" is clampDigest's catch-all for unrecognized formats — avoiding
+    // it would penalize arbitrary innocent videos, so it can't be a target.
+    formatsAvoid: cleanList(obj["formatsAvoid"], { dropItems: ["other"], maxItems: AVOID_LIST_MAX }),
+    tonesAvoid: cleanList(obj["tonesAvoid"], { maxItems: AVOID_LIST_MAX }),
   };
 }
 

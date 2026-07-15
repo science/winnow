@@ -7,6 +7,7 @@ import { ENRICHMENT_PROMPT_VERSION, ENRICH_TRANSCRIPT_CHARS } from "./enrichProm
 import {
   contentHashFor,
   enrichBatch,
+  expectedScoresHash,
   runTwoPhaseScoring,
   type StoredTarget,
   type StructuredCallFn,
@@ -161,9 +162,28 @@ describe("runTwoPhaseScoring", () => {
     });
     const result = await runTwoPhaseScoring([video("provocateur")], memoryDeps(callFn));
     const s = result.scores["provocateur"]!;
-    expect(s.score).toBeLessThan(40);
+    // Below the winnowed threshold (50) — behind the fold.
+    expect(s.score).toBeLessThan(50);
     expect(s.clickbait).toBe(true);
     expect(s.reason).toContain("overclaims");
+  });
+
+  it("should predict the run's scoresHash from the cached target, and refuse to when stale", async () => {
+    // scoreFeedTwoPhase shows last run's scores while the new run works ONLY
+    // when this prediction matches — stale scores (other engine, edited
+    // profile) must never render as if they were current.
+    const { callFn } = stubCall();
+    const deps = memoryDeps(callFn);
+    expect(await expectedScoresHash(profile, [], "stub-nano", deps.loadTarget!)).toBeNull();
+
+    const result = await runTwoPhaseScoring([video("aaaaaaaaaa1")], deps);
+    expect(await expectedScoresHash(profile, [], "stub-nano", deps.loadTarget!)).toBe(
+      result.scoresHash,
+    );
+    // Any translation input change (profile text, votes, model) → unknown again.
+    const edited: Profile = { ...profile, moreOf: "woodworking" };
+    expect(await expectedScoresHash(edited, [], "stub-nano", deps.loadTarget!)).toBeNull();
+    expect(await expectedScoresHash(profile, [], "other-model", deps.loadTarget!)).toBeNull();
   });
 
   it("should make a second run fully cache-served: no LLM calls, same scores", async () => {

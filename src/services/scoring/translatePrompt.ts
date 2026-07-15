@@ -13,7 +13,7 @@ import { DIGEST_FORMATS, DIGEST_TONES } from "../../lib/digest";
 
 // Bump on any prompt or schema change — participates in the target cache
 // key, so a bump cleanly re-translates and re-ranks.
-export const TRANSLATOR_PROMPT_VERSION = 1;
+export const TRANSLATOR_PROMPT_VERSION = 2;
 
 export const TRANSLATE_SYSTEM_PROMPT = `You translate a person's free-text YouTube interest profile into structured curation constraints. The constraints rank videos that have already been analyzed on these axes:
 
@@ -26,9 +26,9 @@ export const TRANSLATE_SYSTEM_PROMPT = `You translate a person's free-text YouTu
 
 Constrain ONLY what the person actually expressed — emit null for every axis and list their words don't touch. Each constraint gets the axis's desired value (target, 1-5) and an importance 1-10 reflecting how emphatically they expressed it. Anyone asking for "substance", "depth", or "no BS" wants high substanceDensity; complaints about hype, provocateurs, overclaiming, or "is this true?" content mean claimOverreach target 1 at high importance; complaints about clickbait mean clickbaitSeverity target 1.
 
-topicsMore / topicsLess: subject tags (lowercase) they want more/less of. Include synonyms and obvious subtopics of what they wrote, not inventions.
-formatsAvoid: formats they reject, from: ${DIGEST_FORMATS.join(", ")}.
-tonesAvoid: tones they reject, from: ${DIGEST_TONES.join(", ")}.
+topicsMore / topicsLess: SUBJECT tags only (lowercase) they want more/less of — things a video can be about, like "chess" or "rook endgames". Prefer short broad tags over long phrases; include synonyms and obvious subtopics of what they wrote, not inventions. Quality complaints are NOT topics: "clickbait", "hype", "overclaiming" and similar belong in the numeric axes above, never in topicsLess.
+formatsAvoid: at most 3 formats their words EXPLICITLY reject (e.g. "no reaction videos" → reaction), from: ${DIGEST_FORMATS.join(", ")}. Never include "other" — it is the catch-all for unclassifiable videos, not a real format. Wanting some subjects does not imply rejecting formats; when unsure, emit null.
+tonesAvoid: at most 3 tones their words explicitly reject, from: ${DIGEST_TONES.join(", ")}.
 
 You may also receive their recent personal votes on videos ("up" = good pick, "down" = not for me). Use them to sharpen importance and topic lists — generalize the pattern, never add a constraint their profile text and votes don't support.`;
 

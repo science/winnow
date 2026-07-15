@@ -52,15 +52,38 @@ describe("rankVideo", () => {
   it("should credit topic matches case-insensitively and by substring", () => {
     const hit = rankVideo(DIGEST, target({ topicsMore: { items: ["Chess openings"], importance: 5 } }));
     expect(hit.score).toBe(100); // "chess" ⊂ "chess openings"
+  });
+
+  it("should treat a topicsMore miss as mildly negative, not catastrophic", () => {
+    // A broad feed matches any topic list rarely; "not on your list" is weak
+    // evidence, and must not be able to sink the whole feed below the
+    // winnowed threshold on its own (the 2026-07 feed-collapse bug).
     const miss = rankVideo(DIGEST, target({ topicsMore: { items: ["woodworking"], importance: 5 } }));
-    expect(miss.score).toBe(0);
+    expect(miss.score).toBeGreaterThanOrEqual(30);
+    expect(miss.score).toBeLessThan(50);
+    expect(miss.reason).toContain("off your stated interests");
   });
 
   it("should zero the credit for avoided topics, formats, and tones", () => {
     expect(rankVideo(DIGEST, target({ topicsLess: { items: ["chess"], importance: 5 } })).score).toBe(0);
     expect(rankVideo(DIGEST, target({ formatsAvoid: { items: ["tutorial"], importance: 5 } })).score).toBe(0);
     expect(rankVideo(DIGEST, target({ tonesAvoid: { items: ["calm"], importance: 5 } })).score).toBe(0);
-    expect(rankVideo(DIGEST, target({ tonesAvoid: { items: ["outraged"], importance: 5 } })).score).toBe(100);
+  });
+
+  it("should treat NOT hitting an avoid-list as no evidence at all", () => {
+    // Avoid-lists only subtract: lacking an avoided trait neither rewards
+    // (v1 floated junk into Worth a look) nor dilutes real matches (an
+    // early v2 draft capped on-profile videos below the Top threshold).
+    expect(rankVideo(DIGEST, target({ topicsLess: { items: ["drama"], importance: 5 } })).score).toBe(50);
+    const matchPlusMissedAvoid = rankVideo(
+      DIGEST,
+      target({
+        fields: { substanceDensity: { target: 5, importance: 8 } },
+        formatsAvoid: { items: ["reaction"], importance: 5 },
+        tonesAvoid: { items: ["outraged"], importance: 5 },
+      }),
+    );
+    expect(matchPlusMissedAvoid.score).toBe(100);
   });
 
   it("should flag clickbait from digest severity or claim overreach >= 4", () => {
@@ -107,6 +130,44 @@ describe("canonicalizeTarget", () => {
     expect(t.topicsMore).toEqual({ items: ["chess"], importance: 5 });
     expect(t.topicsLess).toEqual({ items: [], importance: 0 });
     expect(t.tonesAvoid).toEqual({ items: ["outraged"], importance: 10 });
+  });
+
+  it("should strip the catch-all 'other' format from formatsAvoid", () => {
+    // clampDigest coerces every unrecognized format to "other", so letting
+    // the translator avoid "other" penalizes arbitrary innocent videos.
+    const t = canonicalizeTarget({
+      fields: {},
+      topicsMore: null,
+      topicsLess: null,
+      formatsAvoid: { items: ["reaction", "other", "highlights"], importance: 6 },
+      tonesAvoid: null,
+    });
+    expect(t.formatsAvoid.items).toEqual(["reaction", "highlights"]);
+    const onlyOther = canonicalizeTarget({
+      fields: {},
+      topicsMore: null,
+      topicsLess: null,
+      formatsAvoid: { items: ["other"], importance: 6 },
+      tonesAvoid: null,
+    });
+    expect(onlyOther.formatsAvoid).toEqual({ items: [], importance: 0 });
+  });
+
+  it("should cap format/tone avoid-lists at 3 — beyond that the translator is hallucinating taste", () => {
+    // Live nano run 2026-07-15 emitted formatsAvoid with 8 of 12 formats
+    // (including "tutorial" for a profile asking for lessons), demoting
+    // on-profile videos. Real people reject a couple of formats, not most.
+    const t = canonicalizeTarget({
+      fields: {},
+      topicsMore: null,
+      topicsLess: null,
+      formatsAvoid: {
+        items: ["news", "review", "interview", "reaction", "highlights", "vlog"],
+        importance: 7,
+      },
+      tonesAvoid: null,
+    });
+    expect(t.formatsAvoid.items).toEqual(["news", "review", "interview"]);
   });
 
   it("should produce the empty target from a fully null translation", () => {

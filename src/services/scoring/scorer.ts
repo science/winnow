@@ -25,7 +25,7 @@ import {
 import { settings, profile as profileStore, settingsReady } from "../../stores/settingsStore";
 import { fetchTranscriptExcerpt, type TranscriptOutcome } from "../youtube/transcripts";
 import { isDemoMode } from "../youtube/feedSource";
-import { enrichmentModelFor, runTwoPhaseScoring } from "./twoPhase";
+import { enrichmentModelFor, expectedScoresHash, runTwoPhaseScoring } from "./twoPhase";
 import type { Settings } from "../../lib/types";
 
 const CONCURRENCY = 2;
@@ -336,10 +336,18 @@ async function scoreFeedTwoPhase(
   if ($videos.length === 0) return;
   const model = enrichmentModelFor($settings.provider);
 
-  // Last run's scores stand (optimistic display) until the re-rank below.
+  await feedbackReady;
+  const feedbackExamples = recentExamples(get(feedbackStore), FEEDBACK_PROMPT_CAP);
+
+  // Last run's scores stand (optimistic display) until the re-rank below —
+  // but ONLY when they're provably current (same target, versions, model).
+  // Stale scores (other engine, edited profile, new votes) render as pending
+  // instead: half-finished tiers mislead more than a progress bar does.
   const stored = await storageGet<StoredScores>(KEYS.scores);
-  if (stored) scoresStore.set(stored.scores);
-  const known = new Set(Object.keys(stored?.scores ?? {}));
+  const currentHash = await expectedScoresHash($profile, feedbackExamples, model);
+  const displayable = stored && currentHash && stored.profileHash === currentHash;
+  scoresStore.set(displayable ? stored.scores : {});
+  const known = new Set(displayable ? Object.keys(stored.scores) : []);
   pendingScores.set(new Set($videos.filter((v) => !known.has(v.id)).map((v) => v.id)));
   status.update((s) => ({
     ...s,
@@ -349,7 +357,6 @@ async function scoreFeedTwoPhase(
     detail: "Analyzing videos…",
   }));
 
-  await feedbackReady;
   // Transcript excerpts buffered here and merged once — the fetch workers
   // run concurrently and must not race on the stored cache.
   const excerptBuffer: Record<string, TranscriptCacheEntry> = {};
@@ -358,7 +365,7 @@ async function scoreFeedTwoPhase(
     apiKey,
     model,
     profile: $profile,
-    feedback: recentExamples(get(feedbackStore), FEEDBACK_PROMPT_CAP),
+    feedback: feedbackExamples,
     saveExcerpt: async (videoId, excerpt) => {
       excerptBuffer[videoId] = { excerpt, source: "player", fetchedAt: Date.now() };
     },

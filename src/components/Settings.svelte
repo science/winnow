@@ -1,6 +1,8 @@
 <script lang="ts">
   import { applyKeyChange, profile, settings } from "../stores/settingsStore";
-  import { KEYS, storageRemove } from "../lib/storage";
+  import { KEYS, storageGet, storageRemove } from "../lib/storage";
+  import { buildScoringDebug } from "../lib/scoringDebug";
+  import type { EnrichmentEntry, VideoScore } from "../lib/types";
   import { scores } from "../stores/feedStore";
   import { feedback } from "../stores/feedbackStore";
   import { scoreFeed } from "../services/scoring/scorer";
@@ -127,7 +129,13 @@
         timedtext: transcript.timedtextRaw,
       };
     }
-    const captured = [...parts.map(([k]) => k), ...(transcript ? ["transcript"] : [])];
+    bundle["scoring"] = buildScoringDebug({
+      target: await storageGet(KEYS.profileTarget),
+      scores:
+        (await storageGet<{ scores: Record<string, VideoScore> }>(KEYS.scores))?.scores ?? null,
+      enrichment: await storageGet<Record<string, EnrichmentEntry>>(KEYS.enrichment),
+    });
+    const captured = [...parts.map(([k]) => k), ...(transcript ? ["transcript"] : []), "scoring"];
     await navigator.clipboard.writeText(JSON.stringify(bundle, null, 2));
     captureMessage = `Copied raw captures for: ${captured.join(", ")}. Paste into a file for parser fixtures.`;
   }
