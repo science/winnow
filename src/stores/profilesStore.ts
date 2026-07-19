@@ -64,17 +64,39 @@ profilesState.subscribe((value) => {
 
 export const activeProfileId = derived(profilesState, (s) => s.activeProfileId);
 
+/** Reload per-profile companion stores for the (new) active profile.
+ * Dynamic import breaks the feedbackStore ↔ profilesStore cycle. */
+async function reloadCompanions(profileId: string): Promise<void> {
+  const { reloadFeedback } = await import("./feedbackStore");
+  await reloadFeedback(profileId);
+}
+
 /** Create an empty named profile and switch to it. Returns the new id. */
 export async function addProfileAction(name: string): Promise<string> {
   await profilesReady;
   const next = addProfile(get(profilesState), name);
   profilesState.set(next);
+  await reloadCompanions(next.activeProfileId);
   return next.activeProfileId;
 }
 
 export async function renameProfileAction(id: string, name: string): Promise<void> {
   await profilesReady;
   profilesState.set(renameProfile(get(profilesState), id, name));
+}
+
+/** Switch the active profile: swap the vote set, then kick a scoring run —
+ * it loads the target profile's cached scores instantly and only calls the
+ * provider for cache misses. Dynamic imports break the store cycle
+ * (feedbackStore/scorer both import this module). */
+export async function switchProfile(id: string): Promise<void> {
+  await profilesReady;
+  const current = get(profilesState);
+  if (current.activeProfileId === id || !current.profiles.some((p) => p.id === id)) return;
+  profilesState.set({ ...current, activeProfileId: id });
+  await reloadCompanions(id);
+  const { scoreFeed } = await import("../services/scoring/scorer");
+  void scoreFeed();
 }
 
 /** Delete a profile and prune every per-profile cache key it owned.
@@ -86,5 +108,8 @@ export async function deleteProfileAction(id: string): Promise<boolean> {
   if (next === current) return false;
   profilesState.set(next);
   await Promise.all(Object.values(profileKeys(id)).map((key) => storageRemove(key)));
+  if (next.activeProfileId !== current.activeProfileId) {
+    await reloadCompanions(next.activeProfileId);
+  }
   return true;
 }
