@@ -48,6 +48,49 @@ export async function openSettingsDemoWithState(
   await page.goto("/feed.html?demo=1#/settings");
 }
 
+// --- profile management (Settings → Interest profiles) --------------------
+
+function profileRow(page: Page, name: string) {
+  return page.getByTestId("profile-row").filter({ hasText: name });
+}
+
+export async function getSettingsProfileNames(page: Page): Promise<string[]> {
+  return page.getByTestId("profile-row").getByRole("radio").allInnerTexts();
+}
+
+export async function addProfileInSettings(page: Page, name: string): Promise<void> {
+  await page.getByTestId("new-profile-name").fill(name);
+  await page.getByTestId("add-profile").click();
+}
+
+export async function selectActiveProfileInSettings(page: Page, name: string): Promise<void> {
+  await profileRow(page, name).getByRole("radio").click();
+}
+
+export async function isProfileActiveInSettings(page: Page, name: string): Promise<boolean> {
+  const checked = await profileRow(page, name).getByRole("radio").getAttribute("aria-checked");
+  return checked === "true";
+}
+
+export async function renameProfileInSettings(
+  page: Page,
+  name: string,
+  newName: string,
+): Promise<void> {
+  await profileRow(page, name).getByTestId("profile-rename").click();
+  const input = page.getByTestId("profile-rename-input");
+  await input.fill(newName);
+  await input.press("Enter");
+}
+
+export async function deleteProfileInSettings(page: Page, name: string): Promise<void> {
+  await profileRow(page, name).getByTestId("profile-delete").click();
+}
+
+export async function expectDeleteProfileDisabled(page: Page, name: string): Promise<void> {
+  await expect(profileRow(page, name).getByTestId("profile-delete")).toBeDisabled();
+}
+
 export async function expectSuggestProfileEnabled(page: Page, enabled: boolean): Promise<void> {
   if (enabled) await expect(page.getByTestId("suggest-profile")).toBeEnabled();
   else await expect(page.getByTestId("suggest-profile")).toBeDisabled();

@@ -14,6 +14,18 @@ import {
   expectVideoNotInTier,
   voteOnVideo,
 } from "../helpers";
+import {
+  openSettingsDemoWithState,
+  addProfileInSettings,
+  getSettingsProfileNames,
+  selectActiveProfileInSettings,
+  isProfileActiveInSettings,
+  renameProfileInSettings,
+  deleteProfileInSettings,
+  expectDeleteProfileDisabled,
+  fillMoreOfProfile,
+  readActiveProfile,
+} from "../helpers";
 import { profileHash } from "../../src/lib/profileHash";
 import { PROMPT_VERSION } from "../../src/services/scoring/prompt";
 import { DEMO_MODEL } from "../../src/services/scoring/demoScorer";
@@ -104,6 +116,42 @@ test("should keep votes isolated per profile", async ({ page }) => {
   await switchProfileInFeed(page, "Leisure");
   await expectVideoNotInTier(page, "top", "Shared Video");
   expect(await getWinnowedFoldText(page)).toContain("1 video");
+});
+
+test("should create, rename, and switch profiles from settings", async ({ page }) => {
+  await openSettingsDemoWithState(page, { profile: { moreOf: "science lectures", lessOf: "" } });
+
+  await addProfileInSettings(page, "Kpop fun");
+  expect(await getSettingsProfileNames(page)).toEqual(["Default", "Kpop fun"]);
+  expect(await isProfileActiveInSettings(page, "Kpop fun")).toBe(true);
+
+  // The textareas edit the newly active (empty) profile now.
+  await fillMoreOfProfile(page, "kpop stage mixes");
+  expect((await readActiveProfile(page))?.moreOf).toBe("kpop stage mixes");
+
+  await renameProfileInSettings(page, "Kpop fun", "Kpop nights");
+  expect(await getSettingsProfileNames(page)).toEqual(["Default", "Kpop nights"]);
+
+  // Switching back shows the original profile's text again.
+  await selectActiveProfileInSettings(page, "Default");
+  expect((await readActiveProfile(page))?.moreOf).toBe("science lectures");
+});
+
+test("should disable deleting the last remaining profile", async ({ page }) => {
+  await openSettingsDemoWithState(page);
+  await expectDeleteProfileDisabled(page, "Default");
+});
+
+test("should fall back to a remaining profile when the active one is deleted", async ({ page }) => {
+  await openSettingsDemoWithState(page, { profile: { moreOf: "science lectures", lessOf: "" } });
+  await addProfileInSettings(page, "Doomed");
+  expect(await isProfileActiveInSettings(page, "Doomed")).toBe(true);
+
+  await deleteProfileInSettings(page, "Doomed");
+
+  expect(await getSettingsProfileNames(page)).toEqual(["Default"]);
+  expect(await isProfileActiveInSettings(page, "Default")).toBe(true);
+  expect((await readActiveProfile(page))?.moreOf).toBe("science lectures");
 });
 
 test("should keep the top tier ordering stable within a profile", async ({ page }) => {

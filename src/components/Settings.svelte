@@ -1,6 +1,13 @@
 <script lang="ts">
   import { applyKeyChange, profile, settings } from "../stores/settingsStore";
-  import { activeProfileId } from "../stores/profilesStore";
+  import {
+    activeProfileId,
+    addProfileAction,
+    deleteProfileAction,
+    profilesState,
+    renameProfileAction,
+    switchProfile,
+  } from "../stores/profilesStore";
   import { KEYS, profileKeys, storageGet, storageRemove } from "../lib/storage";
   import { buildScoringDebug } from "../lib/scoringDebug";
   import type { EnrichmentEntry, VideoScore } from "../lib/types";
@@ -24,6 +31,8 @@
   let saved = $state(false);
   let captureMessage = $state("");
   let targetLines = $state<string[] | null>(null);
+  let newProfileName = $state("");
+  let renamingId = $state<string | null>(null);
   let retranslating = $state(false);
   let suggesting = $state(false);
   let suggestion = $state<ProfileSuggestion | null>(null);
@@ -121,7 +130,32 @@
     const stored = await storageGet<StoredTarget>(profileKeys($activeProfileId).profileTarget);
     targetLines = stored ? describeTarget(stored.target) : null;
   }
-  void loadTarget();
+  // Reactive on the active profile: switching profiles swaps the viewer to
+  // that profile's translated target.
+  $effect(() => {
+    void $activeProfileId;
+    void loadTarget();
+  });
+
+  const activeName = $derived(
+    $profilesState.profiles.find((p) => p.id === $profilesState.activeProfileId)?.name ?? "",
+  );
+
+  async function addNewProfile(): Promise<void> {
+    const name = newProfileName.trim();
+    if (!name) return;
+    await addProfileAction(name);
+    newProfileName = "";
+    flashSaved();
+  }
+
+  async function finishRename(id: string, value: string): Promise<void> {
+    const name = value.trim();
+    renamingId = null;
+    if (!name) return;
+    await renameProfileAction(id, name);
+    flashSaved();
+  }
 
   // Dropping the stored target makes the next scoring run miss the input
   // hash and re-translate the profile from scratch (one small call).
@@ -178,7 +212,76 @@
 
 <div class="mx-auto max-w-2xl space-y-8">
   <section class="space-y-3">
-    <h2 class="text-lg font-medium">Interest profile</h2>
+    <h2 class="text-lg font-medium">Interest profiles</h2>
+    <p class="text-sm text-ink-muted">
+      Each profile is its own lens on YouTube — separate criteria, votes, and ranking. Switch here
+      or from the feed header.
+    </p>
+    <ul class="space-y-2" role="radiogroup" aria-label="Active profile">
+      {#each $profilesState.profiles as p (p.id)}
+        <li class="flex items-center gap-2" data-testid="profile-row">
+          <button
+            role="radio"
+            aria-checked={p.id === $profilesState.activeProfileId}
+            onclick={() => switchProfile(p.id)}
+            class={`flex-1 rounded-md px-4 py-2 text-left text-sm ${p.id === $profilesState.activeProfileId ? "bg-accent-muted text-white" : "bg-surface-raised text-ink-muted hover:bg-surface-hover"}`}
+            >{p.name}</button
+          >
+          {#if renamingId === p.id}
+            <input
+              class="rounded-md border border-surface-hover bg-surface-raised px-2 py-1.5 text-sm text-ink"
+              data-testid="profile-rename-input"
+              value={p.name}
+              onkeydown={(e) => {
+                if (e.key === "Enter") void finishRename(p.id, e.currentTarget.value);
+                if (e.key === "Escape") renamingId = null;
+              }}
+              onblur={(e) => void finishRename(p.id, e.currentTarget.value)}
+            />
+          {:else}
+            <button
+              class="rounded-md bg-surface-raised px-3 py-1.5 text-sm text-ink-muted hover:bg-surface-hover"
+              data-testid="profile-rename"
+              onclick={() => (renamingId = p.id)}
+              >Rename</button
+            >
+          {/if}
+          <button
+            class="rounded-md bg-surface-raised px-3 py-1.5 text-sm text-danger hover:bg-surface-hover disabled:opacity-50"
+            data-testid="profile-delete"
+            disabled={$profilesState.profiles.length <= 1}
+            onclick={() => deleteProfileAction(p.id)}
+            >Delete</button
+          >
+        </li>
+      {/each}
+    </ul>
+    <div class="flex gap-2">
+      <input
+        class="flex-1 rounded-md border border-surface-hover bg-surface-raised px-3 py-2 text-sm text-ink placeholder:text-ink-faint"
+        placeholder="New profile name, e.g. Kpop fun"
+        data-testid="new-profile-name"
+        bind:value={newProfileName}
+        onkeydown={(e) => {
+          if (e.key === "Enter") void addNewProfile();
+        }}
+      />
+      <button
+        class="rounded-md bg-surface-raised px-4 py-2 text-sm text-ink hover:bg-surface-hover disabled:opacity-50"
+        data-testid="add-profile"
+        disabled={!newProfileName.trim()}
+        onclick={addNewProfile}
+        >New profile</button
+      >
+    </div>
+  </section>
+
+  <section class="space-y-3">
+    <h2 class="text-lg font-medium">
+      Interest profile{#if $profilesState.profiles.length > 1}&nbsp;<span
+          class="text-ink-muted">— {activeName}</span
+        >{/if}
+    </h2>
     <p class="text-sm text-ink-muted">
       The AI scores every video against this. Be concrete — channels, topics, formats, moods.
     </p>

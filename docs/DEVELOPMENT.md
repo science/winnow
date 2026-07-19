@@ -44,10 +44,12 @@ Status as of 2026-07-14: MVP confirmed working by the user against real YouTube 
 | `src/services/scoring/profileSuggest.ts` | Feedback → suggested moreOf/lessOf replacement (uncached structured call, demo stub, `MIN_VOTES_FOR_SUGGESTION`) | Suggestion quality/flow |
 | `src/services/scoring/modelCatalog.ts` | Boundary: `fetchProviderModels` via SDK `models.list()` for the Settings picker (fail fast, no retry) | Model picker fetch issues |
 | `src/lib/modelFilter.ts` | Pure catalog shaping: OpenAI gpt-chat filter + newest-first sort for both providers | Picker shows wrong/noisy models |
-| `src/stores/settingsStore.ts` | Settings/profile stores, `isConfigured`, `applyKeyChange`, `missingConfig`; per-provider scoring model fields | Settings semantics |
+| `src/lib/profiles.ts` | Pure multi-profile collection ops (migrate/add/rename/delete/active) | Profile semantics |
+| `src/stores/profilesStore.ts` | Persisted profiles collection (`winnow:profiles:v1`), legacy-profile + cache migration, `switchProfile` (reloads votes, kicks scoring), per-profile key pruning on delete | Profile switching/migration |
+| `src/stores/settingsStore.ts` | Settings store + `profile` proxy over the active profiles entry, `isConfigured`, `applyKeyChange`, `missingConfig`; per-provider scoring model fields | Settings semantics |
 | `src/stores/modelCatalogStore.ts` | Persisted model catalog (`winnow:models:v1`), refreshed only on explicit user action | Picker persistence |
 | `src/stores/feedStore.ts` | Videos/scores/watched/status stores, `tiers`/`collapsed` deriveds, `initFeed`/`refresh` (TTL 30 min), `transcriptCoverage`, pruning | Feed state machine |
-| `src/stores/feedbackStore.ts` | Persisted votes (`toggleVote`); NEVER pruned with the video window | Vote persistence |
+| `src/stores/feedbackStore.ts` | Persisted votes (`toggleVote`), PER PROFILE (`winnow:feedback:v2:<id>`, `reloadFeedback` on switch); NEVER pruned with the video window | Vote persistence |
 | `src/components/` | `App` (config gate + routes), `Feed` (tier sections), `VideoCard`, `ScoreBadge`, `Watch` (nocookie embed, start-on-open, no autoplay-next), `Settings`, `Onboarding` | UI |
 | `src/background.ts` | Toolbar click → open/focus feed tab. Import-free; keep it that way | Almost never |
 | `e2e/helpers/` | **All Playwright selectors** (house rule: specs use helpers only) | Any e2e work |
