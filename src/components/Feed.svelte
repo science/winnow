@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { collapsed, initFeed, refresh, status, tiers, transcriptCoverage, videos, watched } from "../stores/feedStore";
+  import { profilesState, switchProfile } from "../stores/profilesStore";
   import { scoreFeed } from "../services/scoring/scorer";
   import VideoCard from "./VideoCard.svelte";
 
@@ -33,12 +34,27 @@
         Loading…
       {/if}
     </div>
-    <button
-      onclick={onRefresh}
-      disabled={$status.phase === "fetching" || $status.phase === "loading"}
-      class="rounded-md bg-surface-raised px-3 py-1.5 text-sm text-ink hover:bg-surface-hover disabled:opacity-50"
-      >Refresh</button
-    >
+    <div class="flex items-center gap-2">
+      {#if $profilesState.profiles.length > 1}
+        <select
+          data-testid="profile-switcher"
+          aria-label="Active profile"
+          class="rounded-md bg-surface-raised px-2 py-1.5 text-sm text-ink hover:bg-surface-hover"
+          value={$profilesState.activeProfileId}
+          onchange={(e) => switchProfile(e.currentTarget.value)}
+        >
+          {#each $profilesState.profiles as p (p.id)}
+            <option value={p.id}>{p.name}</option>
+          {/each}
+        </select>
+      {/if}
+      <button
+        onclick={onRefresh}
+        disabled={$status.phase === "fetching" || $status.phase === "loading"}
+        class="rounded-md bg-surface-raised px-3 py-1.5 text-sm text-ink hover:bg-surface-hover disabled:opacity-50"
+        >Refresh</button
+      >
+    </div>
   </div>
 
   {#if $transcriptCoverage}

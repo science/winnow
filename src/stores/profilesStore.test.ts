@@ -152,3 +152,47 @@ describe("profile actions", () => {
     expect(get(store.profilesState).profiles).toHaveLength(1);
   });
 });
+
+describe("switching profiles", () => {
+  async function bootWithVoteInDefault() {
+    const storage = await loadStorage();
+    const store = await loadStore();
+    const fbStore = await import("./feedbackStore");
+    await fbStore.feedbackReady;
+    const defaultId = get(store.profilesState).activeProfileId;
+    await storage.storageSet(storage.profileKeys(defaultId).feedback, {
+      votedvideo01: { videoId: "votedvideo01", vote: "up", votedAt: 1 },
+    });
+    await fbStore.reloadFeedback(defaultId);
+    return { storage, store, fbStore, defaultId };
+  }
+
+  it("should reload the target profile's votes on switch", async () => {
+    const { store, fbStore, defaultId } = await bootWithVoteInDefault();
+    const secondId = await store.addProfileAction("Engineering");
+
+    await store.switchProfile(defaultId);
+    expect(Object.keys(get(fbStore.feedback))).toEqual(["votedvideo01"]);
+
+    await store.switchProfile(secondId);
+    expect(get(fbStore.feedback)).toEqual({});
+  });
+
+  it("should reload votes when adding a profile (adding switches to it)", async () => {
+    const { store, fbStore } = await bootWithVoteInDefault();
+    expect(Object.keys(get(fbStore.feedback))).toEqual(["votedvideo01"]);
+
+    await store.addProfileAction("Engineering");
+    expect(get(fbStore.feedback)).toEqual({});
+  });
+
+  it("should reload votes when deleting the active profile falls back to another", async () => {
+    const { store, fbStore, defaultId } = await bootWithVoteInDefault();
+    const secondId = await store.addProfileAction("Engineering");
+    expect(get(fbStore.feedback)).toEqual({});
+
+    await store.deleteProfileAction(secondId);
+    expect(get(store.profilesState).activeProfileId).toBe(defaultId);
+    expect(Object.keys(get(fbStore.feedback))).toEqual(["votedvideo01"]);
+  });
+});

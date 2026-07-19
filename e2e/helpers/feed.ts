@@ -45,6 +45,58 @@ export async function openOnboarding(page: Page): Promise<void> {
   await page.goto("/feed.html");
 }
 
+/** Seed a full multi-profile world: the profiles collection, the shared
+ * video window, and optional per-profile score caches (winnow:scores:v2:<id>).
+ * Score blobs must carry the profileHash the app will compute, or they read
+ * as stale and re-score. */
+export async function openFeedDemoWithProfiles(
+  page: Page,
+  state: {
+    videos: Video[];
+    profiles: { id: string; name: string; moreOf?: string; lessOf?: string }[];
+    activeProfileId: string;
+    perProfileScores?: Record<string, unknown>;
+    perProfileFeedback?: Record<string, unknown>;
+  },
+): Promise<void> {
+  await page.addInitScript(
+    (s) => {
+      localStorage.clear();
+      localStorage.setItem(
+        "winnow:videos:v1",
+        JSON.stringify({ fetchedAt: Date.now(), videos: s.videos }),
+      );
+      localStorage.setItem(
+        "winnow:profiles:v1",
+        JSON.stringify({
+          activeProfileId: s.activeProfileId,
+          profiles: s.profiles.map((p) => ({ moreOf: "demo", lessOf: "", updatedAt: 1, ...p })),
+        }),
+      );
+      for (const [id, blob] of Object.entries(s.perProfileScores ?? {})) {
+        localStorage.setItem(`winnow:scores:v2:${id}`, JSON.stringify(blob));
+      }
+      for (const [id, blob] of Object.entries(s.perProfileFeedback ?? {})) {
+        localStorage.setItem(`winnow:feedback:v2:${id}`, JSON.stringify(blob));
+      }
+    },
+    state,
+  );
+  await page.goto("/feed.html?demo=1");
+}
+
+export async function switchProfileInFeed(page: Page, name: string): Promise<void> {
+  await page.getByTestId("profile-switcher").selectOption({ label: name });
+}
+
+export async function getActiveProfileName(page: Page): Promise<string> {
+  return page.getByTestId("profile-switcher").locator("option:checked").innerText();
+}
+
+export async function expectProfileSwitcherHidden(page: Page): Promise<void> {
+  await expect(page.getByTestId("profile-switcher")).not.toBeVisible();
+}
+
 export async function waitForScoredFeed(page: Page): Promise<void> {
   // Scoring is stubbed in demo mode; tiers appear once scores land.
   await expect(page.getByTestId("tier-top")).toBeVisible({ timeout: 10_000 });
