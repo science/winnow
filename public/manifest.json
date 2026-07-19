@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Winnow",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Winnow your YouTube feed down to what you actually want to watch. AI-curated, calm, no engagement bait.",
   "browser_specific_settings": {
     "gecko": {

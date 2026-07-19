@@ -1,6 +1,6 @@
 {
   "name": "winnow",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "private": true,
   "description": "A Firefox extension that winnows your YouTube feed down to what you actually want to watch.",
   "license": "Apache-2.0",
