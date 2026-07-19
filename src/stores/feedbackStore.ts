@@ -1,18 +1,32 @@
-// Per-video user verdicts (Good pick / Not for me). Wolfechat pattern:
-// load once, persist explicitly at the mutation site. NEVER pruned with the
-// video window — votes must outlive the 300-cap feed to keep teaching
-// future scoring runs (the store is bounded by FEEDBACK_STORE_CAP instead).
+// Per-video user verdicts (Good pick / Not for me), PER PROFILE: votes teach
+// the active profile's scoring only — a "boring" downvote in a leisure
+// profile must not steer a work profile. Wolfechat pattern: load once,
+// persist explicitly at the mutation site. NEVER pruned with the video
+// window (bounded by FEEDBACK_STORE_CAP instead).
 
 import { get, writable } from "svelte/store";
 import type { FeedbackEntry, ScoredVideo, Vote } from "../lib/types";
 import { applyVote } from "../lib/feedback";
-import { KEYS, storageGet, storageSet } from "../lib/storage";
+import { profileKeys, storageGet, storageSet } from "../lib/storage";
+import { profilesReady, profilesState } from "./profilesStore";
 
 export const feedback = writable<Record<string, FeedbackEntry>>({});
 
+/** The profile whose votes are currently loaded (and voted into). */
+let loadedProfileId: string | null = null;
+
+/** Swap the in-memory votes to another profile's persisted set. */
+export async function reloadFeedback(profileId: string): Promise<void> {
+  const stored = await storageGet<Record<string, FeedbackEntry>>(
+    profileKeys(profileId).feedback,
+  );
+  loadedProfileId = profileId;
+  feedback.set(stored ?? {});
+}
+
 export const feedbackReady: Promise<void> = (async () => {
-  const stored = await storageGet<Record<string, FeedbackEntry>>(KEYS.feedback);
-  if (stored) feedback.set(stored);
+  await profilesReady;
+  await reloadFeedback(get(profilesState).activeProfileId);
 })();
 
 /** Record a vote (or clear it, when the same vote repeats) with a snapshot
@@ -35,5 +49,8 @@ export async function toggleVote(video: ScoredVideo, vote: Vote): Promise<void> 
   };
   const next = applyVote(get(feedback), entry);
   feedback.set(next);
-  await storageSet(KEYS.feedback, next);
+  // Persist under the profile whose votes are loaded — not whatever is
+  // active right now — so a vote landing during a switch can't cross over.
+  const profileId = loadedProfileId ?? get(profilesState).activeProfileId;
+  await storageSet(profileKeys(profileId).feedback, next);
 }

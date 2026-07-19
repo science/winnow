@@ -6,9 +6,9 @@ import {
   getSuggestionText,
   applySuggestion,
   dismissSuggestion,
-  readStoredJson,
+  readActiveProfile,
 } from "../helpers";
-import type { FeedbackEntry, Profile, Vote } from "../../src/lib/types";
+import type { FeedbackEntry, Vote } from "../../src/lib/types";
 
 // Demo mode returns a deterministic stub suggestion built from the votes,
 // so the whole suggest → approve/dismiss flow runs offline.
@@ -51,12 +51,12 @@ test("should show a suggested profile and apply it only on approval", async ({ p
   expect(text).toContain("Excellent Woodworking Process");
 
   // Nothing persists until Apply.
-  const before = await readStoredJson<Profile>(page, "winnow:profile:v1");
+  const before = await readActiveProfile(page);
   expect(before!.moreOf).toBe("science lectures");
 
   await applySuggestion(page);
   await expect
-    .poll(async () => (await readStoredJson<Profile>(page, "winnow:profile:v1"))!.moreOf)
+    .poll(async () => (await readActiveProfile(page))!.moreOf)
     .toContain("Excellent Woodworking Process");
 });
 
@@ -67,7 +67,7 @@ test("should leave the profile untouched on dismiss", async ({ page }) => {
 
   await dismissSuggestion(page);
 
-  const after = await readStoredJson<Profile>(page, "winnow:profile:v1");
+  const after = await readActiveProfile(page);
   expect(after!.moreOf).toBe("science lectures");
   expect(after!.lessOf).toBe("drama");
 });

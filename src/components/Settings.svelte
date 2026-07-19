@@ -1,6 +1,7 @@
 <script lang="ts">
   import { applyKeyChange, profile, settings } from "../stores/settingsStore";
-  import { KEYS, storageGet, storageRemove } from "../lib/storage";
+  import { activeProfileId } from "../stores/profilesStore";
+  import { KEYS, profileKeys, storageGet, storageRemove } from "../lib/storage";
   import { buildScoringDebug } from "../lib/scoringDebug";
   import type { EnrichmentEntry, VideoScore } from "../lib/types";
   import { scores } from "../stores/feedStore";
@@ -111,13 +112,13 @@
   }
 
   async function rescoreAll(): Promise<void> {
-    await storageRemove(KEYS.scores);
+    await storageRemove(profileKeys($activeProfileId).scores);
     scores.set({});
     await scoreFeed();
   }
 
   async function loadTarget(): Promise<void> {
-    const stored = await storageGet<StoredTarget>(KEYS.profileTarget);
+    const stored = await storageGet<StoredTarget>(profileKeys($activeProfileId).profileTarget);
     targetLines = stored ? describeTarget(stored.target) : null;
   }
   void loadTarget();
@@ -127,7 +128,7 @@
   async function retranslate(): Promise<void> {
     retranslating = true;
     try {
-      await storageRemove(KEYS.profileTarget);
+      await storageRemove(profileKeys($activeProfileId).profileTarget);
       await scoreFeed();
       await loadTarget();
     } finally {
@@ -153,9 +154,11 @@
       };
     }
     bundle["scoring"] = buildScoringDebug({
-      target: await storageGet(KEYS.profileTarget),
+      target: await storageGet(profileKeys($activeProfileId).profileTarget),
       scores:
-        (await storageGet<{ scores: Record<string, VideoScore> }>(KEYS.scores))?.scores ?? null,
+        (await storageGet<{ scores: Record<string, VideoScore> }>(
+          profileKeys($activeProfileId).scores,
+        ))?.scores ?? null,
       enrichment: await storageGet<Record<string, EnrichmentEntry>>(KEYS.enrichment),
     });
     const captured = [...parts.map(([k]) => k), ...(transcript ? ["transcript"] : []), "scoring"];

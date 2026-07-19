@@ -6,7 +6,8 @@
 import { get } from "svelte/store";
 import type { Profile, TranscriptCacheEntry, Video, VideoScore } from "../../lib/types";
 import { profileHash } from "../../lib/profileHash";
-import { KEYS, storageGet, storageSet } from "../../lib/storage";
+import { KEYS, profileKeys, storageGet, storageSet } from "../../lib/storage";
+import { profilesState } from "../../stores/profilesStore";
 import { log } from "../../lib/logger";
 import { BATCH_SIZE, FEEDBACK_PROMPT_CAP, PROMPT_VERSION } from "./prompt";
 import { recentExamples, type FeedbackExample } from "../../lib/feedback";
@@ -31,6 +32,7 @@ import {
   expectedScoresHash,
   runTwoPhaseScoring,
   softScoresHashFor,
+  type StoredTarget,
 } from "./twoPhase";
 import type { Settings } from "../../lib/types";
 
@@ -254,9 +256,16 @@ async function scoreFeedOnce(): Promise<void> {
   const realKey = $settings.provider === "anthropic" ? $settings.anthropicApiKey : $settings.openaiApiKey;
   if (!demo && (!realKey || (!$profile.moreOf.trim() && !$profile.lessOf.trim()))) return;
 
+  // Run identity: everything persists under the profile the run STARTED
+  // with, and visible-store updates stop once the user switches away —
+  // a stale run must never paint another profile's feed (plan D3).
+  const runProfileId = get(profilesState).activeProfileId;
+  const runKeys = profileKeys(runProfileId);
+  const stillCurrent = (): boolean => get(profilesState).activeProfileId === runProfileId;
+
   // Demo mode always uses the direct path (stub scorer, no network).
   if (!demo && $settings.scoringStrategy === "two-phase") {
-    return scoreFeedTwoPhase($settings, $profile, realKey!);
+    return scoreFeedTwoPhase($settings, $profile, realKey!, runKeys, stillCurrent);
   }
 
   const apiKey = demo ? "demo" : realKey!;
@@ -274,8 +283,9 @@ async function scoreFeedOnce(): Promise<void> {
       : (v, p, k, f) => scoreBatchOpenai(v, p, k, f, model);
   const hash = profileHash($profile, PROMPT_VERSION, model);
 
-  const stored = await storageGet<StoredScores>(KEYS.scores);
+  const stored = await storageGet<StoredScores>(runKeys.scores);
   const cache = stored?.profileHash === hash ? stored.scores : {};
+  if (!stillCurrent()) return;
   scoresStore.set(cache);
 
   const $videos = get(videosStore);
@@ -297,6 +307,10 @@ async function scoreFeedOnce(): Promise<void> {
   );
 
   await feedbackReady;
+  // Accumulated separately from the visible store: after a mid-run profile
+  // switch the store belongs to the new profile, but this run still persists
+  // its own results under runKeys.
+  let accumulated: Record<string, VideoScore> = { ...cache };
   const result = await runScoring(enrichment.videos, {
     adapter,
     model,
@@ -307,22 +321,27 @@ async function scoreFeedOnce(): Promise<void> {
     // an explicit "Re-score everything" (see DESIGN.md).
     feedback: recentExamples(get(feedbackStore), FEEDBACK_PROMPT_CAP),
     cache,
-    onProgress: (scoredCount, scoreTotal) =>
-      status.update((s) => ({ ...s, scoredCount, scoreTotal })),
+    onProgress: (scoredCount, scoreTotal) => {
+      if (stillCurrent()) status.update((s) => ({ ...s, scoredCount, scoreTotal }));
+    },
     onBatch: async (batchScores) => {
-      scoresStore.update((s) => ({ ...s, ...batchScores }));
-      pendingScores.update((p) => {
-        const next = new Set(p);
-        for (const id of Object.keys(batchScores)) next.delete(id);
-        return next;
-      });
+      accumulated = { ...accumulated, ...batchScores };
+      if (stillCurrent()) {
+        scoresStore.update((s) => ({ ...s, ...batchScores }));
+        pendingScores.update((p) => {
+          const next = new Set(p);
+          for (const id of Object.keys(batchScores)) next.delete(id);
+          return next;
+        });
+      }
       // Persist incrementally so a mid-run close loses nothing.
-      await storageSet<StoredScores>(KEYS.scores, { profileHash: hash, scores: get(scoresStore) });
+      await storageSet<StoredScores>(runKeys.scores, { profileHash: hash, scores: accumulated });
     },
   });
 
+  await storageSet<StoredScores>(runKeys.scores, { profileHash: hash, scores: result.scores });
+  if (!stillCurrent()) return;
   pendingScores.set(new Set());
-  await storageSet<StoredScores>(KEYS.scores, { profileHash: hash, scores: result.scores });
 
   if (result.fatalError) {
     status.update((s) => ({
@@ -344,6 +363,8 @@ async function scoreFeedTwoPhase(
   $settings: Settings,
   $profile: Profile,
   apiKey: string,
+  runKeys: ReturnType<typeof profileKeys>,
+  stillCurrent: () => boolean,
 ): Promise<void> {
   const $videos = get(videosStore);
   if ($videos.length === 0) return;
@@ -351,6 +372,8 @@ async function scoreFeedTwoPhase(
 
   await feedbackReady;
   const feedbackExamples = recentExamples(get(feedbackStore), FEEDBACK_PROMPT_CAP);
+  const loadTarget = () => storageGet<StoredTarget>(runKeys.profileTarget);
+  const saveTarget = (s: StoredTarget) => storageSet(runKeys.profileTarget, s);
 
   // Last run's scores stand (optimistic display) until the re-rank below —
   // when they're provably current (same target, versions, model), or merely
@@ -358,11 +381,12 @@ async function scoreFeedTwoPhase(
   // ~right and the vote-informed re-rank lands in place). Truly stale scores
   // (other engine, edited profile, version bump) render as pending instead:
   // half-finished tiers mislead more than a progress bar does.
-  const stored = await storageGet<StoredScores>(KEYS.scores);
-  const currentHash = await expectedScoresHash($profile, feedbackExamples, model);
+  const stored = await storageGet<StoredScores>(runKeys.scores);
+  const currentHash = await expectedScoresHash($profile, feedbackExamples, model, loadTarget);
   const softHash = softScoresHashFor($profile, model);
   const displayable =
     stored && (stored.profileHash === currentHash || stored.softHash === softHash);
+  if (!stillCurrent()) return;
   scoresStore.set(displayable ? stored.scores : {});
   const known = new Set(displayable ? Object.keys(stored.scores) : []);
   pendingScores.set(new Set($videos.filter((v) => !known.has(v.id)).map((v) => v.id)));
@@ -383,11 +407,14 @@ async function scoreFeedTwoPhase(
     model,
     profile: $profile,
     feedback: feedbackExamples,
+    loadTarget,
+    saveTarget,
     saveExcerpt: async (videoId, excerpt) => {
       excerptBuffer[videoId] = { excerpt, source: "player", fetchedAt: Date.now() };
     },
-    onProgress: (scoredCount, scoreTotal) =>
-      status.update((s) => ({ ...s, scoredCount, scoreTotal })),
+    onProgress: (scoredCount, scoreTotal) => {
+      if (stillCurrent()) status.update((s) => ({ ...s, scoredCount, scoreTotal }));
+    },
   });
 
   if (Object.keys(excerptBuffer).length > 0) {
@@ -395,14 +422,15 @@ async function scoreFeedTwoPhase(
     await storageSet(KEYS.transcripts, { ...cache, ...excerptBuffer });
   }
 
-  transcriptCoverage.set(result.transcripts.attempted > 0 ? result.transcripts : null);
-  scoresStore.set(result.scores);
-  pendingScores.set(new Set());
-  await storageSet<StoredScores>(KEYS.scores, {
+  await storageSet<StoredScores>(runKeys.scores, {
     profileHash: result.scoresHash,
     softHash,
     scores: result.scores,
   });
+  if (!stillCurrent()) return;
+  transcriptCoverage.set(result.transcripts.attempted > 0 ? result.transcripts : null);
+  scoresStore.set(result.scores);
+  pendingScores.set(new Set());
 
   if (result.fatalError) {
     status.update((s) => ({

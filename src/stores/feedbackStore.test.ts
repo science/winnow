@@ -1,8 +1,13 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { get } from "svelte/store";
 import { feedback, toggleVote } from "./feedbackStore";
-import { KEYS, storageGet } from "../lib/storage";
+import { profilesState } from "./profilesStore";
+import { profileKeys, storageGet } from "../lib/storage";
 import type { FeedbackEntry, ScoredVideo } from "../lib/types";
+
+async function activeFeedbackKey(): Promise<string> {
+  return profileKeys(get(profilesState).activeProfileId).feedback;
+}
 
 function scoredVideo(id: string): ScoredVideo {
   return {
@@ -40,7 +45,7 @@ describe("toggleVote", () => {
     expect(entry.reason).toBe("matches your interests");
     expect(entry.clickbait).toBe(false);
 
-    const stored = await storageGet<Record<string, FeedbackEntry>>(KEYS.feedback);
+    const stored = await storageGet<Record<string, FeedbackEntry>>(await activeFeedbackKey());
     expect(stored!["snapshotme1"]!.vote).toBe("down");
   });
 
@@ -57,5 +62,60 @@ describe("toggleVote", () => {
     await toggleVote(scoredVideo("togglemeoff"), "up");
     await toggleVote(scoredVideo("togglemeoff"), "up");
     expect(get(feedback)["togglemeoff"]).toBeUndefined();
+  });
+});
+
+describe("per-profile votes", () => {
+  // Fresh module graph per test: vote isolation depends on which profile is
+  // active at load time, so each scenario boots its own stores.
+  beforeEach(() => {
+    vi.resetModules();
+  });
+
+  it("should keep votes isolated per profile and reload them on demand", async () => {
+    const storage = await import("../lib/storage");
+    const fbStore = await import("./feedbackStore");
+    const profiles = await import("./profilesStore");
+    await fbStore.feedbackReady;
+    const defaultId = get(profiles.profilesState).activeProfileId;
+
+    const vote = (id: string): ScoredVideo => ({
+      ...{
+        id,
+        source: "home" as const,
+        title: id,
+        channelTitle: null,
+        channelId: null,
+        durationText: null,
+        durationSec: null,
+        publishedText: null,
+        publishedAtApprox: null,
+        viewCountText: null,
+        viewCount: null,
+        thumbnailUrl: null,
+        descriptionSnippet: null,
+        isLive: false,
+      },
+      scoreState: "unknown" as const,
+    });
+
+    await fbStore.toggleVote(vote("defaultvote1"), "up");
+
+    const secondId = await profiles.addProfileAction("Engineering");
+    await fbStore.reloadFeedback(secondId);
+    expect(get(fbStore.feedback)).toEqual({});
+
+    await fbStore.toggleVote(vote("secondvote01"), "down");
+    const secondStored = await storage.storageGet<Record<string, FeedbackEntry>>(
+      storage.profileKeys(secondId).feedback,
+    );
+    expect(Object.keys(secondStored!)).toEqual(["secondvote01"]);
+
+    await fbStore.reloadFeedback(defaultId);
+    expect(Object.keys(get(fbStore.feedback))).toEqual(["defaultvote1"]);
+    const defaultStored = await storage.storageGet<Record<string, FeedbackEntry>>(
+      storage.profileKeys(defaultId).feedback,
+    );
+    expect(Object.keys(defaultStored!)).toEqual(["defaultvote1"]);
   });
 });

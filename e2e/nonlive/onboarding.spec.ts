@@ -10,6 +10,7 @@ import {
   fillOpenAiKey,
   isProviderSelected,
   readStoredJson,
+  readActiveProfile,
 } from "../helpers";
 
 test("should show onboarding on first run when nothing is configured", async ({ page }) => {
@@ -24,7 +25,7 @@ test("should persist settings and profile edits", async ({ page }) => {
 
   const settings = await readStoredJson<{ anthropicApiKey: string }>(page, "winnow:settings:v1");
   expect(settings?.anthropicApiKey).toBe("sk-ant-test-not-real");
-  const profile = await readStoredJson<{ moreOf: string }>(page, "winnow:profile:v1");
+  const profile = await readActiveProfile(page);
   expect(profile?.moreOf).toBe("long-form science explainers");
 });
 

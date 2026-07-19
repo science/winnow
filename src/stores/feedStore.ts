@@ -1,9 +1,10 @@
 import { derived, get, writable } from "svelte/store";
 import type { TranscriptCacheEntry, Video, VideoScore, ScoredVideo } from "../lib/types";
 import { bucketVideos, scoresCollapse, type Tiers } from "../lib/tiers";
-import { KEYS, storageGet, storageSet } from "../lib/storage";
+import { KEYS, profileKeys, storageGet, storageSet } from "../lib/storage";
 import { loadFeeds } from "../services/youtube/feedSource";
 import { feedback } from "./feedbackStore";
+import { profilesReady, profilesState } from "./profilesStore";
 import { log } from "../lib/logger";
 
 const VIDEOS_TTL_MS = 30 * 60 * 1000;
@@ -121,8 +122,9 @@ export async function markWatched(videoId: string): Promise<void> {
 }
 
 /** Drop watched marks and transcript-cache entries whose videos left the
- * feed window. Transcripts for VOTED videos are kept — feedback analysis
- * needs them after the video is gone. The feedback store itself is never
+ * feed window. Transcripts for videos voted in ANY profile are kept —
+ * feedback analysis needs them after the video is gone, and only the active
+ * profile's votes are in memory. The feedback stores themselves are never
  * pruned here (bounded by FEEDBACK_STORE_CAP instead). Exported for tests. */
 export async function pruneStaleEntries(current: Video[]): Promise<void> {
   const ids = new Set(current.map((v) => v.id));
@@ -132,7 +134,12 @@ export async function pruneStaleEntries(current: Video[]): Promise<void> {
     watched.set(pruned);
     await storageSet(KEYS.watched, pruned);
   }
+  await profilesReady;
   const votedIds = new Set(Object.keys(get(feedback)));
+  for (const p of get(profilesState).profiles) {
+    const stored = await storageGet<Record<string, unknown>>(profileKeys(p.id).feedback);
+    for (const id of Object.keys(stored ?? {})) votedIds.add(id);
+  }
   for (const key of [KEYS.transcripts, KEYS.enrichment]) {
     const cache = await storageGet<Record<string, unknown>>(key);
     if (!cache) continue;

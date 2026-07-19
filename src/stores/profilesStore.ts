@@ -26,12 +26,37 @@ export const profilesReady: Promise<void> = (async () => {
     return;
   }
   // First run on this schema: migrate the legacy single profile (kept in
-  // place as rollback safety). Persist flag goes on BEFORE the set so the
-  // migrated state lands in storage immediately.
+  // place as rollback safety) and hand its caches to the new first profile.
+  // Persist flag goes on BEFORE the set so the migrated state lands in
+  // storage immediately.
   const legacy = await storageGet<Profile>(KEYS.profile);
+  const state = initialProfilesState(legacy);
+  await migrateLegacyCaches(state.activeProfileId);
   persist = true;
-  profilesState.set(initialProfilesState(legacy));
+  profilesState.set(state);
 })();
+
+/** One-time copy of the single-profile caches into the migrated profile's
+ * key family. Scores/target move (recomputable, so the originals go);
+ * feedback is copied but the v1 blob stays as rollback safety. Runs only in
+ * the fresh-migration branch, so a later profile delete can't resurrect it. */
+async function migrateLegacyCaches(profileId: string): Promise<void> {
+  const keys = profileKeys(profileId);
+  const [scores, target, votes] = await Promise.all([
+    storageGet(KEYS.scores),
+    storageGet(KEYS.profileTarget),
+    storageGet(KEYS.feedback),
+  ]);
+  if (scores !== null) {
+    await storageSet(keys.scores, scores);
+    await storageRemove(KEYS.scores);
+  }
+  if (target !== null) {
+    await storageSet(keys.profileTarget, target);
+    await storageRemove(KEYS.profileTarget);
+  }
+  if (votes !== null) await storageSet(keys.feedback, votes);
+}
 
 profilesState.subscribe((value) => {
   if (persist) void storageSet(KEYS.profiles, value);

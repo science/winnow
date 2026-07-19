@@ -65,6 +65,43 @@ describe("profilesStore init", () => {
     expect(state.profiles[0]!.name).toBe("Default");
     expect(state.profiles[0]!.moreOf).toBe("");
   });
+
+  it("should copy legacy scores, target, and feedback to the first profile's keys on migration", async () => {
+    const storage = await loadStorage();
+    await storage.storageSet(storage.KEYS.profile, { moreOf: "cats", lessOf: "", updatedAt: 1 });
+    const legacyScores = { profileHash: "h1", scores: { vid1: { score: 70 } } };
+    const legacyTarget = { inputHash: "ih1", target: { topicsMore: { items: [], importance: 0 } } };
+    const legacyFeedback = { vid1: { videoId: "vid1", vote: "up" } };
+    await storage.storageSet(storage.KEYS.scores, legacyScores);
+    await storage.storageSet(storage.KEYS.profileTarget, legacyTarget);
+    await storage.storageSet(storage.KEYS.feedback, legacyFeedback);
+
+    const store = await loadStore();
+    const id = get(store.profilesState).activeProfileId;
+    const keys = storage.profileKeys(id);
+    expect(await storage.storageGet(keys.scores)).toEqual(legacyScores);
+    expect(await storage.storageGet(keys.profileTarget)).toEqual(legacyTarget);
+    expect(await storage.storageGet(keys.feedback)).toEqual(legacyFeedback);
+
+    // Legacy score/target caches are removed (recomputable); the feedback
+    // blob stays as rollback safety alongside the legacy profile.
+    expect(await storage.storageGet(storage.KEYS.scores)).toBeNull();
+    expect(await storage.storageGet(storage.KEYS.profileTarget)).toBeNull();
+    expect(await storage.storageGet(storage.KEYS.feedback)).toEqual(legacyFeedback);
+  });
+
+  it("should not copy legacy caches when a profiles state already exists", async () => {
+    const storage = await loadStorage();
+    await storage.storageSet(storage.KEYS.profiles, {
+      activeProfileId: "p1",
+      profiles: [{ id: "p1", name: "Default", moreOf: "x", lessOf: "", updatedAt: 1 }],
+    });
+    await storage.storageSet(storage.KEYS.scores, { profileHash: "h", scores: {} });
+
+    await loadStore();
+    expect(await storage.storageGet(storage.profileKeys("p1").scores)).toBeNull();
+    expect(await storage.storageGet(storage.KEYS.scores)).not.toBeNull();
+  });
 });
 
 describe("profile actions", () => {

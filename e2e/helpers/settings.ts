@@ -130,3 +130,13 @@ export async function readStoredJson<T>(page: Page, key: string): Promise<T | nu
     return raw ? (JSON.parse(raw) as unknown) : null;
   }, key) as Promise<T | null>;
 }
+
+/** The active entry of the persisted profiles collection (winnow:profiles:v1). */
+export async function readActiveProfile(page: Page): Promise<Profile | null> {
+  const state = await readStoredJson<{
+    activeProfileId: string;
+    profiles: (Profile & { id: string })[];
+  }>(page, "winnow:profiles:v1");
+  if (!state) return null;
+  return state.profiles.find((p) => p.id === state.activeProfileId) ?? null;
+}

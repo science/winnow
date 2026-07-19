@@ -74,4 +74,27 @@ describe("pruneStaleEntries", () => {
     const cache = await storageGet<Record<string, TranscriptCacheEntry>>(KEYS.transcripts);
     expect(cache).toEqual({ votedgone01: entry("kept for feedback analysis") });
   });
+
+  // Keep this test LAST in the file: it switches the active profile, which
+  // would change where earlier tests' toggleVote calls persist.
+  it("should keep transcript entries for videos voted in any profile, not just the active one", async () => {
+    watched.set({});
+    await toggleVote({ ...video("votedinother"), scoreState: "unknown" }, "up");
+    const { addProfileAction } = await import("./profilesStore");
+    const secondId = await addProfileAction("Second");
+    // Reload empties the in-memory store — the kept vote is only reachable
+    // through the default profile's persisted blob.
+    const { reloadFeedback } = await import("./feedbackStore");
+    await reloadFeedback(secondId);
+
+    await storageSet(KEYS.transcripts, {
+      votedinother: entry("kept — voted in the default profile"),
+      plainold0001: entry("dropped"),
+    });
+
+    await pruneStaleEntries([]);
+
+    const cache = await storageGet<Record<string, TranscriptCacheEntry>>(KEYS.transcripts);
+    expect(cache).toEqual({ votedinother: entry("kept — voted in the default profile") });
+  });
 });
