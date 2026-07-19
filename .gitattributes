@@ -1,0 +1,4 @@
+# git archive substitutes the commit hash here (source zips for AMO review
+# carry no .git — vite.config.ts falls back to this stamp so a reviewer
+# rebuild is byte-identical to the submitted package).
+.git-archive-version export-subst

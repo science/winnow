@@ -3,11 +3,23 @@ import { svelte } from "@sveltejs/vite-plugin-svelte";
 import tailwindcss from "@tailwindcss/vite";
 import { resolve } from "node:path";
 import { execSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 
 function gitHash(): string {
   try {
-    return execSync("git rev-parse --short HEAD").toString().trim();
+    return execSync("git rev-parse --short HEAD", { stdio: ["ignore", "pipe", "ignore"] })
+      .toString()
+      .trim();
   } catch {
+    // No .git — an AMO-review source zip. git archive stamped the commit
+    // into .git-archive-version (export-subst); using it keeps the reviewer
+    // rebuild byte-identical to the submitted package.
+    try {
+      const stamp = readFileSync(resolve(__dirname, ".git-archive-version"), "utf8").trim();
+      if (stamp && !stamp.startsWith("$Format")) return stamp;
+    } catch {
+      /* fall through */
+    }
     return "unknown";
   }
 }
