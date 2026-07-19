@@ -97,6 +97,55 @@ export async function expectProfileSwitcherHidden(page: Page): Promise<void> {
   await expect(page.getByTestId("profile-switcher")).not.toBeVisible();
 }
 
+// --- discovery ("go deeper") -----------------------------------------------
+
+export async function clickGoDeeper(page: Page): Promise<void> {
+  await page.getByTestId("go-deeper").click();
+}
+
+export async function clickRegenerateQueries(page: Page): Promise<void> {
+  await page.getByTestId("regenerate-queries").click();
+}
+
+/** Titles of browsable (top / worth-a-look) discovery cards. */
+export async function getDiscoveryVideoTitles(page: Page): Promise<string[]> {
+  return page.getByTestId("discovery-results").getByTestId("video-card").locator("h3").allInnerTexts();
+}
+
+export async function waitForDiscoveryResults(page: Page): Promise<void> {
+  await expect(
+    page.getByTestId("discovery-results").getByTestId("video-card").first(),
+  ).toBeVisible({ timeout: 10_000 });
+}
+
+export async function expectDiscoveryEmpty(page: Page): Promise<void> {
+  await expect(page.getByTestId("discovery").getByTestId("video-card")).toHaveCount(0);
+  await expect(page.getByTestId("discovery-winnowed-fold")).not.toBeVisible();
+}
+
+export async function getDiscoveryWinnowedFoldText(page: Page): Promise<string> {
+  return page.getByTestId("discovery-winnowed-fold").innerText();
+}
+
+export async function clickDiscoveryWinnowedFold(page: Page): Promise<void> {
+  await page.getByTestId("discovery-winnowed-fold").click();
+}
+
+export async function getDiscoveryWinnowedTitles(page: Page): Promise<string[]> {
+  return page.getByTestId("discovery-winnowed").getByTestId("video-card").locator("h3").allInnerTexts();
+}
+
+/** The named title renders nowhere in the discovery section. */
+export async function expectDiscoveryTitleHidden(page: Page, title: string): Promise<void> {
+  await expect(
+    page.getByTestId("discovery").getByTestId("video-card").filter({ hasText: title }),
+  ).toHaveCount(0);
+}
+
+export async function getDiscoveryStatusText(page: Page): Promise<string> {
+  return page.getByTestId("discovery-status").innerText();
+}
+
 export async function waitForScoredFeed(page: Page): Promise<void> {
   // Scoring is stubbed in demo mode; tiers appear once scores land.
   await expect(page.getByTestId("tier-top")).toBeVisible({ timeout: 10_000 });

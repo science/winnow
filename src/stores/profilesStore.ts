@@ -65,10 +65,11 @@ profilesState.subscribe((value) => {
 export const activeProfileId = derived(profilesState, (s) => s.activeProfileId);
 
 /** Reload per-profile companion stores for the (new) active profile.
- * Dynamic import breaks the feedbackStore ↔ profilesStore cycle. */
+ * Dynamic imports break the companion-store ↔ profilesStore cycles. */
 async function reloadCompanions(profileId: string): Promise<void> {
   const { reloadFeedback } = await import("./feedbackStore");
-  await reloadFeedback(profileId);
+  const { reloadDiscovered } = await import("./discoveryStore");
+  await Promise.all([reloadFeedback(profileId), reloadDiscovered(profileId)]);
 }
 
 /** Create an empty named profile and switch to it. Returns the new id. */

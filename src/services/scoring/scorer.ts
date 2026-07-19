@@ -23,6 +23,7 @@ import {
   status,
   transcriptCoverage,
 } from "../../stores/feedStore";
+import { discovered as discoveredStore } from "../../stores/discoveryStore";
 import { settings, profile as profileStore, settingsReady } from "../../stores/settingsStore";
 import { fetchTranscriptExcerpt, type TranscriptOutcome } from "../youtube/transcripts";
 import { isDemoMode } from "../youtube/feedSource";
@@ -288,7 +289,9 @@ async function scoreFeedOnce(): Promise<void> {
   if (!stillCurrent()) return;
   scoresStore.set(cache);
 
-  const $videos = get(videosStore);
+  // Discovered videos score alongside the feed — same per-profile cache,
+  // keyed by videoId, so they're ordinary misses on their first run.
+  const $videos = [...get(videosStore), ...get(discoveredStore).map((e) => e.video)];
   const misses = $videos.filter((v) => !cache[v.id]);
   if (misses.length === 0) return;
 
@@ -366,7 +369,7 @@ async function scoreFeedTwoPhase(
   runKeys: ReturnType<typeof profileKeys>,
   stillCurrent: () => boolean,
 ): Promise<void> {
-  const $videos = get(videosStore);
+  const $videos = [...get(videosStore), ...get(discoveredStore).map((e) => e.video)];
   if ($videos.length === 0) return;
   const model = enrichmentModelFor($settings.provider);
 

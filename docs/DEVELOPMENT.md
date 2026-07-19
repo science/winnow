@@ -50,6 +50,10 @@ Status as of 2026-07-14: MVP confirmed working by the user against real YouTube 
 | `src/stores/modelCatalogStore.ts` | Persisted model catalog (`winnow:models:v1`), refreshed only on explicit user action | Picker persistence |
 | `src/stores/feedStore.ts` | Videos/scores/watched/status stores, `tiers`/`collapsed` deriveds, `initFeed`/`refresh` (TTL 30 min), `transcriptCoverage`, pruning | Feed state machine |
 | `src/stores/feedbackStore.ts` | Persisted votes (`toggleVote`), PER PROFILE (`winnow:feedback:v2:<id>`, `reloadFeedback` on switch); NEVER pruned with the video window | Vote persistence |
+| `src/lib/discovery.ts` | Pure go-deeper logic: query-pool build/LRU-pick/stamp + discovered merge/dedupe/caps (entries 120, seenIds 1000 FIFO) | Discovery semantics |
+| `src/services/scoring/discoverQueries.ts` | Profile → search-query pool (one cheap structured call, cached per profile until the profile text/model changes; demo stub) | Query generation |
+| `src/services/discovery/discovery.ts` | Go-deeper orchestrator: pool → sequential `/results` fetches (500 ms pacing) → parse → merge → persist → `scoreFeed`; per-query failures degrade to warnings; deterministic demo results | Discovery pipeline |
+| `src/stores/discoveryStore.ts` | Per-profile discovered entries + seenIds (`winnow:discovered:v1:<id>`), `discoveryTiers` derived, `reloadDiscovered` on switch | Discovery state |
 | `src/components/` | `App` (config gate + routes), `Feed` (tier sections), `VideoCard`, `ScoreBadge`, `Watch` (nocookie embed, start-on-open, no autoplay-next), `Settings`, `Onboarding` | UI |
 | `src/background.ts` | Toolbar click → open/focus feed tab. Import-free; keep it that way | Almost never |
 | `e2e/helpers/` | **All Playwright selectors** (house rule: specs use helpers only) | Any e2e work |

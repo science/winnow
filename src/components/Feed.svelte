@@ -2,11 +2,22 @@
   import { onMount } from "svelte";
   import { collapsed, initFeed, refresh, status, tiers, transcriptCoverage, videos, watched } from "../stores/feedStore";
   import { profilesState, switchProfile } from "../stores/profilesStore";
+  import { discovered, discoveryStatus, discoveryTiers } from "../stores/discoveryStore";
+  import { regenerateQueriesAndDiscover, runDiscovery } from "../services/discovery/discovery";
   import { scoreFeed } from "../services/scoring/scorer";
   import VideoCard from "./VideoCard.svelte";
 
   let showWinnowed = $state(false);
   let showUnvetted = $state(false);
+  let showDiscoveryWinnowed = $state(false);
+
+  const discoveryBusy = $derived(
+    $discoveryStatus.phase === "generating" || $discoveryStatus.phase === "searching",
+  );
+  const discoveryBrowsable = $derived([...$discoveryTiers.top, ...$discoveryTiers.worthALook]);
+  const discoveryVetting = $derived(
+    $discoveryTiers.unscored.filter((v) => v.scoreState === "pending").length,
+  );
 
   onMount(() => {
     void initFeed().then(() => scoreFeed());
@@ -200,6 +211,80 @@
         {/if}
       </section>
     {/if}
+
+    <section class="space-y-3 border-t border-surface-hover pt-6" data-testid="discovery">
+      <div class="flex items-center justify-between">
+        <h2 class="text-sm font-semibold uppercase tracking-wider text-ink-muted">Discovery</h2>
+        <div class="flex items-center gap-2">
+          {#if $discovered.length > 0 || $discoveryStatus.detail}
+            <button
+              onclick={() => regenerateQueriesAndDiscover()}
+              disabled={discoveryBusy}
+              class="rounded-md bg-surface-raised px-3 py-1.5 text-sm text-ink-muted hover:bg-surface-hover disabled:opacity-50"
+              data-testid="regenerate-queries"
+              >Regenerate queries</button
+            >
+          {/if}
+          <button
+            onclick={() => runDiscovery()}
+            disabled={discoveryBusy}
+            class="rounded-md bg-accent-muted px-3 py-1.5 text-sm text-white hover:opacity-90 disabled:opacity-50"
+            data-testid="go-deeper"
+            >{discoveryBusy ? "Searching…" : "Go deeper"}</button
+          >
+        </div>
+      </div>
+      <p class="text-xs text-ink-faint">
+        Winnow turns this profile into YouTube searches and vets what it finds — new videos and
+        creators beyond your subscriptions. Already-seen finds never repeat.
+      </p>
+
+      {#if discoveryBusy || $discoveryStatus.phase === "error" || $discoveryStatus.detail}
+        <p
+          class={`text-sm ${$discoveryStatus.phase === "error" ? "text-danger" : "text-ink-muted"}`}
+          data-testid="discovery-status"
+          aria-live="polite"
+        >
+          {$discoveryStatus.detail}
+        </p>
+      {/if}
+      {#each $discoveryStatus.warnings as warning (warning)}
+        <p class="rounded-md border border-caution/40 bg-caution/10 px-3 py-2 text-sm text-caution">{warning}</p>
+      {/each}
+
+      {#if discoveryVetting > 0}
+        <p class="text-xs text-ink-faint" data-testid="discovery-vetting">
+          Vetting {discoveryVetting} {discoveryVetting === 1 ? "discovery" : "discoveries"}…
+        </p>
+      {/if}
+
+      {#if discoveryBrowsable.length > 0}
+        <div data-testid="discovery-results">
+          {#each discoveryBrowsable as video (video.id)}
+            <VideoCard {video} watched={watchedSet.has(video.id)} hideScoreNumber={$collapsed} />
+          {/each}
+        </div>
+      {/if}
+
+      {#if $discoveryTiers.winnowed.length > 0}
+        <button
+          onclick={() => (showDiscoveryWinnowed = !showDiscoveryWinnowed)}
+          class="w-full rounded-md bg-surface-raised px-3 py-2 text-left text-sm text-ink-faint hover:bg-surface-hover"
+          data-testid="discovery-winnowed-fold"
+        >
+          {showDiscoveryWinnowed ? "▾" : "▸"}
+          {$discoveryTiers.winnowed.length}
+          {$discoveryTiers.winnowed.length === 1 ? "discovery" : "discoveries"} winnowed out — {showDiscoveryWinnowed ? "hide" : "show"}
+        </button>
+        {#if showDiscoveryWinnowed}
+          <div class="mt-2 opacity-70" data-testid="discovery-winnowed">
+            {#each $discoveryTiers.winnowed as video (video.id)}
+              <VideoCard {video} watched={watchedSet.has(video.id)} hideScoreNumber={$collapsed} />
+            {/each}
+          </div>
+        {/if}
+      {/if}
+    </section>
 
     <p class="pt-4 text-center text-xs text-ink-faint">
       That's everything from your subscriptions and recommendations. The page has a bottom.

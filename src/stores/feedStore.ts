@@ -127,14 +127,24 @@ export async function markWatched(videoId: string): Promise<void> {
  * profile's votes are in memory. The feedback stores themselves are never
  * pruned here (bounded by FEEDBACK_STORE_CAP instead). Exported for tests. */
 export async function pruneStaleEntries(current: Video[]): Promise<void> {
+  await profilesReady;
   const ids = new Set(current.map((v) => v.id));
+  // Discovered videos (any profile) are part of the live window too — their
+  // watched marks and caches must survive feed refreshes.
+  for (const p of get(profilesState).profiles) {
+    const disc = await storageGet<{ entries?: { video?: { id?: string } }[] }>(
+      profileKeys(p.id).discovered,
+    );
+    for (const e of disc?.entries ?? []) {
+      if (typeof e?.video?.id === "string") ids.add(e.video.id);
+    }
+  }
   const w = get(watched);
   const pruned = Object.fromEntries(Object.entries(w).filter(([id]) => ids.has(id)));
   if (Object.keys(pruned).length !== Object.keys(w).length) {
     watched.set(pruned);
     await storageSet(KEYS.watched, pruned);
   }
-  await profilesReady;
   const votedIds = new Set(Object.keys(get(feedback)));
   for (const p of get(profilesState).profiles) {
     const stored = await storageGet<Record<string, unknown>>(profileKeys(p.id).feedback);

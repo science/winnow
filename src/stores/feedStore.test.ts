@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { get } from "svelte/store";
 import { pruneStaleEntries, watched } from "./feedStore";
 import { toggleVote } from "./feedbackStore";
-import { KEYS, storageGet, storageSet } from "../lib/storage";
+import { KEYS, profileKeys, storageGet, storageSet } from "../lib/storage";
 import type { TranscriptCacheEntry, Video } from "../lib/types";
 
 function video(id: string): Video {
@@ -96,5 +96,28 @@ describe("pruneStaleEntries", () => {
 
     const cache = await storageGet<Record<string, TranscriptCacheEntry>>(KEYS.transcripts);
     expect(cache).toEqual({ votedinother: entry("kept — voted in the default profile") });
+  });
+
+  it("should keep watched marks and caches for discovered videos in any profile", async () => {
+    // Runs after the profile switch above — the discovered blob is seeded on
+    // the SECOND profile while it is active, proving the cross-profile scan.
+    const { profilesState } = await import("./profilesStore");
+    const otherId = get(profilesState).profiles.find((p) => p.name === "Second")!.id;
+
+    watched.set({ discokept001: 5 });
+    await storageSet(profileKeys(otherId).discovered, {
+      entries: [{ video: video("discokept001"), query: "q", discoveredAt: 1 }],
+      seenIds: ["discokept001"],
+    });
+    await storageSet(KEYS.transcripts, {
+      discokept001: entry("kept — discovered video"),
+      strandedvid1: entry("dropped"),
+    });
+
+    await pruneStaleEntries([]);
+
+    const cache = await storageGet<Record<string, TranscriptCacheEntry>>(KEYS.transcripts);
+    expect(cache).toEqual({ discokept001: entry("kept — discovered video") });
+    expect(get(watched)).toEqual({ discokept001: 5 });
   });
 });

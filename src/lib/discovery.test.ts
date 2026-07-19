@@ -1,11 +1,39 @@
 import { describe, expect, it } from "vitest";
+import type { Video } from "./types";
 import {
   buildQueryPool,
+  DISCOVERED_CAP,
   markQueriesUsed,
+  mergeDiscovered,
   pickQueries,
   QUERIES_PER_RUN,
   QUERY_POOL_MAX,
+  SEEN_IDS_CAP,
+  type DiscoveredState,
 } from "./discovery";
+
+function video(id: string): Video {
+  return {
+    id,
+    source: "search",
+    title: `Video ${id}`,
+    channelTitle: "c",
+    channelId: null,
+    durationText: "10:00",
+    durationSec: 600,
+    publishedText: null,
+    publishedAtApprox: null,
+    viewCountText: null,
+    viewCount: null,
+    thumbnailUrl: null,
+    descriptionSnippet: null,
+    isLive: false,
+  };
+}
+
+const found = (id: string, query = "q") => ({ video: video(id), query });
+
+const emptyState: DiscoveredState = { entries: [], seenIds: [] };
 
 describe("buildQueryPool", () => {
   it("should trim, dedupe case-insensitively, and cap the pool", () => {
@@ -52,5 +80,66 @@ describe("markQueriesUsed", () => {
       { text: "a", lastUsedAt: 500 },
       { text: "b", lastUsedAt: 0 },
     ]);
+  });
+});
+
+describe("mergeDiscovered", () => {
+  it("should add fresh videos and record them as seen", () => {
+    const { state, added } = mergeDiscovered(
+      emptyState,
+      [found("newvideo0001"), found("newvideo0002")],
+      new Set(),
+      100,
+    );
+    expect(added).toBe(2);
+    expect(state.entries.map((e) => e.video.id)).toEqual(["newvideo0001", "newvideo0002"]);
+    expect(state.entries[0]).toMatchObject({ query: "q", discoveredAt: 100 });
+    expect(state.seenIds).toEqual(["newvideo0001", "newvideo0002"]);
+  });
+
+  it("should drop videos already in the feed, already seen, or repeated in-run", () => {
+    const prior: DiscoveredState = { entries: [], seenIds: ["seenbefore01"] };
+    const { state, added } = mergeDiscovered(
+      prior,
+      [
+        found("infeedvideo1"),
+        found("seenbefore01"),
+        found("fresh0000001"),
+        found("fresh0000001"),
+      ],
+      new Set(["infeedvideo1"]),
+      100,
+    );
+    expect(added).toBe(1);
+    expect(state.entries.map((e) => e.video.id)).toEqual(["fresh0000001"]);
+  });
+
+  it("should evict the oldest entries beyond the cap without shrinking seenIds", () => {
+    const prior: DiscoveredState = {
+      entries: Array.from({ length: DISCOVERED_CAP }, (_u, i) => ({
+        video: video(`old${i}`),
+        query: "q",
+        discoveredAt: i,
+      })),
+      seenIds: Array.from({ length: DISCOVERED_CAP }, (_u, i) => `old${i}`),
+    };
+    const { state } = mergeDiscovered(prior, [found("brandnew0001")], new Set(), 9999);
+    expect(state.entries).toHaveLength(DISCOVERED_CAP);
+    expect(state.entries.some((e) => e.video.id === "old0")).toBe(false);
+    expect(state.entries.at(-1)!.video.id).toBe("brandnew0001");
+    // The evicted video stays seen — it must never be re-discovered.
+    expect(state.seenIds).toContain("old0");
+    expect(state.seenIds).toContain("brandnew0001");
+  });
+
+  it("should cap seenIds FIFO at SEEN_IDS_CAP", () => {
+    const prior: DiscoveredState = {
+      entries: [],
+      seenIds: Array.from({ length: SEEN_IDS_CAP }, (_u, i) => `seen${i}`),
+    };
+    const { state } = mergeDiscovered(prior, [found("overflow0001")], new Set(), 100);
+    expect(state.seenIds).toHaveLength(SEEN_IDS_CAP);
+    expect(state.seenIds).not.toContain("seen0");
+    expect(state.seenIds).toContain("overflow0001");
   });
 });

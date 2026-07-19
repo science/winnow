@@ -1,6 +1,8 @@
-// Pure "go deeper" discovery logic: the LLM-generated search-query pool and
-// its LRU rotation. Persistence and orchestration live in the services/
-// stores layers.
+// Pure "go deeper" discovery logic: the LLM-generated search-query pool with
+// its LRU rotation, and the discovered-videos merge/dedupe/caps. Persistence
+// and orchestration live in the services/stores layers.
+
+import type { Video } from "./types";
 
 export interface QueryPoolEntry {
   text: string;
@@ -49,4 +51,47 @@ export function markQueriesUsed(
 ): QueryPoolEntry[] {
   const usedSet = new Set(used);
   return pool.map((q) => (usedSet.has(q.text) ? { ...q, lastUsedAt: now } : q));
+}
+
+// --- discovered videos ------------------------------------------------------
+
+export interface DiscoveredEntry {
+  video: Video;
+  /** The search query that surfaced this video. */
+  query: string;
+  discoveredAt: number;
+}
+
+/** Per-profile persisted blob (winnow:discovered:v1:<profileId>). */
+export interface DiscoveredState {
+  entries: DiscoveredEntry[];
+  /** Every id a discovery run ever assessed, kept beyond entry eviction so
+   * the same recommendation is never re-surfaced for this profile. */
+  seenIds: string[];
+}
+
+export const DISCOVERED_CAP = 120;
+export const SEEN_IDS_CAP = 1000;
+
+/** Fold one run's search results into the discovered state. Drops videos
+ * already in the feed (knownIds), already seen by this profile, or repeated
+ * within the run; evicts the oldest entries beyond the cap (they stay in
+ * seenIds); records every added id as seen, FIFO-capped. */
+export function mergeDiscovered(
+  state: DiscoveredState,
+  incoming: { video: Video; query: string }[],
+  knownIds: ReadonlySet<string>,
+  now: number,
+): { state: DiscoveredState; added: number } {
+  const seen = new Set(state.seenIds);
+  const inRun = new Set<string>();
+  const fresh: DiscoveredEntry[] = [];
+  for (const { video, query } of incoming) {
+    if (knownIds.has(video.id) || seen.has(video.id) || inRun.has(video.id)) continue;
+    inRun.add(video.id);
+    fresh.push({ video, query, discoveredAt: now });
+  }
+  const entries = [...state.entries, ...fresh].slice(-DISCOVERED_CAP);
+  const seenIds = [...state.seenIds, ...fresh.map((e) => e.video.id)].slice(-SEEN_IDS_CAP);
+  return { state: { entries, seenIds }, added: fresh.length };
 }
