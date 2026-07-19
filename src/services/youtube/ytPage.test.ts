@@ -1,5 +1,11 @@
-import { describe, it, expect } from "vitest";
-import { extractYtInitialData, extractInnertubeConfig, extractLoggedIn } from "./ytPage";
+import { afterEach, describe, it, expect, vi } from "vitest";
+import {
+  extractYtInitialData,
+  extractInnertubeConfig,
+  extractLoggedIn,
+  fetchSearchPage,
+  lastCaptures,
+} from "./ytPage";
 
 const SAMPLE_HTML = `<!doctype html><html><head>
 <script>ytcfg.set({"INNERTUBE_API_KEY":"AIzaXXX","LOGGED_IN":true,"OTHER":1});</script>
@@ -38,6 +44,43 @@ describe("extractInnertubeConfig", () => {
   it("should return null when ytcfg is absent or incomplete", () => {
     expect(extractInnertubeConfig("<html></html>")).toBeNull();
     expect(extractInnertubeConfig(`<script>ytcfg.set({"INNERTUBE_API_KEY":"AIzaTest123"});</script>`)).toBeNull();
+  });
+});
+
+describe("fetchSearchPage", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  function stubFetch(html: string): ReturnType<typeof vi.fn> {
+    const mock = vi.fn(async () => ({ ok: true, status: 200, text: async () => html }));
+    vi.stubGlobal("fetch", mock);
+    return mock;
+  }
+
+  it("should URL-encode the query into the results URL and carry credentials", async () => {
+    const mock = stubFetch(SAMPLE_HTML);
+    await fetchSearchPage("kpop stage mix & more");
+    expect(mock).toHaveBeenCalledTimes(1);
+    const [url, init] = mock.mock.calls[0]! as unknown as [string, RequestInit];
+    expect(url).toBe(
+      "https://www.youtube.com/results?search_query=kpop%20stage%20mix%20%26%20more",
+    );
+    expect(init.credentials).toBe("include");
+  });
+
+  it("should not treat a signed-out search page as fatal", async () => {
+    // Search works without a session; SignedOutError is reserved for feeds.
+    stubFetch(SIGNED_OUT_HTML);
+    const page = await fetchSearchPage("woodworking");
+    expect(page.loggedIn).toBe(false);
+    expect(page.data).toEqual({ contents: {} });
+  });
+
+  it("should record the raw capture for the debug-fixture flow", async () => {
+    stubFetch(SAMPLE_HTML);
+    await fetchSearchPage("anything");
+    expect(lastCaptures["search"]).toContain('"contents"');
   });
 });
 

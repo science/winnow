@@ -46,7 +46,7 @@ export const FEED_PART_DROP_KEYS: readonly string[] = [
   "onResponseReceivedActions",
 ];
 
-const FEED_PARTS = ["home", "subscriptions"] as const;
+const FEED_PARTS = ["home", "subscriptions", "search"] as const;
 
 const SUSPECT_RE = /token|tracking|visitor|datasync|rollout|account|email|avatar/i;
 

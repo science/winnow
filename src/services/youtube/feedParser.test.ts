@@ -7,6 +7,7 @@ import subsVideoRenderer from "./fixtures/subscriptions-videorenderer.json";
 import homeRealBrandShelf from "./fixtures/home-real-brandshelf.json";
 import homeRealSignedIn from "./fixtures/home-real-signedin.json";
 import subsRealSignedIn from "./fixtures/subscriptions-real-signedin.json";
+import searchResults from "./fixtures/search-results-videorenderer.json";
 
 describe("parseFeedPage — legacy videoRenderer shapes (subscriptions)", () => {
   const videos = parseFeedPage(subsVideoRenderer, "subscriptions");
@@ -118,6 +119,28 @@ describe("parseFeedPage — real signed-in home capture", () => {
   it("should skip brand promo shelves (advertiser-injected, not the user's feed)", () => {
     expect(JSON.stringify(homeRealBrandShelf)).toContain("videoRenderer");
     expect(parseFeedPage(homeRealBrandShelf, "home")).toEqual([]);
+  });
+});
+
+describe("parseFeedPage — search results pages (/results?search_query=…)", () => {
+  it("should parse videoRenderer items from a search results page with source \"search\"", () => {
+    const videos = parseFeedPage(searchResults, "search");
+    expect(videos.map((v) => v.id)).toEqual(["searchvid001", "searchvid002"]);
+    const v = videos[0]!;
+    expect(v.source).toBe("search");
+    expect(v.title).toBe("Hand-Cut Dovetails, Start to Finish");
+    expect(v.channelTitle).toBe("Woodcraft Channel");
+    expect(v.channelId).toBe("UCsearchchan001");
+    expect(v.durationSec).toBe(24 * 60 + 31);
+    expect(v.viewCount).toBe(184_201);
+    expect(v.descriptionSnippet).toContain("dovetails by hand");
+  });
+
+  it("should skip channelRenderer results and Shorts shelves on the search page", () => {
+    expect(JSON.stringify(searchResults)).toContain("channelRenderer");
+    const ids = parseFeedPage(searchResults, "search").map((v) => v.id);
+    expect(ids).not.toContain("UCsearchchan001");
+    expect(ids).not.toContain("shortsvid001");
   });
 });
 

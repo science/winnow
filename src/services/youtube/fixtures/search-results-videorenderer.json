@@ -1,0 +1,104 @@
+{
+  "contents": {
+    "twoColumnSearchResultsRenderer": {
+      "primaryContents": {
+        "sectionListRenderer": {
+          "contents": [
+            {
+              "itemSectionRenderer": {
+                "contents": [
+                  {
+                    "channelRenderer": {
+                      "channelId": "UCsearchchan001",
+                      "title": { "simpleText": "Woodcraft Channel" },
+                      "descriptionSnippet": {
+                        "runs": [{ "text": "A channel about hand-tool woodworking." }]
+                      },
+                      "subscriberCountText": { "simpleText": "512K subscribers" }
+                    }
+                  },
+                  {
+                    "videoRenderer": {
+                      "videoId": "searchvid001",
+                      "title": { "runs": [{ "text": "Hand-Cut Dovetails, Start to Finish" }] },
+                      "ownerText": {
+                        "runs": [
+                          {
+                            "text": "Woodcraft Channel",
+                            "navigationEndpoint": {
+                              "browseEndpoint": { "browseId": "UCsearchchan001" }
+                            }
+                          }
+                        ]
+                      },
+                      "lengthText": { "simpleText": "24:31" },
+                      "publishedTimeText": { "simpleText": "3 weeks ago" },
+                      "viewCountText": { "simpleText": "184,201 views" },
+                      "thumbnail": {
+                        "thumbnails": [
+                          { "url": "https://i.ytimg.com/vi/searchvid001/hq720.jpg", "width": 720, "height": 404 }
+                        ]
+                      },
+                      "detailedMetadataSnippets": [
+                        {
+                          "snippetText": {
+                            "runs": [{ "text": "Every step of cutting dovetails by hand with a western saw." }]
+                          }
+                        }
+                      ],
+                      "badges": []
+                    }
+                  },
+                  {
+                    "videoRenderer": {
+                      "videoId": "searchvid002",
+                      "title": { "simpleText": "Sharpening Chisels on a Budget" },
+                      "ownerText": {
+                        "runs": [
+                          {
+                            "text": "Shop Basics",
+                            "navigationEndpoint": {
+                              "browseEndpoint": { "browseId": "UCsearchchan002" }
+                            }
+                          }
+                        ]
+                      },
+                      "lengthText": { "simpleText": "9:03" },
+                      "publishedTimeText": { "simpleText": "2 years ago" },
+                      "viewCountText": { "simpleText": "1.2M views" },
+                      "thumbnail": {
+                        "thumbnails": [
+                          { "url": "https://i.ytimg.com/vi/searchvid002/hq720.jpg", "width": 720, "height": 404 }
+                        ]
+                      },
+                      "badges": []
+                    }
+                  },
+                  {
+                    "reelShelfRenderer": {
+                      "title": { "simpleText": "Shorts" },
+                      "items": [
+                        {
+                          "reelItemRenderer": {
+                            "videoId": "shortsvid001",
+                            "headline": { "simpleText": "60-second bevel trick" }
+                          }
+                        }
+                      ]
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "continuationItemRenderer": {
+                "trigger": "CONTINUATION_TRIGGER_ON_ITEM_SHOWN",
+                "continuationEndpoint": {}
+              }
+            }
+          ]
+        }
+      }
+    }
+  }
+}

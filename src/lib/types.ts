@@ -1,4 +1,6 @@
-export type FeedSource = "subscriptions" | "home";
+/** Where a video was found: the user's subscriptions feed, YouTube's
+ * homepage recommendations, or a Winnow "go deeper" discovery search. */
+export type FeedSource = "subscriptions" | "home" | "search";
 
 /** One video as parsed from a YouTube page. All metadata fields are
  * best-effort: YouTube serves display text, not structured data. */

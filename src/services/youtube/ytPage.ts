@@ -72,11 +72,12 @@ export function extractLoggedIn(html: string): boolean | null {
 }
 
 // Last successful raw captures, for Settings' "copy debug fixture" button.
-export const lastCaptures: Partial<Record<keyof typeof FEED_URLS, string>> = {};
+export const lastCaptures: Partial<Record<keyof typeof FEED_URLS | "search", string>> = {};
 
-/** Fetch a feed page as the logged-in user and extract its data blob. */
-export async function fetchFeedPage(feed: keyof typeof FEED_URLS): Promise<YtPage> {
-  const url = FEED_URLS[feed];
+/** Shared credentialed fetch + ytInitialData extraction for any youtube.com
+ * page. Signed-out handling differs per caller: feeds need a session,
+ * search works without one. */
+async function fetchYtPage(url: string): Promise<YtPage> {
   log.debug("fetching", url);
   const res = await fetch(url, {
     credentials: "include",
@@ -87,14 +88,28 @@ export async function fetchFeedPage(feed: keyof typeof FEED_URLS): Promise<YtPag
   }
   const html = await res.text();
   const loggedIn = extractLoggedIn(html);
-  if (loggedIn === false) throw new SignedOutError();
   const data = extractYtInitialData(html);
   if (data === null) {
     throw new PageParseError(
       "Could not find ytInitialData in the page — YouTube may have changed its layout, or a consent page is in the way.",
     );
   }
-  const raw = rawYtInitialData(html);
-  if (raw) lastCaptures[feed] = raw;
-  return { data, loggedIn, rawJson: raw ?? "" };
+  return { data, loggedIn, rawJson: rawYtInitialData(html) ?? "" };
+}
+
+/** Fetch a feed page as the logged-in user and extract its data blob. */
+export async function fetchFeedPage(feed: keyof typeof FEED_URLS): Promise<YtPage> {
+  const page = await fetchYtPage(FEED_URLS[feed]);
+  if (page.loggedIn === false) throw new SignedOutError();
+  if (page.rawJson) lastCaptures[feed] = page.rawJson;
+  return page;
+}
+
+/** Fetch a search results page. Never throws SignedOutError — search works
+ * without a session (results are just less personalized). */
+export async function fetchSearchPage(query: string): Promise<YtPage> {
+  const url = `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`;
+  const page = await fetchYtPage(url);
+  if (page.rawJson) lastCaptures["search"] = page.rawJson;
+  return page;
 }

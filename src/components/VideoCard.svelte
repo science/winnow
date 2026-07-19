@@ -45,8 +45,12 @@
       {#if video.viewCountText}<span class="text-ink-faint"> · {video.viewCountText}</span>{/if}
       <span
         class="ml-1 rounded bg-surface-hover px-1 py-px text-[10px] uppercase tracking-wide text-ink-faint"
-        title={video.source === "home" ? "From YouTube's recommendations" : "From your subscriptions"}
-        >{video.source === "home" ? "rec" : "sub"}</span
+        title={video.source === "home"
+          ? "From YouTube's recommendations"
+          : video.source === "search"
+            ? "Discovered by Winnow search"
+            : "From your subscriptions"}
+        >{video.source === "home" ? "rec" : video.source === "search" ? "disc" : "sub"}</span
       >
     </p>
     {#if video.scoreState === "scored"}
