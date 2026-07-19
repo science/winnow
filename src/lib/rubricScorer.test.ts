@@ -1,6 +1,13 @@
 import { describe, it, expect } from "vitest";
 import type { ProfileTarget, VideoDigest } from "./types";
-import { canonicalizeTarget, EMPTY_TARGET, isEmptyTarget, rankVideo, targetHash } from "./rubricScorer";
+import {
+  canonicalizeTarget,
+  EMPTY_TARGET,
+  isEmptyTarget,
+  rankVideo,
+  TARGET_TOPICS_MAX,
+  targetHash,
+} from "./rubricScorer";
 import gothamTargetRaw from "./fixtures/gotham-target.json";
 
 const DIGEST: VideoDigest = {
@@ -280,6 +287,95 @@ describe("canonicalizeTarget", () => {
     });
     expect(t.topicsMore.items).toEqual(["engineering"]);
     expect(t.topicsLess.items).toEqual(["comic chess"]);
+  });
+
+  it("should map free-form tier qualifiers onto the digest vocabulary", () => {
+    // The enricher's subjectTiers are schema-forced onto the canonical list,
+    // so a translator tag with any other qualifier token-matches nothing.
+    const t = canonicalizeTarget({
+      fields: {},
+      topicsMore: { items: ["top tier chess", "pro engineering"], importance: 8 },
+      topicsLess: { items: ["low tier chess", "novice woodworking"], importance: 7 },
+      formatsAvoid: null,
+      tonesAvoid: null,
+    });
+    expect(t.topicsMore.items).toEqual(["elite chess", "professional engineering"]);
+    expect(t.topicsLess.items).toEqual(["amateur chess", "beginner woodworking"]);
+  });
+
+  it("should strip quality adjectives from topicsMore so the bare subject can match", () => {
+    // Live 2026-07-19: "practical, professional or serious" engineering became
+    // three tags, two of which ("practical/serious engineering") the enricher
+    // never emits — inert slots. Quality lives in the numeric axes; the tag's
+    // job is naming the subject.
+    const t = canonicalizeTarget({
+      fields: {},
+      topicsMore: {
+        items: ["practical engineering", "serious engineering", "good quality movie previews"],
+        importance: 8,
+      },
+      topicsLess: null,
+      formatsAvoid: null,
+      tonesAvoid: null,
+    });
+    expect(t.topicsMore.items).toEqual(["engineering", "movie previews"]);
+  });
+
+  it("should not strip quality adjectives from topicsLess", () => {
+    // Broadening an avoid item over-penalizes ("practical engineering" →
+    // "engineering" would veto content the person wants — the gotham shape);
+    // an inert avoid tag is the safe failure.
+    const t = canonicalizeTarget({
+      fields: {},
+      topicsMore: null,
+      topicsLess: { items: ["practical engineering"], importance: 6 },
+      formatsAvoid: null,
+      tonesAvoid: null,
+    });
+    expect(t.topicsLess.items).toEqual(["practical engineering"]);
+  });
+
+  it("should leave compound subjects untouched", () => {
+    // "computer science", "cultural anthropology" are subjects, not
+    // qualifier+subject — only known tier synonyms may be rewritten.
+    const t = canonicalizeTarget({
+      fields: {},
+      topicsMore: { items: ["computer science", "cultural anthropology", "film studies"], importance: 8 },
+      topicsLess: { items: ["video games"], importance: 8 },
+      formatsAvoid: null,
+      tonesAvoid: null,
+    });
+    expect(t.topicsMore.items).toEqual(["computer science", "cultural anthropology", "film studies"]);
+    expect(t.topicsLess.items).toEqual(["video games"]);
+  });
+
+  it("should drop quality-complaint pseudo-topics from both topic lists", () => {
+    // Live 2026-07-19: "science provocateurs" landed in topicsLess despite the
+    // prompt. Complaints rank via the axes (claimOverreach/clickbaitSeverity);
+    // as topics they match nothing and muddy the audit display.
+    const t = canonicalizeTarget({
+      fields: {},
+      topicsMore: null,
+      topicsLess: {
+        items: ["science provocateurs", "clickbait", "overhyped movies", "drama narratives"],
+        importance: 9,
+      },
+      formatsAvoid: null,
+      tonesAvoid: null,
+    });
+    expect(t.topicsLess.items).toEqual(["drama narratives"]);
+  });
+
+  it("should keep up to TARGET_TOPICS_MAX topics per list", () => {
+    const items = Array.from({ length: TARGET_TOPICS_MAX + 3 }, (_, i) => `subject${i}`);
+    const t = canonicalizeTarget({
+      fields: {},
+      topicsMore: { items, importance: 8 },
+      topicsLess: null,
+      formatsAvoid: null,
+      tonesAvoid: null,
+    });
+    expect(t.topicsMore.items).toHaveLength(TARGET_TOPICS_MAX);
   });
 
   it("should produce the empty target from a fully null translation", () => {

@@ -7,6 +7,7 @@
 // can't hallucinate.
 
 import { fnv1a } from "./profileHash";
+import { DIGEST_TIER_QUALIFIERS } from "./digest";
 import {
   DIGEST_NUMERIC_FIELDS,
   type DigestNumericField,
@@ -207,13 +208,107 @@ export function rankVideo(digest: VideoDigest, target: ProfileTarget): RankedSco
 
 // --- target canonicalization (strict-schema null workaround) --------------
 
+/** Per-list cap for translated topic tags. The digest side caps at 8 topics
+ * per video (TOPICS_MAX); a profile legitimately spans more subjects — the
+ * 2026-07-19 bug was the prompt's tighter cap silently dropping whole
+ * subjects (art, history, science). translatePrompt quotes this number. */
+export const TARGET_TOPICS_MAX = 12;
+
+/** The enricher's subjectTiers are schema-forced onto DIGEST_TIER_QUALIFIERS,
+ * so a translator tag with any other leading qualifier token-matches nothing.
+ * Known free-form tier phrases are rewritten onto the canonical word; sorted
+ * longest-first so "top tier chess" → "elite chess", not "elite tier chess".
+ * Ambiguous words stay out: "comic" is a subject in "comic books". */
+export const TIER_QUALIFIER_SYNONYMS: ReadonlyArray<[string, string]> = (
+  [
+    ["world class", "elite"],
+    ["top tier", "elite"],
+    ["high level", "elite"],
+    ["expert", "elite"],
+    ["top", "elite"],
+    ["low tier", "amateur"],
+    ["hobbyist", "amateur"],
+    ["pro", "professional"],
+    ["novice", "beginner"],
+    ["funny", "comedic"],
+    ["recreational", "casual"],
+  ] as Array<[string, string]>
+)
+  .filter(([, canon]) => (DIGEST_TIER_QUALIFIERS as readonly string[]).includes(canon))
+  .sort((a, b) => b[0].length - a[0].length);
+
+/** Quality adjectives say how a subject should be treated — the numeric axes
+ * carry that. Stripped from SEEK tags only, so the bare subject can match
+ * ("practical engineering" is a tag the enricher never emits); an avoid tag
+ * broadened the same way would veto wanted content (the gotham shape), so
+ * avoid tags keep their adjective and fail inert instead. Longest-first. */
+const QUALITY_ADJECTIVE_PREFIXES: readonly string[] = [
+  "good quality",
+  "high quality",
+  "high effort",
+  "well produced",
+  "well made",
+  "real world",
+  "practical",
+  "serious",
+  "quality",
+  "good",
+].sort((a, b) => b.length - a.length);
+
+function rewriteQualifierPrefix(tag: string, mode: "seek" | "avoid"): string {
+  let t = tag;
+  for (let guard = 0; guard < 8; guard++) {
+    const tier = TIER_QUALIFIER_SYNONYMS.find(([syn]) => t.startsWith(`${syn} `));
+    if (tier) {
+      t = `${tier[1]} ${t.slice(tier[0].length + 1)}`;
+      continue;
+    }
+    if (mode === "seek") {
+      const adj = QUALITY_ADJECTIVE_PREFIXES.find(
+        (a) => t.startsWith(`${a} `) && t.length > a.length + 1,
+      );
+      if (adj) {
+        t = t.slice(adj.length + 1);
+        continue;
+      }
+    }
+    break;
+  }
+  return t;
+}
+
+/** Quality complaints the prompt bans from topic lists but cheap translators
+ * still emit ("science provocateurs", live 2026-07-19). As topics they match
+ * nothing the enricher tags and clutter the audit display; the axes
+ * (claimOverreach/clickbaitSeverity) already carry the intent. */
+const COMPLAINT_TOKENS = new Set([
+  "clickbait",
+  "clickbaity",
+  "hype",
+  "hyped",
+  "overhyped",
+  "overclaim",
+  "overclaiming",
+  "overclaimed",
+  "provocateur",
+  "sensational",
+  "sensationalist",
+  "sensationalism",
+  "sensationalized",
+]);
+
+function isComplaintTag(tag: string): boolean {
+  for (const t of tokens(tag)) if (COMPLAINT_TOKENS.has(t)) return true;
+  return false;
+}
+
 function cleanItems(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
   return value
     .filter((t): t is string => typeof t === "string")
     .map(norm)
     .filter(Boolean)
-    .slice(0, 12);
+    .slice(0, TARGET_TOPICS_MAX * 2); // headroom: dedupe/complaint-drop below may shrink the list
 }
 
 /** Translator synonym spam ("engineering" ×5 variants) adds no matching
@@ -234,13 +329,19 @@ function dedupeSupersets(items: string[]): string[] {
 
 function cleanList(
   value: unknown,
-  opts: { dropItems?: readonly string[]; maxItems?: number } = {},
+  opts: { dropItems?: readonly string[]; maxItems?: number; topics?: "seek" | "avoid" } = {},
 ): ListTarget {
   if (value === null || typeof value !== "object") return EMPTY_LIST;
   const obj = value as { items?: unknown; importance?: unknown };
-  const items = dedupeSupersets(cleanItems(obj.items))
+  let raw = cleanItems(obj.items);
+  if (opts.topics) {
+    raw = raw
+      .map((i) => rewriteQualifierPrefix(i, opts.topics!))
+      .filter((i) => !isComplaintTag(i));
+  }
+  const items = dedupeSupersets(raw)
     .filter((i) => !(opts.dropItems ?? []).includes(i))
-    .slice(0, opts.maxItems ?? 12);
+    .slice(0, opts.maxItems ?? TARGET_TOPICS_MAX);
   const importance =
     typeof obj.importance === "number" && items.length > 0
       ? Math.max(0, Math.min(10, Math.round(obj.importance)))
@@ -271,8 +372,8 @@ export function canonicalizeTarget(raw: unknown): ProfileTarget {
   }
   return {
     fields,
-    topicsMore: cleanList(obj["topicsMore"]),
-    topicsLess: cleanList(obj["topicsLess"]),
+    topicsMore: cleanList(obj["topicsMore"], { topics: "seek" }),
+    topicsLess: cleanList(obj["topicsLess"], { topics: "avoid" }),
     // "other" is clampDigest's catch-all for unrecognized formats — avoiding
     // it would penalize arbitrary innocent videos, so it can't be a target.
     formatsAvoid: cleanList(obj["formatsAvoid"], { dropItems: ["other"], maxItems: AVOID_LIST_MAX }),
