@@ -45,6 +45,18 @@ interface StoredScores {
   scores: Record<string, VideoScore>;
 }
 
+/** Read the ACTIVE profile's persisted score blob (winnow:scores:v2:<id>);
+ * the seeded legacy profile migrates into the profiles collection on load. */
+async function readActiveScoresRaw(page: Page): Promise<string | null> {
+  return page.evaluate(() => {
+    const state = JSON.parse(localStorage.getItem("winnow:profiles:v1") ?? "null") as {
+      activeProfileId: string;
+    } | null;
+    if (!state) return null;
+    return localStorage.getItem(`winnow:scores:v2:${state.activeProfileId}`);
+  });
+}
+
 /** Poll persisted scores until every id has one (or the test times out). */
 export async function waitForStoredScores(
   page: Page,
@@ -54,7 +66,7 @@ export async function waitForStoredScores(
   await expect
     .poll(
       async () => {
-        const raw = await page.evaluate(() => localStorage.getItem("winnow:scores:v1"));
+        const raw = await readActiveScoresRaw(page);
         if (!raw) return 0;
         const stored = JSON.parse(raw) as StoredScores;
         return ids.filter((id) => stored.scores[id]).length;
@@ -62,7 +74,7 @@ export async function waitForStoredScores(
       { timeout: timeoutMs, message: `scores for ${ids.join(", ")}` },
     )
     .toBe(ids.length);
-  const raw = await page.evaluate(() => localStorage.getItem("winnow:scores:v1"));
+  const raw = await readActiveScoresRaw(page);
   return (JSON.parse(raw!) as StoredScores).scores;
 }
 
