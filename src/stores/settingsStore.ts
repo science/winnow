@@ -2,9 +2,11 @@
 // init from storage, subscribe → persist). Async storage means consumers
 // that need loaded values await `settingsReady` first.
 
-import { writable } from "svelte/store";
+import { writable, type Writable } from "svelte/store";
 import type { Profile, Provider, Settings } from "../lib/types";
 import { KEYS, storageGet, storageSet } from "../lib/storage";
+import { activeProfile, updateActiveProfile } from "../lib/profiles";
+import { profilesReady, profilesState } from "./profilesStore";
 import { ANTHROPIC_MODEL } from "../services/scoring/anthropicScorer";
 import { OPENAI_MODEL } from "../services/scoring/openaiScorer";
 
@@ -19,29 +21,32 @@ export const DEFAULT_SETTINGS: Settings = {
   scoringStrategy: "two-phase",
 };
 
-const DEFAULT_PROFILE: Profile = { moreOf: "", lessOf: "", updatedAt: 0 };
-
 export const settings = writable<Settings>(DEFAULT_SETTINGS);
-export const profile = writable<Profile>(DEFAULT_PROFILE);
+
+/** The ACTIVE interest profile, proxied over the profiles collection.
+ * Same subscribe/set/update contract the old single-profile writable had,
+ * so consumers stay collection-unaware. Persistence rides on profilesStore's
+ * subscribe — this store must never persist profiles itself (split-brain). */
+export const profile: Writable<Profile> = {
+  subscribe: (run, invalidate) =>
+    profilesState.subscribe((s) => run(activeProfile(s)), invalidate),
+  set: (value) => profilesState.update((s) => updateActiveProfile(s, value)),
+  update: (fn) => profilesState.update((s) => updateActiveProfile(s, fn(activeProfile(s)))),
+};
 
 let persist = false;
 
 export const settingsReady: Promise<void> = (async () => {
-  const [storedSettings, storedProfile] = await Promise.all([
+  const [storedSettings] = await Promise.all([
     storageGet<Settings>(KEYS.settings),
-    storageGet<Profile>(KEYS.profile),
+    profilesReady,
   ]);
   if (storedSettings) settings.set({ ...DEFAULT_SETTINGS, ...storedSettings });
-  if (storedProfile) profile.set({ ...DEFAULT_PROFILE, ...storedProfile });
   persist = true;
 })();
 
 settings.subscribe((value) => {
   if (persist) void storageSet(KEYS.settings, value);
-});
-
-profile.subscribe((value) => {
-  if (persist) void storageSet(KEYS.profile, value);
 });
 
 /** True once the user can score: a key for the chosen provider + any profile text. */

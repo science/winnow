@@ -79,6 +79,19 @@ export interface Profile {
   updatedAt: number;
 }
 
+/** One named interest profile in the multi-profile collection. */
+export interface ProfileEntry extends Profile {
+  id: string;
+  name: string;
+}
+
+/** The persisted profiles collection (winnow:profiles:v1). Always holds at
+ * least one entry; activeProfileId always names a member. */
+export interface ProfilesState {
+  activeProfileId: string;
+  profiles: ProfileEntry[];
+}
+
 // --- Two-phase scoring (docs/TWO_PHASE_SCORING.md) ----------------------
 
 /** Numeric 1-5 taxonomy axes shared by the enrichment digest and the

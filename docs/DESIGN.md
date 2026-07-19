@@ -52,7 +52,8 @@ All persistence via `src/lib/storage.ts` (browser.storage.local → localStorage
 | Key | Shape | Lifecycle |
 |---|---|---|
 | `winnow:settings:v1` | `{ provider, anthropicApiKey, openaiApiKey, anthropicModel, openaiModel, scoringStrategy }` | persisted on change; missing fields fill from defaults on load |
-| `winnow:profile:v1` | `{ moreOf, lessOf, updatedAt }` | free-text interest profile |
+| `winnow:profiles:v1` | `{ activeProfileId, profiles: [{id, name, moreOf, lessOf, updatedAt}] }` — the named-profile collection | ≥1 entry always; created on first run by migrating `winnow:profile:v1` into a "Default" entry |
+| `winnow:profile:v1` | `{ moreOf, lessOf, updatedAt }` | LEGACY — migration source for `winnow:profiles:v1`, kept as rollback safety; no longer read or written otherwise |
 | `winnow:videos:v1` | `{ fetchedAt, videos[] }` | merged+deduped subs+home, cap 300, TTL 30 min |
 | `winnow:scores:v1` | `{ profileHash, scores: {videoId: {score, reason, clickbait, scoredAt, model}} }` | invalidated whole when profileHash mismatches |
 | `winnow:watched:v1` | `{videoId: watchedAt}` | written on Watch open; pruned with videos |
@@ -61,6 +62,18 @@ All persistence via `src/lib/storage.ts` (browser.storage.local → localStorage
 | `winnow:models:v1` | `{ anthropic: string[], openai: string[], fetchedAt }` — model catalog for the Settings picker | refreshed only on explicit "Refresh model list"; picker works offline from this |
 | `winnow:enrichment:v1` | `{videoId: {digest: VideoDigest, contentHash, model, promptVersion, hadTranscript, enrichedAt}}` — phase-1 taxonomy digests | invalidated per entry by content/model/prompt-version change; transcript-backed entries are final, metadata-only ones stay provisional; pruned with videos (voted kept) |
 | `winnow:profileTarget:v1` | `{ inputHash, target: ProfileTarget }` — phase-2 profile translation | re-translated when profile text, votes, translator version, or model change |
+
+Per-profile key families (built via `profileKeys(profileId)` in `storage.ts`; deleting a profile removes exactly this set):
+
+| Key family | Shape | Lifecycle |
+|---|---|---|
+| `winnow:scores:v2:<profileId>` | same as `winnow:scores:v1` | one score cache per profile — switching profiles swaps caches instead of invalidating |
+| `winnow:profileTarget:v2:<profileId>` | same as `winnow:profileTarget:v1` | one translated target per profile |
+| `winnow:feedback:v2:<profileId>` | same as `winnow:feedback:v1` | votes are per-profile: a downvote in one use-case must not steer another |
+| `winnow:discovered:v1:<profileId>` | `{ entries: [{video, query, discoveredAt}], seenIds: string[] }` | "go deeper" results; entries cap 120 (oldest evicted), seenIds cap 1000 FIFO and outlive eviction so discoveries never repeat |
+| `winnow:discoverQueries:v1:<profileId>` | `{ inputHash, queries: [{text, lastUsedAt}] }` | LLM-generated search-query pool; regenerated when profile text/model change the hash or on explicit user request |
+
+(`winnow:scores:v1`, `winnow:profileTarget:v1`, and `winnow:feedback:v1` are migration sources for the first profile's v2 keys; the scores/target copies are removed after migration, feedback kept as rollback.)
 
 `profileHash = fnv1a(moreOf, lessOf, PROMPT_VERSION, modelId)` — editing the profile, bumping the prompt, or swapping models cleanly re-scores everything (movie-night's versioned-cache pattern). Transcript excerpts are cached by videoId (bounded by the 300-video window via pruning) so re-scores and feedback analysis don't re-fetch; fetch failures are never cached, staying retryable.
 

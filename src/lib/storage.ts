@@ -7,7 +7,9 @@ import { log } from "./logger";
 
 export const KEYS = {
   settings: "winnow:settings:v1",
+  /** Legacy single profile — migration source only (see profilesStore). */
   profile: "winnow:profile:v1",
+  profiles: "winnow:profiles:v1",
   videos: "winnow:videos:v1",
   scores: "winnow:scores:v1",
   watched: "winnow:watched:v1",
@@ -17,6 +19,25 @@ export const KEYS = {
   enrichment: "winnow:enrichment:v1",
   profileTarget: "winnow:profileTarget:v1",
 } as const;
+
+/** Per-profile key families (docs/DESIGN.md schema registry). Everything a
+ * single profile owns lives under these keys; deleting a profile removes
+ * exactly this set. */
+export function profileKeys(profileId: string): {
+  scores: string;
+  profileTarget: string;
+  feedback: string;
+  discovered: string;
+  discoverQueries: string;
+} {
+  return {
+    scores: `winnow:scores:v2:${profileId}`,
+    profileTarget: `winnow:profileTarget:v2:${profileId}`,
+    feedback: `winnow:feedback:v2:${profileId}`,
+    discovered: `winnow:discovered:v1:${profileId}`,
+    discoverQueries: `winnow:discoverQueries:v1:${profileId}`,
+  };
+}
 
 type WebExtStorage = {
   get: (key: string) => Promise<Record<string, unknown>>;

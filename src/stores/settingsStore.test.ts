@@ -1,4 +1,5 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { get } from "svelte/store";
 import { applyKeyChange, DEFAULT_SETTINGS, isConfigured, missingConfig } from "./settingsStore";
 import type { Profile, Settings } from "../lib/types";
 
@@ -93,5 +94,62 @@ describe("missingConfig", () => {
     const s: Settings = { ...base, anthropicApiKey: "sk-ant" };
     expect(missingConfig(s, someProfile)).toHaveLength(0);
     expect(isConfigured(s, someProfile)).toBe(true);
+  });
+});
+
+describe("profile proxy store", () => {
+  // Fresh module graph per test: the proxy sits over profilesStore's
+  // migration-on-init, so each scenario needs its own storage state.
+  beforeEach(() => {
+    vi.resetModules();
+  });
+
+  it("should expose the active profile through the profile store", async () => {
+    const storage = await import("../lib/storage");
+    await storage.storageSet<Profile>(storage.KEYS.profile, {
+      moreOf: "cats",
+      lessOf: "dogs",
+      updatedAt: 1,
+    });
+    const { profile, settingsReady } = await import("./settingsStore");
+    await settingsReady;
+    expect(get(profile).moreOf).toBe("cats");
+    expect(get(profile).lessOf).toBe("dogs");
+  });
+
+  it("should write profile.update through to the active profiles entry", async () => {
+    const storage = await import("../lib/storage");
+    const { profile, settingsReady } = await import("./settingsStore");
+    await settingsReady;
+
+    profile.update((p) => ({ ...p, moreOf: "trains", updatedAt: 9 }));
+
+    const { profilesState } = await import("./profilesStore");
+    const state = get(profilesState);
+    const active = state.profiles.find((p) => p.id === state.activeProfileId)!;
+    expect(active.moreOf).toBe("trains");
+    expect(get(profile).moreOf).toBe("trains");
+
+    // Persisted under the profiles collection, not the legacy key.
+    const persisted = await storage.storageGet<{ profiles: { moreOf: string }[] }>(
+      storage.KEYS.profiles,
+    );
+    expect(persisted?.profiles[0]?.moreOf).toBe("trains");
+    expect(await storage.storageGet(storage.KEYS.profile)).toBeNull();
+  });
+
+  it("should follow the active profile when it changes", async () => {
+    const { profile, settingsReady } = await import("./settingsStore");
+    await settingsReady;
+    profile.update((p) => ({ ...p, moreOf: "default stuff" }));
+
+    const store = await import("./profilesStore");
+    await store.addProfileAction("Engineering");
+    expect(get(profile).moreOf).toBe("");
+
+    profile.update((p) => ({ ...p, moreOf: "SWE tips" }));
+    const state = get(store.profilesState);
+    expect(state.profiles.find((p) => p.name === "Default")!.moreOf).toBe("default stuff");
+    expect(state.profiles.find((p) => p.name === "Engineering")!.moreOf).toBe("SWE tips");
   });
 });
