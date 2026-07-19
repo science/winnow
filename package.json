@@ -1,6 +1,6 @@
 {
   "name": "winnow",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "description": "A Firefox extension that winnows your YouTube feed down to what you actually want to watch.",
   "license": "Apache-2.0",
@@ -17,7 +17,8 @@
     "test:e2e:live": "playwright test --project=live",
     "test:e2e:ext": "npm run zip && node --test e2e/extension/*.test.mjs",
     "zip": "npm run build && node scripts/zip.mjs",
-    "sign": "npm run build && node scripts/sign.mjs"
+    "sign": "npm run build && node scripts/sign.mjs",
+    "source-zip": "node scripts/source-zip.mjs"
   },
   "devDependencies": {
     "@playwright/test": "^1.49.0",

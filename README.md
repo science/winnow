@@ -26,6 +26,8 @@ Want to poke around without keys or a YouTube session? Open the feed page with `
 
 ## Privacy
 
+Full policy: [PRIVACY.md](PRIVACY.md). The short version:
+
 - Everything runs in your browser. There is no winnow server and no telemetry.
 - Your API keys and profile live in extension storage on your machine.
 - The only network calls are to youtube.com (as you, for your data) and to the AI provider you configured (video metadata + transcript excerpts + your profile text, under your own key).

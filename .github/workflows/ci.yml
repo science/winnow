@@ -17,7 +17,7 @@ jobs:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6
         with:
-          node-version: 22
+          node-version: 24
           cache: npm
       - run: npm ci
       - name: Type check
@@ -35,16 +35,13 @@ jobs:
         with:
           name: winnow-extension
           path: web-ext-artifacts/*.zip
-      - name: Sign for AMO (unlisted)
+      - name: Source zip for AMO review
         if: startsWith(github.ref, 'refs/tags/v')
-        env:
-          MOZILLA_ADDONS_JWT_ISSUER: ${{ secrets.MOZILLA_ADDONS_JWT_ISSUER }}
-          MOZILLA_ADDONS_JWT_SECRET: ${{ secrets.MOZILLA_ADDONS_JWT_SECRET }}
-        run: node scripts/sign.mjs
-      - name: Attach zip and signed xpi to release
+        run: node scripts/source-zip.mjs
+      - name: Attach extension zip and source zip to release
         if: startsWith(github.ref, 'refs/tags/v')
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "${GITHUB_REF_NAME}" --generate-notes web-ext-artifacts/*.zip web-ext-artifacts/*.xpi \
-            || gh release upload "${GITHUB_REF_NAME}" web-ext-artifacts/*.zip web-ext-artifacts/*.xpi
+          gh release create "${GITHUB_REF_NAME}" --generate-notes web-ext-artifacts/*.zip \
+            || gh release upload "${GITHUB_REF_NAME}" web-ext-artifacts/*.zip
