@@ -337,7 +337,10 @@ describe("canonicalizeTarget", () => {
       tonesAvoid: null,
     });
     expect(t.topicsMore.items).toEqual(["engineering"]);
-    expect(t.topicsLess.items).toEqual(["comic chess"]);
+    // "low tier comic chess" collapses into "comic chess" (superset drop
+    // after the "low tier"→amateur rewrite); the ambiguous "comic" also
+    // expands a "comedic" variant so the canonical tier word can match.
+    expect(t.topicsLess.items).toEqual(["comic chess", "comedic chess"]);
   });
 
   it("should map free-form tier qualifiers onto the digest vocabulary", () => {
