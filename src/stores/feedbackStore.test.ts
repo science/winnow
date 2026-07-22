@@ -2,8 +2,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { get } from "svelte/store";
 import { feedback, toggleVote } from "./feedbackStore";
 import { profilesState } from "./profilesStore";
-import { profileKeys, storageGet } from "../lib/storage";
-import type { FeedbackEntry, ScoredVideo } from "../lib/types";
+import { KEYS, profileKeys, storageGet, storageSet } from "../lib/storage";
+import type { EnrichmentEntry, FeedbackEntry, ScoredVideo, VideoDigest } from "../lib/types";
 
 async function activeFeedbackKey(): Promise<string> {
   return profileKeys(get(profilesState).activeProfileId).feedback;
@@ -56,6 +56,43 @@ describe("toggleVote", () => {
     expect(entry.score).toBeNull();
     expect(entry.reason).toBeNull();
     expect(entry.clickbait).toBeNull();
+  });
+
+  it("should snapshot the video's cached digest so votes can teach in digest coordinates", async () => {
+    const digest: VideoDigest = {
+      summary: "Casual banter chess between famous streamers.",
+      topics: ["casual chess", "chess"],
+      format: "entertainment",
+      emotionalTone: "humorous",
+      hypeSignals: [],
+      substanceDensity: 2,
+      clickbaitSeverity: 2,
+      claimOverreach: 1,
+      intellectualDemand: 1,
+      productionEffort: 3,
+      novelty: 2,
+    };
+    const cached: EnrichmentEntry = {
+      digest,
+      contentHash: "abc",
+      model: "test-model",
+      promptVersion: 3,
+      hadTranscript: true,
+      enrichedAt: 1,
+    };
+    await storageSet(KEYS.enrichment, { digestvote01: cached });
+    await toggleVote(scoredVideo("digestvote01"), "down");
+
+    const entry = get(feedback)["digestvote01"]!;
+    expect(entry.digest).toEqual(digest);
+    expect(entry.digestPromptVersion).toBe(3);
+  });
+
+  it("should record a null digest when the video was never enriched", async () => {
+    await toggleVote(scoredVideo("nodigest0001"), "down");
+    const entry = get(feedback)["nodigest0001"]!;
+    expect(entry.digest).toBeNull();
+    expect(entry.digestPromptVersion).toBeNull();
   });
 
   it("should clear the vote when the same vote is toggled again", async () => {

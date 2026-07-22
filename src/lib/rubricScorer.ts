@@ -218,7 +218,8 @@ export const TARGET_TOPICS_MAX = 12;
  * so a translator tag with any other leading qualifier token-matches nothing.
  * Known free-form tier phrases are rewritten onto the canonical word; sorted
  * longest-first so "top tier chess" → "elite chess", not "elite tier chess".
- * Ambiguous words stay out: "comic" is a subject in "comic books". */
+ * Ambiguous words stay out: "comic" is a subject in "comic books" — it gets
+ * EXPANDED (original kept, "comedic" variant added) below instead. */
 export const TIER_QUALIFIER_SYNONYMS: ReadonlyArray<[string, string]> = (
   [
     ["world class", "elite"],
@@ -337,7 +338,11 @@ function cleanList(
   if (opts.topics) {
     raw = raw
       .map((i) => rewriteQualifierPrefix(i, opts.topics!))
-      .filter((i) => !isComplaintTag(i));
+      .filter((i) => !isComplaintTag(i))
+      // "comic X": tier qualifier ("comic chess", live nano emits the user's
+      // literal word) or subject ("comic books")? Expand instead of rewrite —
+      // whichever reading is right matches, the other tag stays inert.
+      .flatMap((i) => (i.startsWith("comic ") ? [i, `comedic ${i.slice(6)}`] : [i]));
   }
   const items = dedupeSupersets(raw)
     .filter((i) => !(opts.dropItems ?? []).includes(i))

@@ -68,6 +68,14 @@ describe("schemas stay strict and aligned with the taxonomy", () => {
     expect(ENRICH_SYSTEM_PROMPT).toContain("provocateur");
     expect(TRANSLATE_SYSTEM_PROMPT).toContain("claimOverreach");
   });
+
+  it("should guard subject tiers against fame from another domain", () => {
+    // The 2026-07-21 Tyler1/Faker mis-tier: famous streamers/esports pros
+    // playing casual chess were tagged elite on the strength of their fame.
+    // Tier must mean skill demonstrated in THIS video's subject.
+    expect(ENRICH_SYSTEM_PROMPT).toContain("another domain");
+    expect(ENRICH_SYSTEM_PROMPT).toContain("crossover");
+  });
 });
 
 describe("buildTranslateMessage", () => {

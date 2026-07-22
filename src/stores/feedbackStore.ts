@@ -5,9 +5,9 @@
 // window (bounded by FEEDBACK_STORE_CAP instead).
 
 import { get, writable } from "svelte/store";
-import type { FeedbackEntry, ScoredVideo, Vote } from "../lib/types";
+import type { EnrichmentEntry, FeedbackEntry, ScoredVideo, Vote } from "../lib/types";
 import { applyVote } from "../lib/feedback";
-import { profileKeys, storageGet, storageSet } from "../lib/storage";
+import { KEYS, profileKeys, storageGet, storageSet } from "../lib/storage";
 import { profilesReady, profilesState } from "./profilesStore";
 
 export const feedback = writable<Record<string, FeedbackEntry>>({});
@@ -34,6 +34,12 @@ export const feedbackReady: Promise<void> = (async () => {
 export async function toggleVote(video: ScoredVideo, vote: Vote): Promise<void> {
   await feedbackReady;
   const scored = video.scoreState === "scored";
+  // Snapshot the enrichment digest too (shared across profiles): it puts the
+  // vote in the same coordinates the translator emits into. The cache entry
+  // outlives the feed window only for voted videos (pruneStaleEntries), so
+  // the vote must carry its own copy.
+  const enrichment = await storageGet<Record<string, EnrichmentEntry>>(KEYS.enrichment);
+  const enriched = enrichment?.[video.id] ?? null;
   const entry: FeedbackEntry = {
     videoId: video.id,
     vote,
@@ -46,6 +52,8 @@ export async function toggleVote(video: ScoredVideo, vote: Vote): Promise<void> 
     score: scored ? (video.score ?? null) : null,
     reason: scored ? (video.reason ?? null) : null,
     clickbait: scored ? (video.clickbait ?? null) : null,
+    digest: enriched?.digest ?? null,
+    digestPromptVersion: enriched?.promptVersion ?? null,
   };
   const next = applyVote(get(feedback), entry);
   feedback.set(next);

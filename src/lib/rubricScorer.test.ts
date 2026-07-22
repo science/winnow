@@ -207,6 +207,57 @@ describe("rankVideo", () => {
     );
     expect(elite.score).toBeGreaterThanOrEqual(75);
   });
+
+  it("should winnow a celebrity-crossover exhibition tagged casual while elite play stays on top", () => {
+    // The 2026-07-21 Tyler1/Faker mis-ranking: famous non-chess players in a
+    // casual exhibition. Once the enricher tiers it correctly (casual, not
+    // elite) and the translator's avoid list spans the whole rejected
+    // register (comedic/amateur/casual), the avoid cap must put it behind
+    // the fold — while genuinely elite content stays unaffected.
+    const t = target({
+      fields: {
+        substanceDensity: { target: 5, importance: 9 },
+        clickbaitSeverity: { target: 1, importance: 8 },
+      },
+      topicsMore: { items: ["elite chess"], importance: 9 },
+      topicsLess: { items: ["comedic chess", "amateur chess", "casual chess"], importance: 8 },
+    });
+    const crossover = rankVideo(
+      {
+        summary: "Two famous streamers play a casual banter-filled chess match.",
+        topics: ["casual chess", "comedic chess", "chess"],
+        format: "entertainment",
+        emotionalTone: "humorous",
+        hypeSignals: [],
+        substanceDensity: 2,
+        clickbaitSeverity: 2,
+        claimOverreach: 1,
+        intellectualDemand: 1,
+        productionEffort: 3,
+        novelty: 2,
+      },
+      t,
+    );
+    expect(crossover.score).toBeLessThanOrEqual(45);
+    expect(crossover.reason.startsWith("avoided:")).toBe(true);
+    const elite = rankVideo(
+      {
+        summary: "Deep analysis of a super-tournament game.",
+        topics: ["elite chess", "chess", "endgames"],
+        format: "explainer",
+        emotionalTone: "calm",
+        hypeSignals: [],
+        substanceDensity: 5,
+        clickbaitSeverity: 1,
+        claimOverreach: 1,
+        intellectualDemand: 4,
+        productionEffort: 4,
+        novelty: 3,
+      },
+      t,
+    );
+    expect(elite.score).toBeGreaterThanOrEqual(75);
+  });
 });
 
 describe("canonicalizeTarget", () => {
@@ -301,6 +352,22 @@ describe("canonicalizeTarget", () => {
     });
     expect(t.topicsMore.items).toEqual(["elite chess", "professional engineering"]);
     expect(t.topicsLess.items).toEqual(["amateur chess", "beginner woodworking"]);
+  });
+
+  it("should expand a leading 'comic' into a comedic variant while keeping the original", () => {
+    // "comic" is ambiguous: a tier qualifier in "comic chess" (live nano
+    // emitted the user's literal word, which never matches the enricher's
+    // schema-forced "comedic" tag) but a subject in "comic books". A blanket
+    // rewrite would corrupt comic-book interests, so expand instead —
+    // whichever reading is right matches, the other stays inert.
+    const t = canonicalizeTarget({
+      topicsMore: { items: ["comic books"], importance: 5 },
+      topicsLess: { items: ["comic chess"], importance: 8 },
+    });
+    expect(t.topicsLess.items).toContain("comic chess");
+    expect(t.topicsLess.items).toContain("comedic chess");
+    expect(t.topicsMore.items).toContain("comic books");
+    expect(t.topicsMore.items).toContain("comedic books"); // inert, harmless
   });
 
   it("should strip quality adjectives from topicsMore so the bare subject can match", () => {

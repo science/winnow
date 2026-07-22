@@ -35,6 +35,7 @@ import {
   softScoresHashFor,
   type StoredTarget,
 } from "./twoPhase";
+import { ENRICHMENT_PROMPT_VERSION } from "./enrichPrompt";
 import type { Settings } from "../../lib/types";
 
 const CONCURRENCY = 2;
@@ -322,7 +323,7 @@ async function scoreFeedOnce(): Promise<void> {
     // Votes steer future runs only: feedback is deliberately NOT a
     // profileHash input, so cached scores stand until a natural miss or
     // an explicit "Re-score everything" (see DESIGN.md).
-    feedback: recentExamples(get(feedbackStore), FEEDBACK_PROMPT_CAP),
+    feedback: recentExamples(get(feedbackStore), FEEDBACK_PROMPT_CAP, ENRICHMENT_PROMPT_VERSION),
     cache,
     onProgress: (scoredCount, scoreTotal) => {
       if (stillCurrent()) status.update((s) => ({ ...s, scoredCount, scoreTotal }));
@@ -374,7 +375,11 @@ async function scoreFeedTwoPhase(
   const model = enrichmentModelFor($settings.provider);
 
   await feedbackReady;
-  const feedbackExamples = recentExamples(get(feedbackStore), FEEDBACK_PROMPT_CAP);
+  const feedbackExamples = recentExamples(
+    get(feedbackStore),
+    FEEDBACK_PROMPT_CAP,
+    ENRICHMENT_PROMPT_VERSION,
+  );
   const loadTarget = () => storageGet<StoredTarget>(runKeys.profileTarget);
   const saveTarget = (s: StoredTarget) => storageSet(runKeys.profileTarget, s);
 

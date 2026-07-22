@@ -112,4 +112,91 @@ for (const { provider, envVar, model } of PROVIDERS) {
     expect(target.topicsMore.items).not.toContain("chess");
     expect(target.topicsLess.items.length).toBeGreaterThan(0);
   });
+
+  test(`should not tier a celebrity-crossover exhibition as elite via ${provider}`, async () => {
+    const apiKey = process.env[envVar];
+    test.skip(!apiKey, `${envVar} not set — live tier needs .env.production or env keys`);
+
+    // The 2026-07-21 Tyler1/Faker mis-tier: famous non-chess players in a
+    // casual exhibition, commentary calling them legendary, got subjectTier
+    // "elite" — which token-matched an "elite chess" seek tag. Synthetic
+    // transcript (stable fixture); the fame trap rides in the commentary,
+    // exactly how it reaches the model in production.
+    const transcript = [
+      "Welcome back everybody, today we have the most insane crossover in chess history.",
+      "In one corner, the greatest esports player of all time, an absolute legend of League of Legends.",
+      "In the other, the most famous streamer on the planet. Neither of them is titled — ",
+      "both picked up chess about a year ago and it shows.",
+      "He opens with the queen's pawn, and — oh no, he's already hanging the bishop on move four.",
+      "His opponent doesn't see it! Takes three moves to notice the free piece. The chat is losing it.",
+      "Now a wild king walk for no reason. This is not theory, folks, this is pure chaos and it's beautiful.",
+      "He blunders the queen, laughs, offers a rematch. What a spectacle between two legends of gaming.",
+    ].join(" ");
+    const digests = await enrichBatch(
+      [
+        {
+          video: {
+            id: "synthxover01",
+            source: "home",
+            title: "GAMING LEGENDS INSANE CHESS BATTLE",
+            channelTitle: "ChessRecapChannel",
+            channelId: null,
+            durationText: "21:30",
+            durationSec: 1290,
+            publishedText: "12 hours ago",
+            publishedAtApprox: null,
+            viewCountText: "145K views",
+            viewCount: 145000,
+            thumbnailUrl: null,
+            descriptionSnippet: "Two gaming superstars face off over the board.",
+            isLive: false,
+          },
+          transcript,
+        },
+      ],
+      provider,
+      apiKey!,
+      model,
+    );
+
+    const digest = digests.get("synthxover01");
+    expect(digest, "digest returned for the requested id").toBeDefined();
+    const eliteTagged = digest!.topics.some((t) => t.split(/\s+/).includes("elite"));
+    expect(eliteTagged, `fame in another domain must not tier as elite (topics: ${digest!.topics.join(", ")})`).toBe(false);
+    const lowRegister = digest!.topics.some((t) => {
+      const words = t.split(/\s+/);
+      return words.includes("casual") || words.includes("comedic") || words.includes("amateur");
+    });
+    expect(lowRegister, `a celebrity exhibition must carry a casual/comedic/amateur tier (topics: ${digest!.topics.join(", ")})`).toBe(true);
+  });
+
+  test(`should span a rejected register across tier qualifiers via ${provider}`, async () => {
+    const apiKey = process.env[envVar];
+    test.skip(!apiKey, `${envVar} not set — live tier needs .env.production or env keys`);
+
+    // The real profile behind the Tyler1/Faker report (verbatim). "Low tier
+    // comic chess games" must cover the whole register — comedic plus at
+    // least one of casual/amateur — because tier matching is exact per
+    // qualifier word and a missing variant is a hole in the filter.
+    const target = await translateProfile(
+      {
+        moreOf:
+          "Chess videos featuring top tier play or top computer engine games of note.  Science and civil/mechanical/real-world engineering that is practical, professional or serious. Art, film, history, anthropology. Cinematic and film studies. Previews of good quality movies.",
+        lessOf:
+          "Computer science content, video games, sports, politics. Low tier comic chess games. Drama narratives on any subject. Click-bait subjects or attention grabbing material. Standup comedy. Science provocateurs, overclaiming hype. Overhyped or sensational movies or trailers.",
+        updatedAt: 0,
+      },
+      [],
+      provider,
+      apiKey!,
+      model,
+    );
+
+    expect(target.topicsMore.items).toContain("elite chess");
+    expect(target.topicsLess.items).toContain("comedic chess");
+    const spansRegister = ["casual chess", "amateur chess"].some((t) =>
+      target.topicsLess.items.includes(t),
+    );
+    expect(spansRegister, `avoid list must span the low register (got: ${target.topicsLess.items.join(", ")})`).toBe(true);
+  });
 }

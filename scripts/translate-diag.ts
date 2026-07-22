@@ -14,6 +14,7 @@ import { dirname, join } from "node:path";
 import { translateProfile, enrichmentModelFor } from "../src/services/scoring/twoPhase";
 import { describeTarget } from "../src/lib/targetDisplay";
 import type { Provider } from "../src/lib/types";
+import { DIAG_DEFAULT_PROFILE } from "./diagProfile";
 
 const here = dirname(fileURLToPath(import.meta.url));
 
@@ -30,17 +31,9 @@ function loadEnv(): void {
 }
 loadEnv();
 
-// Default: the verbatim profile behind the 2026-07-19 dropped-subject report
-// (art/history/science squeezed out by the 8-tag cap + qualifier expansion).
-const profile = {
-  moreOf:
-    process.env["DIAG_MORE"] ??
-    "Chess videos featuring top tier play or top computer engine games of note.  Science and civil/mechanical/real-world engineering that is practical, professional or serious. Art, film, history, anthropology. Cinematic and film studies. Previews of good quality movies.",
-  lessOf:
-    process.env["DIAG_LESS"] ??
-    "Computer science content, video games, sports, politics. Low tier comic chess games. Drama narratives on any subject. Click-bait subjects or attention grabbing material. Standup comedy. Science provocateurs, overclaiming hype. Overhyped or sensational movies or trailers.",
-  updatedAt: 0,
-};
+// Default: the verbatim profile behind the 2026-07 gotham reports
+// (DIAG_MORE/DIAG_LESS override; shared with probe-video.ts).
+const profile = DIAG_DEFAULT_PROFILE;
 
 const arg = process.argv[2] ?? "both";
 const providers: Provider[] = arg === "both" ? ["anthropic", "openai"] : [arg as Provider];

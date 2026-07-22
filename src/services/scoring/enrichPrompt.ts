@@ -8,7 +8,7 @@ import { DIGEST_FORMATS, DIGEST_TIER_QUALIFIERS, DIGEST_TONES } from "../../lib/
 
 // Bump on any prompt or schema change — participates in the enrichment
 // cache key, so a bump cleanly re-enriches everything.
-export const ENRICHMENT_PROMPT_VERSION = 2;
+export const ENRICHMENT_PROMPT_VERSION = 3;
 
 /** Full transcripts are big; batches stay small so a batch fits comfortably
  * in a cheap model's context and one failure loses little. */
@@ -31,7 +31,7 @@ The transcript is ground truth: it is what the video actually says, while the ti
 Fields per video:
 - summary: 1-2 plain sentences on what the video contains and argues. No hype words, no marketing language.
 - topics: up to 8 lowercase tags, broad to specific (e.g. "chess", "rook endgames"), the main subject first.
-- subjectTiers: EVERY tier/register of its main subject the video clearly shows, from: ${DIGEST_TIER_QUALIFIERS.join(", ")} (usually 0-2 apply). Judge from participant skill level (ratings, titles), who it's made for, and framing: top players or strong engines → elite; blunders/jokes played for laughs → comedic; low-rated hobbyists → amateur; first-steps teaching → beginner. A low-rated game played for laughs is BOTH ["comedic", "amateur"]. Profiles often seek or avoid one tier of a subject, so this matters. Empty array when the evidence doesn't show it (e.g. no transcript and the title/description don't say — never guess from the channel name).
+- subjectTiers: EVERY tier/register of its main subject the video clearly shows, from: ${DIGEST_TIER_QUALIFIERS.join(", ")} (usually 0-2 apply). Tier means the skill actually DEMONSTRATED in this video at its main subject — judge from what the participants do (ratings IN this subject, quality of play, commentary calling out blunders), never from how famous they are. Fame or elite status in another domain does not transfer: a celebrated streamer, esports pro, or other celebrity playing this subject at a low level is casual and/or amateur, never elite on the strength of their name — even when the title or commentary calls them legendary. Celebrity/crossover exhibition matches → casual; add comedic when played for laughs; add amateur when the demonstrated level is low. Elite means the demonstrated level of titled/professional players or strong engines IN this subject — a strong hobbyist is not elite, "top X% of an online rating pool" is not elite, and elite/amateur are mutually exclusive readings of the same play: tag the level the play actually shows. Blunders/jokes played for laughs → comedic; low-rated hobbyists → amateur; first-steps teaching → beginner. A low-rated game played for laughs is BOTH ["comedic", "amateur"]. Profiles often seek or avoid one tier of a subject, so emit every tier that applies. Empty array when the evidence doesn't show it (e.g. no transcript and the title/description don't say — never guess from the channel name). When the participants' level is not actually evidenced, emit NO tier rather than your best guess — profiles route on tiers, and a guessed tier misroutes the video.
 - format: one of ${DIGEST_FORMATS.join(", ")}.
 - emotionalTone: one of ${DIGEST_TONES.join(", ")}.
 - hypeSignals: concrete manipulation techniques you actually observed ("withheld subject in title", "manufactured urgency", "outrage framing", "teaser never resolved"). Empty array when clean.

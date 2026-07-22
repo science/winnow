@@ -18,4 +18,17 @@ describe("TRANSLATE_SYSTEM_PROMPT", () => {
   it("should interpolate the canonical tier-qualifier vocabulary", () => {
     expect(TRANSLATE_SYSTEM_PROMPT).toContain(DIGEST_TIER_QUALIFIERS.join(", "));
   });
+
+  it("should span a rejected register across every applicable tier qualifier", () => {
+    // Tier matching is exact per qualifier word: an avoid list of only
+    // "comedic chess" + "amateur chess" lets a digest correctly tagged
+    // "casual chess" (celebrity exhibition, not played for laughs) escape
+    // the avoid cap — the 2026-07-21 Tyler1/Faker gap.
+    expect(TRANSLATE_SYSTEM_PROMPT).toContain('"casual chess"');
+    expect(TRANSLATE_SYSTEM_PROMPT).toContain('"amateur chess"');
+  });
+
+  it("should tell the translator how to use digest-bearing votes", () => {
+    expect(TRANSLATE_SYSTEM_PROMPT).toContain("digest");
+  });
 });

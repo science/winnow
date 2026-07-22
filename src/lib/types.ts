@@ -173,4 +173,12 @@ export interface FeedbackEntry {
   score: number | null;
   reason: string | null;
   clickbait: boolean | null;
+  /** The video's enrichment digest at vote time (two-phase engine), so the
+   * vote can teach the translator in digest coordinates. Absent on entries
+   * from before 2026-07; null when the video was never enriched. */
+  digest?: VideoDigest | null;
+  /** ENRICHMENT_PROMPT_VERSION that produced the snapshot — digests from
+   * older prompts may carry the very mislabels a newer prompt fixed, so
+   * consumers only trust version-matched snapshots. */
+  digestPromptVersion?: number | null;
 }

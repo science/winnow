@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { applyVote, FEEDBACK_STORE_CAP, recentExamples } from "./feedback";
-import type { FeedbackEntry, Vote } from "./types";
+import type { FeedbackEntry, VideoDigest, Vote } from "./types";
 
 function entry(videoId: string, vote: Vote, votedAt: number, title = `Video ${videoId}`): FeedbackEntry {
   return {
@@ -17,6 +17,20 @@ function entry(videoId: string, vote: Vote, votedAt: number, title = `Video ${vi
     clickbait: false,
   };
 }
+
+const DIGEST: VideoDigest = {
+  summary: "Two famous streamers play casual banter chess.",
+  topics: ["casual chess", "comedic chess", "chess"],
+  format: "entertainment",
+  emotionalTone: "humorous",
+  hypeSignals: ["all-caps title"],
+  substanceDensity: 2,
+  clickbaitSeverity: 2,
+  claimOverreach: 1,
+  intellectualDemand: 1,
+  productionEffort: 3,
+  novelty: 2,
+};
 
 describe("applyVote", () => {
   it("should record a vote", () => {
@@ -72,5 +86,45 @@ describe("recentExamples", () => {
     expect(recentExamples(store, 5)).toEqual([
       { vote: "down", title: "Video vid00000001", channel: "Channel", duration: "10:00" },
     ]);
+  });
+
+  it("should include a compact digest when its snapshot matches the current prompt version", () => {
+    // The digest puts the vote in the same coordinates the translator emits
+    // into ("down: casual chess" beats guessing from a bare title). Summary
+    // and hypeSignals stay out — prompt lean, topics carry the signal.
+    const store = applyVote({}, {
+      ...entry("vid00000001", "down", 100),
+      digest: DIGEST,
+      digestPromptVersion: 3,
+    });
+    const [example] = recentExamples(store, 5, 3);
+    expect(example!.digest).toEqual({
+      topics: ["casual chess", "comedic chess", "chess"],
+      format: "entertainment",
+      tone: "humorous",
+      substanceDensity: 2,
+      clickbaitSeverity: 2,
+      claimOverreach: 1,
+      intellectualDemand: 1,
+      productionEffort: 3,
+      novelty: 2,
+    });
+  });
+
+  it("should omit the digest for votes without one or from another prompt version", () => {
+    // A snapshot from an older enrichment prompt may carry exactly the
+    // mislabel the newer prompt fixed (the Tyler1/Faker "elite chess"
+    // digest) — teaching the translator from it would entrench the bug.
+    const legacy = entry("vid00000001", "down", 100);
+    const stale = { ...entry("vid00000002", "down", 200), digest: DIGEST, digestPromptVersion: 2 };
+    const store = applyVote(applyVote({}, legacy), stale);
+    for (const example of recentExamples(store, 5, 3)) {
+      expect(example.digest).toBeUndefined();
+    }
+  });
+
+  it("should never include digests when no prompt version is given", () => {
+    const store = applyVote({}, { ...entry("vid00000001", "up", 100), digest: DIGEST, digestPromptVersion: 3 });
+    expect(recentExamples(store, 5)[0]!.digest).toBeUndefined();
   });
 });
