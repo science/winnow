@@ -6,6 +6,7 @@ import {
   demoQueryTexts,
   ensureQueryPool,
   queryPoolInputHashFor,
+  QUERIES_SYSTEM_PROMPT,
   QUERY_PROMPT_VERSION,
   type StoredQueryPool,
 } from "./discoverQueries";
@@ -51,7 +52,49 @@ describe("queryPoolInputHashFor", () => {
     expect(queryPoolInputHashFor({ ...profile, moreOf: "other" }, "model-a")).not.toBe(base);
     expect(queryPoolInputHashFor(profile, "model-b")).not.toBe(base);
     expect(queryPoolInputHashFor(profile, "model-a")).toBe(base);
-    expect(QUERY_PROMPT_VERSION).toBeGreaterThanOrEqual(1);
+    expect(QUERY_PROMPT_VERSION).toBeGreaterThanOrEqual(2);
+  });
+
+  it("should change when the translated target changes", () => {
+    // The target is pasted into the generator prompt, so a pool derived
+    // before/under a different translation is derived from inputs the code no
+    // longer sends — it must not survive as a cache hit.
+    const other = canonicalizeTarget({
+      fields: {},
+      topicsMore: { items: ["history"], importance: 8 },
+      topicsLess: { items: [], importance: 0 },
+      formatsAvoid: { items: [], importance: 0 },
+      tonesAvoid: { items: [], importance: 0 },
+    });
+    expect(queryPoolInputHashFor(profile, "model-a", target)).not.toBe(
+      queryPoolInputHashFor(profile, "model-a", other),
+    );
+    expect(queryPoolInputHashFor(profile, "model-a", target)).not.toBe(
+      queryPoolInputHashFor(profile, "model-a", null),
+    );
+    expect(queryPoolInputHashFor(profile, "model-a", target)).toBe(
+      queryPoolInputHashFor(profile, "model-a", target),
+    );
+  });
+});
+
+describe("QUERIES_SYSTEM_PROMPT — subject coverage", () => {
+  it("should require every distinct subject to be covered before any repeats", () => {
+    // The 2026-07-31 imbalance: the prompt defined diversity as varying the
+    // ANGLE, so twelve rephrasings of one subject were maximally compliant.
+    expect(QUERIES_SYSTEM_PROMPT).toMatch(/before any subject|before repeating|every distinct subject/i);
+  });
+
+  it("should require subjects to be interleaved rather than grouped", () => {
+    // pickQueries takes pool[0..4] on a fresh pool (all lastUsedAt 0), so a
+    // subject-grouped pool still yields a single-subject first run.
+    expect(QUERIES_SYSTEM_PROMPT).toMatch(/interleav|alternat|never group|do not group/i);
+  });
+
+  it("should tell the generator that tier-qualified variants are one subject", () => {
+    // "elite chess" + "casual chess" + "amateur chess" in the target is one
+    // interest, not three — otherwise the target JSON itself skews the pool.
+    expect(QUERIES_SYSTEM_PROMPT).toMatch(/qualifi|variant/i);
   });
 });
 

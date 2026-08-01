@@ -14,7 +14,19 @@
   const discoveryBusy = $derived(
     $discoveryStatus.phase === "generating" || $discoveryStatus.phase === "searching",
   );
-  const discoveryBrowsable = $derived([...$discoveryTiers.top, ...$discoveryTiers.worthALook]);
+  // Ids stamped already-subscribed when they were discovered. Using the
+  // stamp rather than live subscription state keeps the list from reshuffling
+  // under the user the moment they press Subscribe.
+  const discoveredSubscribedIds = $derived(
+    new Set($discovered.filter((e) => e.alreadySubscribed).map((e) => e.video.id)),
+  );
+  // Genuinely new creators lead; channels already followed sort below them.
+  const discoveryBrowsable = $derived(
+    [...$discoveryTiers.top, ...$discoveryTiers.worthALook].sort(
+      (a, b) =>
+        Number(discoveredSubscribedIds.has(a.id)) - Number(discoveredSubscribedIds.has(b.id)),
+    ),
+  );
   const discoveryVetting = $derived(
     $discoveryTiers.unscored.filter((v) => v.scoreState === "pending").length,
   );
@@ -261,7 +273,12 @@
       {#if discoveryBrowsable.length > 0}
         <div data-testid="discovery-results">
           {#each discoveryBrowsable as video (video.id)}
-            <VideoCard {video} watched={watchedSet.has(video.id)} hideScoreNumber={$collapsed} />
+            <VideoCard
+              {video}
+              watched={watchedSet.has(video.id)}
+              hideScoreNumber={$collapsed}
+              showSubscribe
+            />
           {/each}
         </div>
       {/if}

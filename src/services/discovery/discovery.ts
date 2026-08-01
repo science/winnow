@@ -30,6 +30,7 @@ import { fetchSearchPage } from "../youtube/ytPage";
 import { parseFeedPage } from "../youtube/feedParser";
 import { isDemoMode } from "../youtube/feedSource";
 import { DEMO_UNVETTED_PREFIX } from "../scoring/demoScorer";
+import { subscribedIds, subscriptionsReady } from "../../stores/subscriptionsStore";
 
 /** Results taken per query — keeps one press bounded (~5 queries × 8). */
 export const RESULTS_PER_QUERY = 8;
@@ -60,8 +61,10 @@ export function demoSearchResults(query: string): Video[] {
       id,
       source: "search" as const,
       title: `${query} — result ${i + 1}`,
-      channelTitle: "Demo Discovery",
-      channelId: null,
+      channelTitle: `Demo Creator ${base}${i}`,
+      // Distinct per result: a shared id would trip PER_CHANNEL_RUN_CAP and
+      // make the demo shelf a poor stand-in for a real run.
+      channelId: `UCdemo${base}${i}`,
       durationText: "12:00",
       durationSec: 720,
       publishedText: "1 week ago",
@@ -179,7 +182,14 @@ export async function runDiscoveryOnce(deps: DiscoveryDeps = {}): Promise<void> 
           seenIds: [],
         });
   const knownIds = new Set(get(videosStore).map((v) => v.id));
-  const { state: merged, added } = mergeDiscovered(prior, collected, knownIds, now());
+  await subscriptionsReady;
+  const { state: merged, added } = mergeDiscovered(
+    prior,
+    collected,
+    knownIds,
+    now(),
+    get(subscribedIds),
+  );
   await commitDiscoveredState(runProfileId, merged);
 
   const stampedPool = {

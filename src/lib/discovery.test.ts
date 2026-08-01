@@ -8,6 +8,7 @@ import {
   pickQueries,
   QUERIES_PER_RUN,
   QUERY_POOL_MAX,
+  PER_CHANNEL_RUN_CAP,
   SEEN_IDS_CAP,
   type DiscoveredState,
 } from "./discovery";
@@ -141,5 +142,81 @@ describe("mergeDiscovered", () => {
     expect(state.seenIds).toHaveLength(SEEN_IDS_CAP);
     expect(state.seenIds).not.toContain("seen0");
     expect(state.seenIds).toContain("overflow0001");
+  });
+});
+
+describe("mergeDiscovered — channel awareness", () => {
+  const chanVideo = (id: string, channelId: string | null, query = "q") => ({
+    video: { ...video(id), channelId },
+    query,
+  });
+
+  it("should mark discoveries from channels the user already subscribes to", () => {
+    const { state } = mergeDiscovered(
+      emptyState,
+      [chanVideo("subbedvid01", "UCsubbed"), chanVideo("freshvid001", "UCnew")],
+      new Set(),
+      1000,
+      new Set(["UCsubbed"]),
+    );
+    const bySubscribed = Object.fromEntries(
+      state.entries.map((e) => [e.video.id, e.alreadySubscribed]),
+    );
+    expect(bySubscribed["subbedvid01"]).toBe(true);
+    expect(bySubscribed["freshvid001"]).toBe(false);
+  });
+
+  it("should keep already-subscribed discoveries rather than dropping them", () => {
+    const { state, added } = mergeDiscovered(
+      emptyState,
+      [chanVideo("subbedvid01", "UCsubbed")],
+      new Set(),
+      1000,
+      new Set(["UCsubbed"]),
+    );
+    expect(added).toBe(1);
+    expect(state.entries).toHaveLength(1);
+  });
+
+  it("should treat a null channelId as not subscribed instead of throwing", () => {
+    const { state } = mergeDiscovered(
+      emptyState,
+      [chanVideo("nochanvid01", null)],
+      new Set(),
+      1000,
+      new Set(["UCsubbed"]),
+    );
+    expect(state.entries[0]!.alreadySubscribed).toBe(false);
+  });
+
+  it("should default to not-subscribed when no set is supplied", () => {
+    const { state } = mergeDiscovered(emptyState, [found("plainvid001")], new Set(), 1000);
+    expect(state.entries[0]!.alreadySubscribed).toBe(false);
+  });
+
+  it("should cap how many videos one channel contributes in a single run", () => {
+    // Eight results from one search are frequently the same creator; without a
+    // cap a single query fills the shelf with one channel.
+    const incoming = Array.from({ length: 8 }, (_u, i) =>
+      chanVideo(`hogvideo${i}0`, "UChog"),
+    );
+    const { state } = mergeDiscovered(emptyState, incoming, new Set(), 1000);
+    expect(state.entries.length).toBeLessThanOrEqual(PER_CHANNEL_RUN_CAP);
+    expect(state.entries.length).toBeGreaterThan(0);
+  });
+
+  it("should not let one channel's cap block a different channel", () => {
+    const incoming = [
+      ...Array.from({ length: 8 }, (_u, i) => chanVideo(`hogvideo${i}0`, "UChog")),
+      chanVideo("othervid001", "UCother"),
+    ];
+    const { state } = mergeDiscovered(emptyState, incoming, new Set(), 1000);
+    expect(state.entries.some((e) => e.video.id === "othervid001")).toBe(true);
+  });
+
+  it("should not count channel-capped videos as seen, so they can surface later", () => {
+    const incoming = Array.from({ length: 8 }, (_u, i) => chanVideo(`hogvideo${i}0`, "UChog"));
+    const { state } = mergeDiscovered(emptyState, incoming, new Set(), 1000);
+    expect(state.seenIds).toHaveLength(state.entries.length);
   });
 });

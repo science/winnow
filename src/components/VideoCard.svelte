@@ -2,12 +2,20 @@
   import type { ScoredVideo } from "../lib/types";
   import ScoreBadge from "./ScoreBadge.svelte";
   import VoteButtons from "./VoteButtons.svelte";
+  import SubscribeButton from "./SubscribeButton.svelte";
 
   let {
     video,
     watched = false,
     hideScoreNumber = false,
-  }: { video: ScoredVideo; watched?: boolean; hideScoreNumber?: boolean } = $props();
+    showSubscribe = false,
+  }: {
+    video: ScoredVideo;
+    watched?: boolean;
+    hideScoreNumber?: boolean;
+    /** Discovery surfaces this — the main feed's videos are already yours. */
+    showSubscribe?: boolean;
+  } = $props();
 </script>
 
 <a
@@ -58,6 +66,11 @@
     {:else if video.scoreState === "pending"}
       <div class="text-xs text-ink-faint">scoring…</div>
     {/if}
-    <VoteButtons {video} />
+    <div class="flex flex-wrap items-center gap-1.5">
+      <VoteButtons {video} />
+      {#if showSubscribe}
+        <SubscribeButton {video} />
+      {/if}
+    </div>
   </div>
 </a>

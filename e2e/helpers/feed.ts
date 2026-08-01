@@ -33,7 +33,12 @@ export async function openFeedDemoWithSeed(
 ): Promise<void> {
   await page.addInitScript(
     (state) => {
+      // addInitScript re-runs on every navigation, reloads included. Seed once
+      // so a reload behaves like a real one (storage survives) instead of
+      // silently wiping whatever the test just did.
+      if (localStorage.getItem("winnow:e2e-seeded")) return;
       localStorage.clear();
+      localStorage.setItem("winnow:e2e-seeded", "1");
       localStorage.setItem("winnow:videos:v1", JSON.stringify(state.videos));
     },
     { videos: { fetchedAt: Date.now(), videos } },
@@ -61,7 +66,11 @@ export async function openFeedDemoWithProfiles(
 ): Promise<void> {
   await page.addInitScript(
     (s) => {
+      // Seed once — see openFeedDemoWithSeed: re-clearing on reload would make
+      // "does X survive a reload?" untestable for anything seeded this way.
+      if (localStorage.getItem("winnow:e2e-seeded")) return;
       localStorage.clear();
+      localStorage.setItem("winnow:e2e-seeded", "1");
       localStorage.setItem(
         "winnow:videos:v1",
         JSON.stringify({ fetchedAt: Date.now(), videos: s.videos }),
@@ -144,6 +153,54 @@ export async function expectDiscoveryTitleHidden(page: Page, title: string): Pro
 
 export async function getDiscoveryStatusText(page: Page): Promise<string> {
   return page.getByTestId("discovery-status").innerText();
+}
+
+// --- subscribing to a discovered creator ------------------------------------
+
+/** The first discovery card offering a Subscribe button. */
+function firstSubscribableCard(page: Page) {
+  return page
+    .getByTestId("discovery-results")
+    .getByTestId("video-card")
+    .filter({ has: page.getByTestId("subscribe") })
+    .first();
+}
+
+export async function clickSubscribeOnFirstDiscovery(page: Page): Promise<string> {
+  const card = firstSubscribableCard(page);
+  const title = await card.locator("h3").innerText();
+  await card.getByTestId("subscribe").click();
+  return title;
+}
+
+/** Wait for the named discovery card to report itself subscribed. */
+export async function waitForSubscribedBadge(page: Page, title: string): Promise<void> {
+  await expect(
+    page
+      .getByTestId("discovery")
+      .getByTestId("video-card")
+      .filter({ hasText: title })
+      .getByTestId("subscribed-badge"),
+  ).toBeVisible({ timeout: 10_000 });
+}
+
+export async function getDiscoverySubscribeCount(page: Page): Promise<number> {
+  return page.getByTestId("discovery-results").getByTestId("subscribe").count();
+}
+
+/** Vote state of the named discovery card's "Good pick" button. */
+export async function isDiscoveryUpvoted(page: Page, title: string): Promise<boolean> {
+  const pressed = await page
+    .getByTestId("discovery")
+    .getByTestId("video-card")
+    .filter({ hasText: title })
+    .getByTestId("vote-up")
+    .getAttribute("aria-pressed");
+  return pressed === "true";
+}
+
+export async function expectNoSubscribeInMainFeed(page: Page): Promise<void> {
+  await expect(page.getByTestId("tier-top").getByTestId("subscribe")).toHaveCount(0);
 }
 
 export async function waitForScoredFeed(page: Page): Promise<void> {

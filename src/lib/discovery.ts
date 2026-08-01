@@ -60,6 +60,11 @@ export interface DiscoveredEntry {
   /** The search query that surfaced this video. */
   query: string;
   discoveredAt: number;
+  /** Whether the user already subscribed to this channel when it was found.
+   * Stamped at merge time, not derived at render time, so the shelf reflects
+   * what was true when the discovery happened. Absent on pre-2026-07-31
+   * entries — treat undefined as false. */
+  alreadySubscribed?: boolean;
 }
 
 /** Per-profile persisted blob (winnow:discovered:v1:<profileId>). */
@@ -73,23 +78,44 @@ export interface DiscoveredState {
 export const DISCOVERED_CAP = 120;
 export const SEEN_IDS_CAP = 1000;
 
+/** Most videos one channel may contribute to a single run. A search for
+ * "endgame technique" routinely returns eight videos from one creator; without
+ * this, one query fills the shelf with one channel and the run reads as
+ * narrow even when the queries were broad. Skipped videos are NOT marked
+ * seen, so they stay eligible for a later run. */
+export const PER_CHANNEL_RUN_CAP = 2;
+
 /** Fold one run's search results into the discovered state. Drops videos
- * already in the feed (knownIds), already seen by this profile, or repeated
- * within the run; evicts the oldest entries beyond the cap (they stay in
- * seenIds); records every added id as seen, FIFO-capped. */
+ * already in the feed (knownIds), already seen by this profile, repeated
+ * within the run, or beyond one channel's per-run share; evicts the oldest
+ * entries beyond the cap (they stay in seenIds); records every added id as
+ * seen, FIFO-capped. Videos from `subscribedIds` are marked, not dropped:
+ * discovery still shows them, the UI sorts them below genuinely new creators. */
 export function mergeDiscovered(
   state: DiscoveredState,
   incoming: { video: Video; query: string }[],
   knownIds: ReadonlySet<string>,
   now: number,
+  subscribedIds: ReadonlySet<string> = new Set(),
 ): { state: DiscoveredState; added: number } {
   const seen = new Set(state.seenIds);
   const inRun = new Set<string>();
+  const perChannel = new Map<string, number>();
   const fresh: DiscoveredEntry[] = [];
   for (const { video, query } of incoming) {
     if (knownIds.has(video.id) || seen.has(video.id) || inRun.has(video.id)) continue;
+    if (video.channelId) {
+      const taken = perChannel.get(video.channelId) ?? 0;
+      if (taken >= PER_CHANNEL_RUN_CAP) continue;
+      perChannel.set(video.channelId, taken + 1);
+    }
     inRun.add(video.id);
-    fresh.push({ video, query, discoveredAt: now });
+    fresh.push({
+      video,
+      query,
+      discoveredAt: now,
+      alreadySubscribed: video.channelId !== null && subscribedIds.has(video.channelId),
+    });
   }
   const entries = [...state.entries, ...fresh].slice(-DISCOVERED_CAP);
   const seenIds = [...state.seenIds, ...fresh.map((e) => e.video.id)].slice(-SEEN_IDS_CAP);

@@ -2,12 +2,22 @@
   import { onMount } from "svelte";
   import { embedUrl, watchUrl } from "../lib/embed";
   import { markWatched, scoredVideos } from "../stores/feedStore";
+  import { discoveredScored } from "../stores/discoveryStore";
   import ScoreBadge from "./ScoreBadge.svelte";
   import VoteButtons from "./VoteButtons.svelte";
+  import SubscribeButton from "./SubscribeButton.svelte";
 
   let { videoId }: { videoId: string } = $props();
 
-  const video = $derived($scoredVideos.find((v) => v.id === videoId) ?? null);
+  // Discoveries live in their own store, so resolving from the feed alone
+  // rendered a bare player with no title, score, or votes for anything found
+  // by "go deeper" — and this page is where following a new creator belongs.
+  const video = $derived(
+    $scoredVideos.find((v) => v.id === videoId) ??
+      $discoveredScored.find((v) => v.id === videoId) ??
+      null,
+  );
+  const isDiscovery = $derived(video?.source === "search");
 
   onMount(() => {
     void markWatched(videoId);
@@ -42,7 +52,12 @@
       {#if video.scoreState === "scored"}
         <ScoreBadge score={video.score} reason={video.reason} clickbait={video.clickbait} />
       {/if}
-      <VoteButtons {video} />
+      <div class="flex flex-wrap items-center gap-1.5">
+        <VoteButtons {video} />
+        {#if isDiscovery}
+          <SubscribeButton {video} />
+        {/if}
+      </div>
     </div>
   {/if}
 
