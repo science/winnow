@@ -337,3 +337,90 @@ describe("contentHashFor", () => {
     expect(contentHashFor(v, "words")).not.toBe(contentHashFor(v, null));
   });
 });
+
+describe("runTwoPhaseScoring — subscribed-channel boost", () => {
+  it("should rank a subscribed channel's video above the same video from an unsubscribed one", async () => {
+    // An imperfect digest, so the boost has headroom below the 100 ceiling.
+    const imperfect = { subbedvid01: { substanceDensity: 3 } };
+    const subscribed = await runTwoPhaseScoring(
+      [video("subbedvid01", { channelId: "UCsubbed" })],
+      memoryDeps(stubCall({ digestOverrides: imperfect }).callFn, {
+        subscribedIds: new Set(["UCsubbed"]),
+      }),
+    );
+    const plain = await runTwoPhaseScoring(
+      [video("subbedvid01", { channelId: "UCstranger" })],
+      memoryDeps(stubCall({ digestOverrides: imperfect }).callFn, {
+        subscribedIds: new Set(["UCsubbed"]),
+      }),
+    );
+    expect(subscribed.scores["subbedvid01"]!.score).toBeGreaterThan(
+      plain.scores["subbedvid01"]!.score,
+    );
+    expect(subscribed.scores["subbedvid01"]!.reason).toContain("followed creator");
+  });
+
+  it("should leave videos with no channelId unboosted instead of throwing", async () => {
+    const result = await runTwoPhaseScoring(
+      [video("nochannel01", { channelId: null })],
+      memoryDeps(stubCall().callFn, { subscribedIds: new Set(["UCsubbed"]) }),
+    );
+    expect(result.scores["nochannel01"]!.reason).not.toContain("followed creator");
+  });
+
+  it("should keep an avoided-topic video behind the fold even from a subscribed channel", async () => {
+    // The curation guarantee: following a creator must not smuggle their
+    // off-profile videos past an explicit "less of this".
+    const avoidCall = (async (spec: { name: string; user: string }) => {
+      if (spec.name === "translate_profile") {
+        return { ...TRANSLATION, topicsLess: { items: ["chess"], importance: 9 } };
+      }
+      const items = JSON.parse(spec.user.replace(/<\/?videos>/g, "")) as Array<{ videoId: string }>;
+      return { digests: items.map((i) => digestFor(i.videoId)) };
+    }) as StructuredCallFn;
+
+    const result = await runTwoPhaseScoring(
+      [video("avoidedvid1", { channelId: "UCsubbed" })],
+      memoryDeps(avoidCall, { subscribedIds: new Set(["UCsubbed"]) }),
+    );
+    expect(result.scores["avoidedvid1"]!.score).toBeLessThan(50);
+  });
+
+  it("should not leak ranking bookkeeping into the persisted score", async () => {
+    const result = await runTwoPhaseScoring(
+      [video("cleanvid001", { channelId: "UCsubbed" })],
+      memoryDeps(stubCall().callFn, { subscribedIds: new Set(["UCsubbed"]) }),
+    );
+    expect(Object.keys(result.scores["cleanvid001"]!).sort()).toEqual([
+      "clickbait",
+      "model",
+      "reason",
+      "score",
+      "scoredAt",
+    ]);
+  });
+
+  it("should change the scores hash when the subscribed set changes", async () => {
+    const a = await runTwoPhaseScoring(
+      [video("hashvid0001", { channelId: "UCsubbed" })],
+      memoryDeps(stubCall().callFn, { subscribedIds: new Set(["UCsubbed"]) }),
+    );
+    const b = await runTwoPhaseScoring(
+      [video("hashvid0001", { channelId: "UCsubbed" })],
+      memoryDeps(stubCall().callFn, { subscribedIds: new Set(["UCsubbed", "UCother"]) }),
+    );
+    expect(a.scoresHash).not.toBe(b.scoresHash);
+  });
+
+  it("should keep the scores hash stable across set iteration order", async () => {
+    const a = await runTwoPhaseScoring(
+      [video("hashvid0001", { channelId: "UCsubbed" })],
+      memoryDeps(stubCall().callFn, { subscribedIds: new Set(["UCa", "UCb"]) }),
+    );
+    const b = await runTwoPhaseScoring(
+      [video("hashvid0001", { channelId: "UCsubbed" })],
+      memoryDeps(stubCall().callFn, { subscribedIds: new Set(["UCb", "UCa"]) }),
+    );
+    expect(a.scoresHash).toBe(b.scoresHash);
+  });
+});

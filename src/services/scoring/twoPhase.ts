@@ -22,7 +22,13 @@ import type {
 } from "../../lib/types";
 import { fnv1a } from "../../lib/profileHash";
 import { clampDigest } from "../../lib/digest";
-import { canonicalizeTarget, rankVideo, RANKER_VERSION, targetHash } from "../../lib/rubricScorer";
+import {
+  applyChannelBoost,
+  canonicalizeTarget,
+  rankVideo,
+  RANKER_VERSION,
+  targetHash,
+} from "../../lib/rubricScorer";
 import { KEYS, storageGet, storageSet } from "../../lib/storage";
 import { log } from "../../lib/logger";
 import type { FeedbackExample } from "../../lib/feedback";
@@ -143,11 +149,28 @@ function targetInputHashFor(profile: Profile, feedback: FeedbackExample[], model
   );
 }
 
+/** Stable identity of the subscribed-channel set. Sorted so set iteration
+ * order can't churn the hash and re-score the feed for nothing. */
+export function subscribedChannelsHash(ids: ReadonlySet<string> | undefined): string {
+  if (!ids || ids.size === 0) return "";
+  return fnv1a([...ids].sort().join(","));
+}
+
 /** Cache key for ranked scores: target semantics + every version that changes
- * ranking or digests. */
-function scoresHashFor(target: ProfileTarget, model: string): string {
+ * ranking or digests + the subscribed set, since it feeds the channel boost. */
+function scoresHashFor(
+  target: ProfileTarget,
+  model: string,
+  subscribedIds?: ReadonlySet<string>,
+): string {
   return fnv1a(
-    [targetHash(target), String(RANKER_VERSION), String(ENRICHMENT_PROMPT_VERSION), model].join("|"),
+    [
+      targetHash(target),
+      String(RANKER_VERSION),
+      String(ENRICHMENT_PROMPT_VERSION),
+      model,
+      subscribedChannelsHash(subscribedIds),
+    ].join("|"),
   );
 }
 
@@ -160,10 +183,11 @@ export async function expectedScoresHash(
   feedback: FeedbackExample[],
   model: string,
   loadTarget: () => Promise<StoredTarget | null> = () => storageGet<StoredTarget>(KEYS.profileTarget),
+  subscribedIds?: ReadonlySet<string>,
 ): Promise<string | null> {
   const stored = await loadTarget();
   if (stored?.inputHash !== targetInputHashFor(profile, feedback, model)) return null;
-  return scoresHashFor(canonicalizeTarget(stored.target), model);
+  return scoresHashFor(canonicalizeTarget(stored.target), model, subscribedIds);
 }
 
 /** Vote-independent identity of a two-phase run: profile text, prompt and
@@ -172,7 +196,11 @@ export async function expectedScoresHash(
  * stored scores matching this hash are still ~right and stay displayed while
  * the re-rank lands in place; blanking the feed for a single vote reads as a
  * full recalc (UAT 2026-07-15). */
-export function softScoresHashFor(profile: Profile, model: string): string {
+export function softScoresHashFor(
+  profile: Profile,
+  model: string,
+  subscribedIds?: ReadonlySet<string>,
+): string {
   return fnv1a(
     [
       profile.moreOf,
@@ -181,6 +209,7 @@ export function softScoresHashFor(profile: Profile, model: string): string {
       String(RANKER_VERSION),
       String(ENRICHMENT_PROMPT_VERSION),
       model,
+      subscribedChannelsHash(subscribedIds),
     ].join("|"),
   );
 }
@@ -192,6 +221,9 @@ export interface TwoPhaseDeps {
   model: string;
   profile: Profile;
   feedback?: FeedbackExample[];
+  /** Channels the user subscribes to; their videos get the modest ranking
+   * lift in applyChannelBoost. Absent means "no boost", never an error. */
+  subscribedIds?: ReadonlySet<string>;
   callFn?: StructuredCallFn;
   fetchExcerpt?: (videoId: string, maxChars: number) => Promise<TranscriptOutcome>;
   loadEnrichment?: () => Promise<Record<string, EnrichmentEntry> | null>;
@@ -291,7 +323,8 @@ export async function runTwoPhaseScoring(
     await saveTarget({ inputHash: targetInputHash, target });
   }
   result.target = target;
-  result.scoresHash = scoresHashFor(target, deps.model);
+  const subscribedIds = deps.subscribedIds ?? new Set<string>();
+  result.scoresHash = scoresHashFor(target, deps.model, subscribedIds);
 
   // Phase 1 — figure out which videos need work.
   const cache = (await loadEnrichment()) ?? {};
@@ -404,9 +437,16 @@ export async function runTwoPhaseScoring(
       result.unknownIds.push(video.id);
       continue;
     }
-    const ranked = rankVideo(digest, target);
+    const ranked = applyChannelBoost(
+      rankVideo(digest, target),
+      video.channelId !== null && subscribedIds.has(video.channelId),
+    );
+    // Explicit fields, not a spread: cappedByAvoidTopic is ranking bookkeeping
+    // and must not leak into the persisted score cache.
     result.scores[video.id] = {
-      ...ranked,
+      score: ranked.score,
+      reason: ranked.reason,
+      clickbait: ranked.clickbait,
       scoredAt: Date.now(),
       model: `two-phase(${deps.model})`,
     };

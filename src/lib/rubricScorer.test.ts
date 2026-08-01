@@ -1,10 +1,13 @@
 import { describe, it, expect } from "vitest";
 import type { ProfileTarget, VideoDigest } from "./types";
 import {
+  applyChannelBoost,
+  AVOID_TOPIC_SCORE_CAP,
   canonicalizeTarget,
   EMPTY_TARGET,
   isEmptyTarget,
   rankVideo,
+  SUBSCRIBED_CHANNEL_BOOST,
   TARGET_TOPICS_MAX,
   targetHash,
 } from "./rubricScorer";
@@ -471,5 +474,59 @@ describe("targetHash", () => {
     const b = target({ fields: { novelty: { target: 4, importance: 3 } } });
     expect(targetHash(a)).toBe(targetHash(target({ fields: { novelty: { target: 5, importance: 3 } } })));
     expect(targetHash(a)).not.toBe(targetHash(b));
+  });
+});
+
+describe("applyChannelBoost — subscribing lifts a creator, it does not exempt them", () => {
+  const neutral = { score: 60, reason: "on-profile: chess", clickbait: false, cappedByAvoidTopic: false };
+
+  it("should leave the score untouched for a channel the user has not subscribed to", () => {
+    expect(applyChannelBoost(neutral, false)).toEqual(neutral);
+  });
+
+  it("should lift a subscribed channel's score modestly", () => {
+    const boosted = applyChannelBoost(neutral, true);
+    expect(boosted.score).toBe(60 + SUBSCRIBED_CHANNEL_BOOST);
+    expect(boosted.reason).toContain("followed creator");
+  });
+
+  it("should keep an avoided-topic video capped despite the boost", () => {
+    // The guarantee that keeps curation honest: subscribing to a creator must
+    // never drag their off-profile videos back in front of the fold.
+    const capped = {
+      score: AVOID_TOPIC_SCORE_CAP,
+      reason: "avoided: comic chess",
+      clickbait: false,
+      cappedByAvoidTopic: true,
+    };
+    const boosted = applyChannelBoost(capped, true);
+    expect(boosted.score).toBe(AVOID_TOPIC_SCORE_CAP);
+    expect(boosted.score).toBeLessThan(50);
+    expect(boosted.reason).toBe("avoided: comic chess");
+  });
+
+  it("should never exceed 100", () => {
+    const high = { score: 98, reason: "on-profile: chess", clickbait: false, cappedByAvoidTopic: false };
+    expect(applyChannelBoost(high, true).score).toBe(100);
+  });
+
+  it("should preserve the clickbait flag", () => {
+    const bait = { score: 60, reason: "hype", clickbait: true, cappedByAvoidTopic: false };
+    expect(applyChannelBoost(bait, true).clickbait).toBe(true);
+  });
+});
+
+describe("rankVideo — avoid-topic capping is reported to callers", () => {
+  it("should flag when an avoided topic capped the score", () => {
+    const r = rankVideo(
+      DIGEST,
+      target({ topicsLess: { items: ["chess"], importance: 8 } }),
+    );
+    expect(r.cappedByAvoidTopic).toBe(true);
+    expect(r.score).toBeLessThanOrEqual(AVOID_TOPIC_SCORE_CAP);
+  });
+
+  it("should not flag when no avoided topic was hit", () => {
+    expect(rankVideo(DIGEST, target({ topicsMore: { items: ["chess"], importance: 8 } })).cappedByAvoidTopic).toBe(false);
   });
 });

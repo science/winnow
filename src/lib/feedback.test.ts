@@ -52,6 +52,25 @@ describe("applyVote", () => {
     expect(next["vid00000001"]!.votedAt).toBe(200);
   });
 
+  it("should keep an existing vote in place when toggling is disabled", () => {
+    // Subscribing records an up-vote-equivalent. If it toggled, subscribing to
+    // a creator whose video you already liked would silently clear that like.
+    const store = applyVote({}, entry("vid00000001", "up", 100));
+    const next = applyVote(store, entry("vid00000001", "up", 200), FEEDBACK_STORE_CAP, {
+      toggle: false,
+    });
+    expect(next["vid00000001"]!.vote).toBe("up");
+    expect(next["vid00000001"]!.votedAt).toBe(200);
+  });
+
+  it("should still replace an opposite vote when toggling is disabled", () => {
+    const store = applyVote({}, entry("vid00000001", "down", 100));
+    const next = applyVote(store, entry("vid00000001", "up", 200), FEEDBACK_STORE_CAP, {
+      toggle: false,
+    });
+    expect(next["vid00000001"]!.vote).toBe("up");
+  });
+
   it("should evict the oldest entries beyond the cap", () => {
     let store: Record<string, FeedbackEntry> = {};
     for (let i = 0; i < FEEDBACK_STORE_CAP + 5; i++) {

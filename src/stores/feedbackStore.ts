@@ -6,7 +6,7 @@
 
 import { get, writable } from "svelte/store";
 import type { EnrichmentEntry, FeedbackEntry, ScoredVideo, Vote } from "../lib/types";
-import { applyVote } from "../lib/feedback";
+import { applyVote, FEEDBACK_STORE_CAP } from "../lib/feedback";
 import { KEYS, profileKeys, storageGet, storageSet } from "../lib/storage";
 import { profilesReady, profilesState } from "./profilesStore";
 
@@ -32,6 +32,17 @@ export const feedbackReady: Promise<void> = (async () => {
 /** Record a vote (or clear it, when the same vote repeats) with a snapshot
  * of the video's display fields and current score. */
 export async function toggleVote(video: ScoredVideo, vote: Vote): Promise<void> {
+  await writeVote(video, vote, true);
+}
+
+/** Record a vote outright, without the same-vote-toggles-off behavior.
+ * Subscribing uses this: it asserts a preference rather than flipping one,
+ * so it must never clear a like the user already gave. */
+export async function setVote(video: ScoredVideo, vote: Vote): Promise<void> {
+  await writeVote(video, vote, false);
+}
+
+async function writeVote(video: ScoredVideo, vote: Vote, toggle: boolean): Promise<void> {
   await feedbackReady;
   const scored = video.scoreState === "scored";
   // Snapshot the enrichment digest too (shared across profiles): it puts the
@@ -55,7 +66,7 @@ export async function toggleVote(video: ScoredVideo, vote: Vote): Promise<void> 
     digest: enriched?.digest ?? null,
     digestPromptVersion: enriched?.promptVersion ?? null,
   };
-  const next = applyVote(get(feedback), entry);
+  const next = applyVote(get(feedback), entry, FEEDBACK_STORE_CAP, { toggle });
   feedback.set(next);
   // Persist under the profile whose votes are loaded — not whatever is
   // active right now — so a vote landing during a switch can't cross over.

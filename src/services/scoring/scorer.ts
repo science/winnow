@@ -24,6 +24,7 @@ import {
   transcriptCoverage,
 } from "../../stores/feedStore";
 import { discovered as discoveredStore } from "../../stores/discoveryStore";
+import { subscribedIds, subscriptionsReady } from "../../stores/subscriptionsStore";
 import { settings, profile as profileStore, settingsReady } from "../../stores/settingsStore";
 import { fetchTranscriptExcerpt, type TranscriptOutcome } from "../youtube/transcripts";
 import { isDemoMode } from "../youtube/feedSource";
@@ -389,9 +390,19 @@ async function scoreFeedTwoPhase(
   // ~right and the vote-informed re-rank lands in place). Truly stale scores
   // (other engine, edited profile, version bump) render as pending instead:
   // half-finished tiers mislead more than a progress bar does.
+  // Subscribed channels feed the ranking boost, so they belong in both score
+  // hashes: subscribing to a creator must re-rank, not serve stale scores.
+  await subscriptionsReady;
+  const $subscribedIds = get(subscribedIds);
   const stored = await storageGet<StoredScores>(runKeys.scores);
-  const currentHash = await expectedScoresHash($profile, feedbackExamples, model, loadTarget);
-  const softHash = softScoresHashFor($profile, model);
+  const currentHash = await expectedScoresHash(
+    $profile,
+    feedbackExamples,
+    model,
+    loadTarget,
+    $subscribedIds,
+  );
+  const softHash = softScoresHashFor($profile, model, $subscribedIds);
   const displayable =
     stored && (stored.profileHash === currentHash || stored.softHash === softHash);
   if (!stillCurrent()) return;
@@ -415,6 +426,7 @@ async function scoreFeedTwoPhase(
     model,
     profile: $profile,
     feedback: feedbackExamples,
+    subscribedIds: $subscribedIds,
     loadTarget,
     saveTarget,
     saveExcerpt: async (videoId, excerpt) => {

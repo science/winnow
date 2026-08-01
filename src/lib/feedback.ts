@@ -33,13 +33,20 @@ function compactDigest(digest: VideoDigest): FeedbackExampleDigest {
 /**
  * Apply one vote. Repeating the same vote toggles it off; an opposite vote
  * replaces it. Beyond `cap` entries, the oldest votes are evicted.
+ *
+ * `toggle: false` records the vote outright. Subscribing writes an
+ * up-vote-equivalent that way: it states a preference rather than flipping a
+ * switch, so subscribing to a creator whose video the user already liked must
+ * not silently clear that like.
  */
 export function applyVote(
   store: Record<string, FeedbackEntry>,
   entry: FeedbackEntry,
   cap: number = FEEDBACK_STORE_CAP,
+  opts: { toggle?: boolean } = {},
 ): Record<string, FeedbackEntry> {
-  if (store[entry.videoId]?.vote === entry.vote) {
+  const toggle = opts.toggle ?? true;
+  if (toggle && store[entry.videoId]?.vote === entry.vote) {
     const { [entry.videoId]: _removed, ...rest } = store;
     return rest;
   }

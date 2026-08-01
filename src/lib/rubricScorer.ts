@@ -18,7 +18,7 @@ import {
 
 /** Participates in the two-phase score-cache hash — bump when ranking or
  * reason-composition semantics change. */
-export const RANKER_VERSION = 3;
+export const RANKER_VERSION = 4;
 
 /** Digest axes ≥ this value set the clickbait flag regardless of profile. */
 const CLICKBAIT_FLAG_THRESHOLD = 4;
@@ -28,7 +28,7 @@ const CLICKBAIT_FLAG_THRESHOLD = 4;
  * always lands behind the fold no matter how well the quality axes score.
  * Only topics cap: formats/tones are too common to be a veto (a "humorous"
  * cap would collapse whole feeds, cf. the 2026-07 feed-collapse bug). */
-const AVOID_TOPIC_SCORE_CAP = 45;
+export const AVOID_TOPIC_SCORE_CAP = 45;
 
 // Binary constraints carry asymmetric evidence. Missing the more-of list is
 // weak negative signal (a broad feed matches any list rarely — v1's credit 0
@@ -51,6 +51,31 @@ export interface RankedScore {
   score: number;
   reason: string;
   clickbait: boolean;
+  /** True when an avoided topic clamped the score to AVOID_TOPIC_SCORE_CAP.
+   * Reported so later adjustments (applyChannelBoost) can honor the veto
+   * instead of quietly lifting the video back over the fold. */
+  cappedByAvoidTopic: boolean;
+}
+
+/** How much a subscribed channel lifts its videos. Deliberately modest: the
+ * user chose the creator, not this particular video, so it reorders within a
+ * tier and can nudge across one — it is not a free pass. */
+export const SUBSCRIBED_CHANNEL_BOOST = 8;
+
+/**
+ * Lift a video because the user subscribes to its channel. Pure, and applied
+ * outside rankVideo so the ranker stays a function of (digest, target) only.
+ *
+ * An avoided-topic cap always wins: subscribing to a creator must never drag
+ * their off-profile videos in front of the fold, or "avoid X" stops meaning
+ * anything the moment you follow someone who sometimes does X.
+ */
+export function applyChannelBoost(ranked: RankedScore, subscribed: boolean): RankedScore {
+  if (!subscribed) return ranked;
+  const raw = Math.min(100, ranked.score + SUBSCRIBED_CHANNEL_BOOST);
+  const score = ranked.cappedByAvoidTopic ? Math.min(raw, AVOID_TOPIC_SCORE_CAP) : raw;
+  if (score === ranked.score) return ranked;
+  return { ...ranked, score, reason: `${ranked.reason}; followed creator`.slice(0, 120) };
 }
 
 export function isEmptyTarget(t: ProfileTarget): boolean {
@@ -193,7 +218,12 @@ export function rankVideo(digest: VideoDigest, target: ProfileTarget): RankedSco
   const { parts, avoidedTopic } = contributions(digest, target);
   const totalWeight = parts.reduce((sum, c) => sum + c.weight, 0);
   if (totalWeight === 0) {
-    return { score: 50, reason: "No profile constraints to rank against yet", clickbait };
+    return {
+      score: 50,
+      reason: "No profile constraints to rank against yet",
+      clickbait,
+      cappedByAvoidTopic: false,
+    };
   }
   let score = Math.round(
     (100 * parts.reduce((sum, c) => sum + c.weight * c.credit, 0)) / totalWeight,
@@ -203,6 +233,7 @@ export function rankVideo(digest: VideoDigest, target: ProfileTarget): RankedSco
     score: Math.max(0, Math.min(100, score)),
     reason: composeReason(parts, avoidedTopic === null ? null : `avoided: ${avoidedTopic}`),
     clickbait,
+    cappedByAvoidTopic: avoidedTopic !== null,
   };
 }
 
