@@ -5,6 +5,7 @@ import { KEYS, profileKeys, storageGet, storageSet } from "../lib/storage";
 import { loadFeeds } from "../services/youtube/feedSource";
 import { feedback } from "./feedbackStore";
 import { profilesReady, profilesState } from "./profilesStore";
+import { refreshSubscriptions } from "./subscriptionsStore";
 import { log } from "../lib/logger";
 
 const VIDEOS_TTL_MS = 30 * 60 * 1000;
@@ -99,11 +100,14 @@ export async function refresh(): Promise<void> {
     videos.set(load.videos);
     await storageSet<StoredVideos>(KEYS.videos, { fetchedAt, videos: load.videos });
     await pruneStaleEntries(load.videos);
+    // Subscribed-channel set rides along with the feed refresh: discovery
+    // labels against it, and it degrades rather than failing.
+    const subWarnings = await refreshSubscriptions(load.videos);
     status.update((s) => ({
       ...s,
       phase: "idle",
       detail: "",
-      warnings: load.warnings,
+      warnings: [...load.warnings, ...subWarnings],
     }));
   } catch (err) {
     log.error("refresh failed", err);

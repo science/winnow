@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
-import { parseFeedPage } from "./feedParser";
+import { parseChannelsPage, parseFeedPage } from "./feedParser";
 import channelLockup from "./fixtures/channel-videos-lockup.json";
+import channelsPage from "./fixtures/channels-page.json";
 import homeSignedIn from "./fixtures/home-lockup-signedin.json";
 import homeSignedOut from "./fixtures/home-signedout.json";
 import subsVideoRenderer from "./fixtures/subscriptions-videorenderer.json";
@@ -165,5 +166,44 @@ describe("parseFeedPage — robustness", () => {
     const videos = parseFeedPage(dup, "home");
     expect(videos).toHaveLength(1);
     expect(videos[0]!.title).toBe("First");
+  });
+});
+
+describe("parseChannelsPage — the /feed/channels subscription list", () => {
+  const channels = parseChannelsPage(channelsPage);
+
+  it("should parse channelRenderer entries into SubscribedChannel records", () => {
+    const c = channels.find((c) => c.channelId === "UCgrain12345");
+    expect(c).toBeDefined();
+    expect(c!.channelTitle).toBe("Grain Channel");
+  });
+
+  it("should read channel titles from both simpleText and runs encodings", () => {
+    expect(channels.find((c) => c.channelId === "UCchessnexus99")?.channelTitle).toBe("Chess Nexus");
+  });
+
+  it("should parse modern LOCKUP_CONTENT_TYPE_CHANNEL lockups", () => {
+    const c = channels.find((c) => c.channelId === "UClockupchan01");
+    expect(c).toBeDefined();
+    expect(c!.channelTitle).toBe("Modern Lockup Channel");
+  });
+
+  it("should skip channel entries without a channelId instead of throwing", () => {
+    expect(channels.some((c) => c.channelTitle?.includes("Defective"))).toBe(false);
+  });
+
+  it("should skip video lockups on the same page", () => {
+    expect(channels.some((c) => c.channelId === "abc123DEF45")).toBe(false);
+  });
+
+  it("should dedupe repeated channelIds, keeping the first occurrence", () => {
+    expect(channels.filter((c) => c.channelId === "UCgrain12345")).toHaveLength(1);
+    expect(channels.find((c) => c.channelId === "UCgrain12345")!.channelTitle).toBe("Grain Channel");
+  });
+
+  it("should return an empty list for junk input instead of throwing", () => {
+    expect(parseChannelsPage(null)).toEqual([]);
+    expect(parseChannelsPage(42)).toEqual([]);
+    expect(parseChannelsPage({ contents: { anything: [] } })).toEqual([]);
   });
 });

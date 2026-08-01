@@ -62,6 +62,7 @@ All persistence via `src/lib/storage.ts` (browser.storage.local → localStorage
 | `winnow:models:v1` | `{ anthropic: string[], openai: string[], fetchedAt }` — model catalog for the Settings picker | refreshed only on explicit "Refresh model list"; picker works offline from this |
 | `winnow:enrichment:v1` | `{videoId: {digest: VideoDigest, contentHash, model, promptVersion, hadTranscript, enrichedAt}}` — phase-1 taxonomy digests | invalidated per entry by content/model/prompt-version change; transcript-backed entries are final, metadata-only ones stay provisional; pruned with videos (voted kept) |
 | `winnow:profileTarget:v1` | `{ inputHash, target: ProfileTarget }` — phase-2 profile translation | re-translated when profile text, votes, translator version, or model change |
+| `winnow:subscriptions:v1` | `{ fetchedAt, channels: [{channelId, channelTitle}], degraded }` — the YouTube subscribed-channel set from `/feed/channels` | account-level, NOT per-profile (subscriptions belong to the account); TTL 30 min alongside the feed refresh; `degraded: true` marks the fallback set derived from subscriptions-feed videos when the page won't parse (recent posters only, so incomplete) |
 
 Per-profile key families (built via `profileKeys(profileId)` in `storage.ts`; deleting a profile removes exactly this set):
 

@@ -9,6 +9,9 @@ import { extractJsonBlob } from "./pageExtract";
 export const FEED_URLS = {
   subscriptions: "https://www.youtube.com/feed/subscriptions",
   home: "https://www.youtube.com/",
+  /** The "All subscriptions" list — channels, not videos. Parsed by
+   * feedParser.parseChannelsPage, not parseFeedPage. */
+  channels: "https://www.youtube.com/feed/channels",
 } as const;
 
 export class SignedOutError extends Error {

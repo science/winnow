@@ -18,6 +18,9 @@ export const KEYS = {
   models: "winnow:models:v1",
   enrichment: "winnow:enrichment:v1",
   profileTarget: "winnow:profileTarget:v1",
+  /** Account-level, deliberately NOT per-profile: YouTube subscriptions
+   * belong to the account, while profiles are Winnow's slicing of it. */
+  subscriptions: "winnow:subscriptions:v1",
 } as const;
 
 /** Per-profile key families (docs/DESIGN.md schema registry). Everything a

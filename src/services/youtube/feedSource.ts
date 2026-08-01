@@ -2,9 +2,10 @@
 // data in demo mode (?demo=1) so the page runs in a plain browser for
 // dev and e2e without touching youtube.com.
 
-import type { Video } from "../../lib/types";
-import { parseFeedPage } from "./feedParser";
+import type { SubscribedChannel, Video } from "../../lib/types";
+import { parseChannelsPage, parseFeedPage } from "./feedParser";
 import { fetchFeedPage, SignedOutError } from "./ytPage";
+import { proxySubscribedChannels } from "../../lib/subscriptions";
 import { log } from "../../lib/logger";
 
 export interface FeedLoad {
@@ -74,4 +75,48 @@ export async function loadFeeds(): Promise<FeedLoad> {
     warnings,
     signedOut: signedOutCount === results.length,
   };
+}
+
+export interface SubscriptionsLoad {
+  channels: SubscribedChannel[];
+  warnings: string[];
+  /** True when the list came from the subscriptions-feed proxy rather than
+   * /feed/channels — the set is then incomplete (recent posters only). */
+  degraded: boolean;
+}
+
+/**
+ * Load the user's subscribed channels from /feed/channels. A parse or fetch
+ * failure degrades to the proxy set derived from the caller's feed videos
+ * rather than failing: an incomplete set still beats none, and discovery
+ * must never be blocked by this.
+ */
+export async function loadSubscribedChannels(feedVideos: Video[]): Promise<SubscriptionsLoad> {
+  const fallback = (warning: string): SubscriptionsLoad => ({
+    channels: proxySubscribedChannels(feedVideos),
+    warnings: [warning],
+    degraded: true,
+  });
+
+  if (isDemoMode()) {
+    const page = await import("./fixtures/channels-page.json");
+    return { channels: parseChannelsPage(page.default), warnings: [], degraded: false };
+  }
+
+  try {
+    const page = await fetchFeedPage("channels");
+    const channels = parseChannelsPage(page.data);
+    if (channels.length === 0) {
+      return fallback(
+        "Couldn't read your subscription list — the parser may need updating. Falling back to channels seen in your subscriptions feed.",
+      );
+    }
+    return { channels, warnings: [], degraded: false };
+  } catch (err) {
+    if (err instanceof SignedOutError) throw err;
+    log.warn("subscribed channels load failed", err);
+    return fallback(
+      `Couldn't load your subscription list: ${err instanceof Error ? err.message : "unknown error"}`,
+    );
+  }
 }

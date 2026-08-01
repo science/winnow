@@ -5,7 +5,7 @@
 // wherever they appear rather than pinning exact page paths, so layout
 // reshuffles don't break us — only leaf-shape changes do.
 
-import type { FeedSource, Video } from "../../lib/types";
+import type { FeedSource, SubscribedChannel, Video } from "../../lib/types";
 import { approxAgeMs, parseDurationText, parseViewCountText } from "../../lib/format";
 import { log } from "../../lib/logger";
 
@@ -246,4 +246,74 @@ export function parseFeedPage(data: unknown, source: FeedSource): Video[] {
     return videos;
   }
   return videos;
+}
+
+/** Legacy shape: channelRenderer on /feed/channels. */
+function parseChannelRenderer(r: Json): SubscribedChannel | null {
+  const channelId = str(r["channelId"]);
+  if (!channelId) return null;
+  return { channelId, channelTitle: ytText(r["title"]) };
+}
+
+/** Modern shape: a lockupViewModel whose content is a channel, not a video. */
+function parseChannelLockup(l: Json): SubscribedChannel | null {
+  if (str(l["contentType"]) !== "LOCKUP_CONTENT_TYPE_CHANNEL") return null;
+  const channelId = str(l["contentId"]);
+  if (!channelId) return null;
+  const md = deepFind(l["metadata"], "lockupMetadataViewModel");
+  const title = isObj(md) && isObj(md["title"]) ? str((md["title"] as Json)["content"]) : null;
+  return { channelId, channelTitle: title };
+}
+
+/**
+ * Extract the user's subscribed channels from a /feed/channels ytInitialData
+ * tree. Same defensive contract as parseFeedPage: never throws, unrecognized
+ * structures yield an empty list, malformed entries are skipped.
+ */
+export function parseChannelsPage(data: unknown): SubscribedChannel[] {
+  const channels: SubscribedChannel[] = [];
+  const seen = new Set<string>();
+
+  function add(c: SubscribedChannel | null): void {
+    if (c && !seen.has(c.channelId)) {
+      seen.add(c.channelId);
+      channels.push(c);
+    }
+  }
+
+  function walk(node: unknown): void {
+    if (Array.isArray(node)) {
+      node.forEach(walk);
+      return;
+    }
+    if (!isObj(node)) return;
+    for (const [key, value] of Object.entries(node)) {
+      if (!isObj(value)) {
+        walk(value);
+        continue;
+      }
+      try {
+        if (key === "channelRenderer" || key === "gridChannelRenderer") {
+          add(parseChannelRenderer(value));
+          continue;
+        }
+        if (key === "lockupViewModel") {
+          add(parseChannelLockup(value));
+          continue;
+        }
+      } catch (err) {
+        log.warn("feedParser: skipping malformed channel entry", key, err);
+        continue;
+      }
+      walk(value);
+    }
+  }
+
+  try {
+    walk(data);
+  } catch (err) {
+    log.error("feedParser: channels walk failed", err);
+    return channels;
+  }
+  return channels;
 }

@@ -27,6 +27,14 @@ export interface Video {
   transcriptExcerpt?: string | null;
 }
 
+/** One channel the user subscribes to on YouTube, parsed from /feed/channels.
+ * Account-level, not per-profile: subscriptions belong to the YouTube account,
+ * while interest profiles are Winnow's own slicing of it. */
+export interface SubscribedChannel {
+  channelId: string;
+  channelTitle: string | null;
+}
+
 /** One entry in the persisted transcript cache (winnow:transcripts:v1).
  * Successes only — failures stay retryable on the next scoring run. */
 export interface TranscriptCacheEntry {

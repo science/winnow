@@ -1,0 +1,82 @@
+{
+  "_comment": "Synthetic /feed/channels ('All subscriptions') capture. Covers both the legacy channelRenderer shape and the modern LOCKUP_CONTENT_TYPE_CHANNEL lockupViewModel, plus entries the parser must skip. A real scrubbed capture is pending (QUESTIONS.md).",
+  "contents": {
+    "twoColumnBrowseResultsRenderer": {
+      "tabs": [
+        {
+          "tabRenderer": {
+            "title": "All subscriptions",
+            "content": {
+              "sectionListRenderer": {
+                "contents": [
+                  {
+                    "itemSectionRenderer": {
+                      "contents": [
+                        {
+                          "shelfRenderer": {
+                            "content": {
+                              "expandedShelfContentsRenderer": {
+                                "items": [
+                                  {
+                                    "channelRenderer": {
+                                      "channelId": "UCgrain12345",
+                                      "title": { "simpleText": "Grain Channel" },
+                                      "subscriberCountText": { "simpleText": "12.3K subscribers" }
+                                    }
+                                  },
+                                  {
+                                    "channelRenderer": {
+                                      "channelId": "UCchessnexus99",
+                                      "title": { "runs": [{ "text": "Chess Nexus" }] }
+                                    }
+                                  },
+                                  {
+                                    "channelRenderer": {
+                                      "title": { "simpleText": "Defective Channel With No Id" }
+                                    }
+                                  },
+                                  {
+                                    "channelRenderer": {
+                                      "channelId": "UCgrain12345",
+                                      "title": { "simpleText": "Grain Channel (duplicate entry)" }
+                                    }
+                                  },
+                                  {
+                                    "lockupViewModel": {
+                                      "contentType": "LOCKUP_CONTENT_TYPE_CHANNEL",
+                                      "contentId": "UClockupchan01",
+                                      "metadata": {
+                                        "lockupMetadataViewModel": {
+                                          "title": { "content": "Modern Lockup Channel" }
+                                        }
+                                      }
+                                    }
+                                  },
+                                  {
+                                    "lockupViewModel": {
+                                      "contentType": "LOCKUP_CONTENT_TYPE_VIDEO",
+                                      "contentId": "abc123DEF45",
+                                      "metadata": {
+                                        "lockupMetadataViewModel": {
+                                          "title": { "content": "A Video, Not A Channel" }
+                                        }
+                                      }
+                                    }
+                                  }
+                                ]
+                              }
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}
