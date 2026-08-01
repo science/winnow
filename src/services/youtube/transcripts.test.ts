@@ -115,12 +115,15 @@ describe("Origin-rewrite manifest wiring", () => {
     expect(rule!.condition.resourceTypes).toContain("xmlhttprequest");
   });
 
-  it("should not request the cookies permission (SAPISID auth is gone)", async () => {
+  it("should keep the DNR and host permissions the Origin rewrite needs", async () => {
+    // The cookies permission returned in 2026-07-31 for the subscribe write
+    // (subscribe.ts) and is asserted there. Transcripts must stay cookie-less
+    // regardless of what the manifest now allows — that invariant is pinned
+    // directly by the "credentials omit" test below, not by its absence here.
     const { readFileSync } = await import("node:fs");
     const manifest = JSON.parse(
       readFileSync(new URL("../../../public/manifest.json", import.meta.url), "utf8"),
     ) as { permissions: string[]; host_permissions: string[] };
-    expect(manifest.permissions).not.toContain("cookies");
     expect(manifest.permissions).toContain("declarativeNetRequestWithHostAccess");
     expect(manifest.host_permissions.some((h) => h.includes("youtube.com"))).toBe(true);
   });

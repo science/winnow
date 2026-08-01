@@ -77,6 +77,23 @@ export function extractLoggedIn(html: string): boolean | null {
 // Last successful raw captures, for Settings' "copy debug fixture" button.
 export const lastCaptures: Partial<Record<keyof typeof FEED_URLS | "search", string>> = {};
 
+// ytcfg from the most recent page fetch. Every feed/search fetch refreshes
+// it, so authenticated InnerTube calls (subscribe) normally pay no extra
+// request; getInnertubeConfig only fetches when nothing has been read yet.
+let cachedInnertubeConfig: InnertubeConfig | null = null;
+
+/** The InnerTube API key + client version, from the last fetched page or a
+ * fresh home fetch. Null when neither yields a usable ytcfg. */
+export async function getInnertubeConfig(): Promise<InnertubeConfig | null> {
+  if (cachedInnertubeConfig) return cachedInnertubeConfig;
+  try {
+    await fetchYtPage(FEED_URLS.home);
+  } catch (err) {
+    log.warn("getInnertubeConfig: home fetch failed", err);
+  }
+  return cachedInnertubeConfig;
+}
+
 /** Shared credentialed fetch + ytInitialData extraction for any youtube.com
  * page. Signed-out handling differs per caller: feeds need a session,
  * search works without one. */
@@ -91,6 +108,7 @@ async function fetchYtPage(url: string): Promise<YtPage> {
   }
   const html = await res.text();
   const loggedIn = extractLoggedIn(html);
+  cachedInnertubeConfig = extractInnertubeConfig(html) ?? cachedInnertubeConfig;
   const data = extractYtInitialData(html);
   if (data === null) {
     throw new PageParseError(
