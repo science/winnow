@@ -6,7 +6,11 @@ Winnow is a client-only Firefox extension. It has no server, no accounts, no tel
 
 ## What Winnow does with data
 
-**Reads your YouTube feeds, locally.** Winnow fetches youtube.com pages (your subscriptions feed and homepage recommendations) using your own logged-in browser session, and parses the video lists out of them. To YouTube this looks like ordinary page visits from your own browser. Transcript fetches are deliberately cookie-less. Winnow never posts, changes, or deletes anything on your YouTube account.
+**Reads your YouTube feeds, locally.** Winnow fetches youtube.com pages (your subscriptions feed, homepage recommendations, and your subscribed-channel list) using your own logged-in browser session, and parses the video and channel lists out of them. To YouTube this looks like ordinary page visits from your own browser. Transcript fetches are deliberately cookie-less.
+
+**Subscribes to a channel — only when you click Subscribe.** This is the one and only thing Winnow writes to your YouTube account. Pressing Subscribe on a discovered creator subscribes you to exactly that channel, the same as pressing Subscribe on youtube.com. Nothing else about your account is ever posted, changed, or deleted: Winnow does not comment, like, rate, add to playlists, alter your watch history, or unsubscribe you from anything. If the subscribe request fails, Winnow opens YouTube's own subscribe-confirmation page instead so you stay in control of what happens.
+
+To authorize that one request, Winnow reads your youtube.com session cookie (`SAPISID`) and uses it to sign the request in the way Google's own site does — this is what the extension's `cookies` permission is for, and it is used for nothing else. The cookie is read in your browser, used to compute a one-way hash for that single request, and never stored or transmitted anywhere else.
 
 **Sends scoring inputs to the AI provider you configure.** To rank videos, Winnow sends the AI provider you chose (Anthropic or OpenAI) — under your own API key — the following:
 
@@ -16,7 +20,7 @@ Winnow is a client-only Firefox extension. It has no server, no accounts, no tel
 
 This is the only place any of your data leaves your machine, it happens only after you supply an API key, and it goes directly from your browser to the provider you picked — no intermediary. Handling of that data is governed by your agreement with that provider ([Anthropic](https://www.anthropic.com/legal/privacy), [OpenAI](https://openai.com/policies/privacy-policy/)).
 
-**Stores everything else locally.** Your API keys, profile text, votes, cached scores, and settings live in Firefox extension storage on your machine. Nothing is synced or uploaded. Uninstalling the extension deletes all of it.
+**Stores everything else locally.** Your API keys, profile text, votes, cached scores, your subscribed-channel list, and settings live in Firefox extension storage on your machine. Nothing is synced or uploaded. Uninstalling the extension deletes all of it.
 
 ## What Winnow never does
 

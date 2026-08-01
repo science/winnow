@@ -45,15 +45,19 @@ Source code: https://github.com/science/winnow
 
 ## Notes to reviewer
 
-Winnow is a client-only extension: no backend, no telemetry, no remote scripts. Three things in the package deserve explanation:
+Winnow is a client-only extension: no backend, no telemetry, no remote scripts. Four things in the package deserve explanation:
 
 1. **DNR header rewrites (`dnr-rules.json`, 2 rules).**
-   (a) `Origin: https://www.youtube.com` is set on requests to `youtube.com/youtubei/v1/*` (XHR). These are cookie-less InnerTube transcript fetches made from the extension page; Google's anti-abuse layer rejects the `moz-extension://` origin Firefox would otherwise send. The rewrite makes the extension's own first-party-style requests acceptable to YouTube; it does not touch requests from any web page.
+   (a) `Origin: https://www.youtube.com` is set on requests to `youtube.com/youtubei/v1/*` (XHR). These are InnerTube calls made from the extension page — cookie-less transcript fetches, and the subscribe request in item 3; Google's anti-abuse layer rejects the `moz-extension://` origin Firefox would otherwise send. The rewrite makes the extension's own first-party-style requests acceptable to YouTube; it does not touch requests from any web page.
    (b) `Referer: https://winnow.misuse.org/` is set on `youtube-nocookie.com/embed/*` sub-frames, so the privacy-enhanced embed player works from the extension page.
 
-2. **Credentialed youtube.com fetches.** The extension fetches `youtube.com` and `/feed/subscriptions` with the user's own session (host permission, no `cookies` API) and parses the embedded `ytInitialData` JSON — the user's own feed, read on the user's machine, for the user's consumption. Nothing is posted or modified.
+2. **Credentialed youtube.com fetches.** The extension fetches `youtube.com`, `/feed/subscriptions`, and `/feed/channels` with the user's own session (host permission) and parses the embedded `ytInitialData` JSON — the user's own feed and subscription list, read on the user's machine, for the user's consumption.
 
-3. **Large minified bundle.** `assets/feed-*.js` inlines the `@anthropic-ai/sdk` and `openai` npm packages for direct browser→provider API calls with the user's own key (hence the `anthropic-dangerous-direct-browser-access` header in Anthropic requests — the SDK's sanctioned browser mode for BYO-key apps). Source zip with build instructions (`BUILD.md`) is submitted alongside; `npm ci && npm run build` on Node 24.14.0 reproduces `dist/` exactly. The linter's single `UNSAFE_VAR_ASSIGNMENT` warning is Svelte 5's internal template reconciler (trusted compiler-generated strings); application source contains no `innerHTML`/`{@html}`.
+3. **One write, and the `cookies` permission it needs.** The extension has a Subscribe button on discovered creators. Pressing it sends a single `POST` to `youtube.com/youtubei/v1/subscription/subscribe` with the channel id, subscribing the user to that channel — the same effect as pressing Subscribe on youtube.com. It fires only from that explicit click. Nothing else is posted, changed, or deleted: no comments, likes, ratings, playlist edits, watch-history changes, or unsubscribes. If the request fails, the UI falls back to opening YouTube's own `?sub_confirmation=1` page rather than retrying.
+
+   That endpoint requires Google's first-party `SAPISIDHASH` authorization, which is why the manifest requests `cookies`: the extension reads the `SAPISID` cookie for `youtube.com`, computes `SHA-1("<timestamp> <SAPISID> https://www.youtube.com")`, and sends it as an `Authorization` header on that one request. The cookie value is never stored and never leaves the browser. `cookies` is used for nothing else in the codebase (`src/services/youtube/authCookies.ts` is the only reader; `src/services/youtube/subscribe.ts` is its only caller).
+
+4. **Large minified bundle.** `assets/feed-*.js` inlines the `@anthropic-ai/sdk` and `openai` npm packages for direct browser→provider API calls with the user's own key (hence the `anthropic-dangerous-direct-browser-access` header in Anthropic requests — the SDK's sanctioned browser mode for BYO-key apps). Source zip with build instructions (`BUILD.md`) is submitted alongside; `npm ci && npm run build` on Node 24.14.0 reproduces `dist/` exactly. The linter's single `UNSAFE_VAR_ASSIGNMENT` warning is Svelte 5's internal template reconciler (trusted compiler-generated strings); application source contains no `innerHTML`/`{@html}`.
 
 Data collection declaration (`websiteContent`, `browsingActivity`) covers the video metadata and transcript excerpts from the user's YouTube feeds that are sent to the user's chosen AI provider for scoring. The developer receives nothing.
 

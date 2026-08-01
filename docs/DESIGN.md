@@ -103,6 +103,7 @@ Cost (claude-haiku-4-5): cold start ~200 videos ≈ $0.10 without transcripts, r
 
 - No winnow server, no telemetry, no third-party runtime scripts (policy, not preference).
 - YouTube sees ordinary page fetches from the user's own browser session.
+- **One write, one permission.** Winnow is read-only except for the Subscribe button, which POSTs `youtubei/v1/subscription/subscribe` for exactly the clicked channel (`services/youtube/subscribe.ts`). That endpoint needs Google's first-party SAPISIDHASH authorization, which is the *only* reason the `cookies` permission exists: `authCookies.ts` reads `SAPISID` for youtube.com, `sapisidHash.ts` hashes it into one `Authorization` header, and the value is never stored. Nothing else about the account is ever posted, changed, or deleted. Failures fall back to YouTube's own `?sub_confirmation=1` page rather than retrying a write. If a future feature wants another write, it gets its own review — do not treat this as a general-purpose opening.
 - The chosen AI provider receives video *metadata* (title/channel/stats) and transcript excerpts, plus the user's profile text — under the user's own API key.
 - Keys live in extension storage; readable by anything with debugger access to the browser profile. Accepted for a no-backend personal tool; stated in the README.
 - Transcript fetches are deliberately cookie-less InnerTube calls (ANDROID client) — the session adds nothing there. A DNR rule rewrites the `Origin` header on `/youtubei/` requests to `https://www.youtube.com`, because Google's anti-abuse layer bot-blocks the `moz-extension://` origin Firefox would otherwise send.
@@ -122,6 +123,6 @@ Cost (claude-haiku-4-5): cold start ~200 videos ≈ $0.10 without transcripts, r
 3. ~~Per-video feedback appended to the scoring prompt~~ — **shipped** (Good pick / Not for me; see Feedback section above).
 4. ~~Feedback-informed profile suggestions (suggested, never silent)~~ — **shipped** (Settings → "Suggest profile updates from my feedback"). Watch-history-informed suggestions remain future work.
 5. Takeover mode: redirect youtube.com's homepage to winnow.
-6. Per-channel mute/boost weights; configurable tier thresholds and windows.
+6. Per-channel boost — **partly shipped 2026-07-31**: subscribed channels get a modest ranking lift (`applyChannelBoost`), and subscribing writes an up-vote-equivalent. Per-channel *mute* weights and configurable tier thresholds/windows remain.
 7. Chrome port (MV3 service_worker + webextension-polyfill).
 8. Export/import of extension storage.

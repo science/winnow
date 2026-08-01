@@ -9,6 +9,7 @@ YouTube's algorithm optimizes for engagement — minutes watched per day. Winnow
 1. Winnow reads your real YouTube data — your subscriptions feed **and** your homepage recommendations — using your own logged-in browser session. No OAuth setup, no YouTube API keys, no quota.
 2. Each video is scored by an LLM (Anthropic or OpenAI — you bring your own API key) against your free-text interest profile: what you want *more* of, what you want *less* of. When a transcript is available it's weighed heavily — it reveals whether the content delivers on the title's promise.
 3. You get a calm, bounded feed in tiers: **Top picks**, **Worth a look**, and a collapsed **Winnowed out** fold. Nothing is deleted — every filtered video is one click away, with the reason it was filtered, so the curation stays auditable.
+4. **Go deeper** turns your profile into YouTube searches to find creators beyond your subscriptions. Like one? **Subscribe** subscribes you on YouTube for real, and tells Winnow to weigh that creator more heavily. Following someone lifts their videos modestly — it never exempts them, so a video that hits something you asked to avoid still gets winnowed.
 
 Deliberately absent, forever: autoplay, infinite scroll, engagement-ranked anything. The feed has a bottom, and says so.
 
@@ -31,6 +32,7 @@ Full policy: [PRIVACY.md](PRIVACY.md). The short version:
 - Everything runs in your browser. There is no winnow server and no telemetry.
 - Your API keys and profile live in extension storage on your machine.
 - The only network calls are to youtube.com (as you, for your data) and to the AI provider you configured (video metadata + transcript excerpts + your profile text, under your own key).
+- Winnow reads your YouTube account; the one thing it ever writes is a channel subscription, and only when you click Subscribe. It never comments, likes, rates, edits playlists, touches your watch history, or unsubscribes you from anything.
 - Zero third-party runtime scripts — policy, not preference.
 - Keys in extension storage are readable by anything with debugger access to your browser profile: standard for BYO-key client-only tools, but know it.
 
