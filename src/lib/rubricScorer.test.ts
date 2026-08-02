@@ -388,8 +388,62 @@ describe("canonicalizeTarget", () => {
       formatsAvoid: null,
       tonesAvoid: null,
     });
-    expect(t.topicsMore.items).toEqual(["elite chess", "professional engineering"]);
+    // Seek tags additionally gain their skill-band peer; avoid tags do not.
+    expect(t.topicsMore.items).toEqual([
+      "elite chess",
+      "professional chess",
+      "professional engineering",
+      "elite engineering",
+    ]);
     expect(t.topicsLess.items).toEqual(["amateur chess", "beginner woodworking"]);
+  });
+
+  // The translator and enricher are independent calls that pick their OWN word
+  // from the shared vocabulary for the same skill register: "top tier play"
+  // became "elite chess" while the enricher tagged 11 of the user's chess
+  // videos "professional chess". Same tier, different word, zero matches
+  // (2026-08-01 diag on the gotham capture).
+  it("should expand a seek tier tag to its skill-band peer", () => {
+    const t = canonicalizeTarget({
+      topicsMore: { items: ["elite chess"], importance: 8 },
+    });
+    expect(t.topicsMore.items).toEqual(["elite chess", "professional chess"]);
+  });
+
+  it("should expand the low-skill band symmetrically", () => {
+    const t = canonicalizeTarget({
+      topicsMore: { items: ["beginner woodworking"], importance: 6 },
+    });
+    expect(t.topicsMore.items).toEqual(["beginner woodworking", "amateur woodworking"]);
+  });
+
+  it("should NOT expand avoid tier tags — a broadened veto hides wanted content", () => {
+    // The gotham mis-ranking was a veto matching more than the user rejected.
+    // Avoiding amateur play says nothing about professional play, and the
+    // translator prompt already enumerates every variant a register covers.
+    const t = canonicalizeTarget({
+      topicsLess: { items: ["amateur chess"], importance: 8 },
+    });
+    expect(t.topicsLess.items).toEqual(["amateur chess"]);
+  });
+
+  it("should not expand style qualifiers across skill bands", () => {
+    // "casual" and "comedic" describe the register, not the skill: a celebrity
+    // exhibition is casual between elite players, so casual ⇏ amateur.
+    const t = canonicalizeTarget({
+      topicsMore: { items: ["casual chess"], importance: 5 },
+    });
+    expect(t.topicsMore.items).toEqual(["casual chess"]);
+  });
+
+  it("should make a professional-tagged video match an elite-chess interest", () => {
+    // The end-to-end point of the expansion, in ranker terms.
+    const t = canonicalizeTarget({
+      fields: {},
+      topicsMore: { items: ["elite chess"], importance: 8 },
+    });
+    const digest: VideoDigest = { ...DIGEST, topics: ["professional chess", "endgame"] };
+    expect(rankVideo(digest, t).reason).toContain("on-profile");
   });
 
   it("should expand a leading 'comic' into a comedic variant while keeping the original", () => {

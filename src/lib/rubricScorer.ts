@@ -280,6 +280,34 @@ export const TIER_QUALIFIER_SYNONYMS: ReadonlyArray<[string, string]> = (
   .filter(([, canon]) => (DIGEST_TIER_QUALIFIERS as readonly string[]).includes(canon))
   .sort((a, b) => b[0].length - a[0].length);
 
+/** Qualifiers denoting the same skill register. The translator and the
+ * enricher are independent LLM calls; the shared vocabulary makes them spell
+ * a qualifier the same way but does nothing to make them CHOOSE the same one.
+ * Live 2026-08-01: "top tier play" translated to "elite chess" while the
+ * enricher tagged 11 of that user's chess videos "professional chess" — same
+ * register, different word, no token overlap, zero matches on their headline
+ * interest.
+ *
+ * Seek tags expand across the band so either choice matches. Avoid tags never
+ * do: broadening a veto hides content the user asked for (the 2026-07 gotham
+ * mis-ranking), and the translator prompt already enumerates every variant a
+ * rejected register covers. "casual"/"comedic" are style, not skill, and have
+ * no peers — a celebrity exhibition is casual between elite players. */
+const SKILL_BAND_PEERS: Readonly<Record<string, string>> = {
+  elite: "professional",
+  professional: "elite",
+  amateur: "beginner",
+  beginner: "amateur",
+};
+
+/** ["elite chess"] → ["elite chess", "professional chess"]. Seek tags only. */
+function expandSkillBand(tag: string): string[] {
+  const sep = tag.indexOf(" ");
+  if (sep <= 0) return [tag];
+  const peer = SKILL_BAND_PEERS[tag.slice(0, sep)];
+  return peer ? [tag, `${peer} ${tag.slice(sep + 1)}`] : [tag];
+}
+
 /** Quality adjectives say how a subject should be treated — the numeric axes
  * carry that. Stripped from SEEK tags only, so the bare subject can match
  * ("practical engineering" is a tag the enricher never emits); an avoid tag
@@ -385,6 +413,9 @@ function cleanList(
       // literal word) or subject ("comic books")? Expand instead of rewrite —
       // whichever reading is right matches, the other tag stays inert.
       .flatMap((i) => (i.startsWith("comic ") ? [i, `comedic ${i.slice(6)}`] : [i]));
+    // Band peers last, so expansions of the "comic"→"comedic" variants are
+    // considered too. Seek only — see SKILL_BAND_PEERS.
+    if (opts.topics === "seek") raw = raw.flatMap(expandSkillBand);
   }
   const items = dedupeSupersets(raw)
     .filter((i) => !(opts.dropItems ?? []).includes(i))
