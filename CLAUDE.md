@@ -8,7 +8,7 @@ Winnow is a Firefox browser extension (Manifest V3) that replaces the YouTube fe
 
 Product principles (do not relitigate): **no autoplay-next, no infinite scroll, no engagement bait**. The video the user clicked does start playing on open (that's intent, not a dark pattern); nothing ever queues or plays after it ends. Winnowed-out videos are hidden behind a fold, never deleted — curation stays auditable.
 
-**Before starting feature work, read `docs/DEVELOPMENT.md`** — module map, invariants/gotchas, and recipes for common changes (parser shapes, providers, settings, storage keys, e2e). `docs/DESIGN.md` has the architecture and storage schema registry; `docs/TWO_PHASE_SCORING.md` the planned scoring evolution; `QUESTIONS.md` the open user-blocked items.
+**Before starting feature work, read `docs/DEVELOPMENT.md`** — module map, invariants/gotchas, and recipes for common changes (parser shapes, providers, settings, storage keys, e2e). `docs/DESIGN.md` has the architecture and storage schema registry; `docs/TWO_PHASE_SCORING.md` the planned scoring evolution and `docs/CUT_SCORE_RANKING.md` the proposed cut-score ranking model; `QUESTIONS.md` the open user-blocked items.
 
 ## Commands
 
