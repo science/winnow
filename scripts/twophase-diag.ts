@@ -18,7 +18,8 @@ import { parseFeedPage } from "../src/services/youtube/feedParser";
 import { extractYtInitialData } from "../src/services/youtube/ytPage";
 import { runTwoPhaseScoring, enrichmentModelFor } from "../src/services/scoring/twoPhase";
 import { fetchTranscriptExcerpt } from "../src/services/youtube/transcripts";
-import { isEmptyTarget } from "../src/lib/rubricScorer";
+import { isEmptyTarget, matchedTopics } from "../src/lib/rubricScorer";
+import { DIGEST_TIER_QUALIFIERS } from "../src/lib/digest";
 import { TIER_THRESHOLDS } from "../src/lib/tiers";
 import type { EnrichmentEntry, Provider, Video } from "../src/lib/types";
 import type { StoredTarget } from "../src/services/scoring/twoPhase";
@@ -224,6 +225,78 @@ async function main(): Promise<void> {
     [...hist.entries()].sort((a, b) => parseInt(a[0]) - parseInt(b[0])).map(([b, n]) => `${b}: ${n}`).join("  "),
   );
   console.log(`tiers → top=${top} worthALook=${worth} winnowed=${winnowed} (of ${scores.length} scored)`);
+
+  // Subject breakdown: is a subject over-represented in what YouTube HANDS us
+  // (supply-driven — the ranker is behaving, only a diversity constraint or a
+  // different subscription mix would change it), or does it survive ranking at
+  // a higher rate than it arrives (ranker-driven — a scoring bug)? Attribution
+  // uses the ranker's own matchedTopics, so "on-profile" here means exactly
+  // what it means to rankVideo.
+  console.log("\n=== SUBJECT BREAKDOWN (supply vs top picks) ===");
+  const isTop = (s: { score: number; clickbait: boolean }): boolean =>
+    s.score >= TIER_THRESHOLDS.top && !s.clickbait;
+  const supplyBy = new Map<string, number>();
+  const topBy = new Map<string, number>();
+  const bump = (m: Map<string, number>, k: string): void => void m.set(k, (m.get(k) ?? 0) + 1);
+  let supplyTotal = 0;
+  let topTotal = 0;
+  for (const [id, s] of scores) {
+    const digest = enrichmentCache?.[id]?.digest;
+    if (!digest) continue;
+    supplyTotal++;
+    const top = isTop(s);
+    if (top) topTotal++;
+    // Tier-qualified variants ("elite chess", "casual chess") are one subject
+    // for this purpose — the question is about subject spread, not tier.
+    const subjects = new Set(
+      matchedTopics(digest.topics, result.target.topicsMore.items).map((m) => {
+        const parts = m.split(" ");
+        return parts.length > 1 && (DIGEST_TIER_QUALIFIERS as readonly string[]).includes(parts[0]!)
+          ? parts.slice(1).join(" ")
+          : m;
+      }),
+    );
+    if (subjects.size === 0) subjects.add("(off-profile)");
+    for (const subj of subjects) {
+      bump(supplyBy, subj);
+      if (top) bump(topBy, subj);
+    }
+  }
+  const pct = (n: number, d: number): string => (d === 0 ? "  n/a" : `${((100 * n) / d).toFixed(0).padStart(3)}%`);
+  console.log(`supply=${supplyTotal} scored, top picks=${topTotal}`);
+  console.log("subject                    supply  share |  top   share |  survival");
+  const subjectRows = [...supplyBy.entries()].sort((a, b) => b[1] - a[1]);
+  for (const [subj, n] of subjectRows) {
+    const t = topBy.get(subj) ?? 0;
+    console.log(
+      `${subj.padEnd(26)} ${String(n).padStart(5)}  ${pct(n, supplyTotal)} | ${String(t).padStart(4)}  ${pct(t, topTotal)} |  ${pct(t, n)}`,
+    );
+  }
+  console.log(
+    "\nshare columns answer the question: a subject whose top-picks share ≈ its\n" +
+      "supply share is supply-driven; a much higher top share means ranking favors it.\n" +
+      "survival = how often that subject's videos clear the top threshold.",
+  );
+
+  console.log("\n=== RAW DIGEST TOPICS (what the feed is actually about) ===");
+  const rawSupply = new Map<string, number>();
+  const rawTop = new Map<string, number>();
+  for (const [id, s] of scores) {
+    const digest = enrichmentCache?.[id]?.digest;
+    if (!digest) continue;
+    for (const t of new Set(digest.topics)) {
+      bump(rawSupply, t);
+      if (isTop(s)) bump(rawTop, t);
+    }
+  }
+  console.log(
+    [...rawSupply.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 25)
+      .map(([t, n]) => `${t}:${n}/${rawTop.get(t) ?? 0}`)
+      .join("  "),
+  );
+  console.log("(topic:supplyCount/topPicksCount — includes subjects not in the profile)");
 
   console.log("\n=== PER-VIDEO ===");
   const sorted = scores

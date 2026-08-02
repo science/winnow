@@ -6,6 +6,7 @@ import {
   canonicalizeTarget,
   EMPTY_TARGET,
   isEmptyTarget,
+  matchedTopics,
   rankVideo,
   SUBSCRIBED_CHANNEL_BOOST,
   TARGET_TOPICS_MAX,
@@ -260,6 +261,37 @@ describe("rankVideo", () => {
       t,
     );
     expect(elite.score).toBeGreaterThanOrEqual(75);
+  });
+});
+
+// Subject attribution for diagnostics reuses the ranker's own matcher. If it
+// were reimplemented, a breakdown could report a subject the ranker never
+// credited — a diagnostic that lies about the thing it exists to measure.
+describe("matchedTopics", () => {
+  it("should return every profile item a digest matches, not just the first", () => {
+    expect(matchedTopics(["chess", "endgames"], ["chess", "endgames", "history"])).toEqual([
+      "chess",
+      "endgames",
+    ]);
+  });
+
+  it("should return an empty list when nothing matches", () => {
+    expect(matchedTopics(["cooking"], ["chess", "history"])).toEqual([]);
+  });
+
+  it("should agree with rankVideo's credit: a match here means an on-profile score", () => {
+    const items = ["chess"];
+    const matches = matchedTopics(DIGEST.topics, items);
+    const ranked = rankVideo(DIGEST, target({ topicsMore: { items, importance: 8 } }));
+    expect(matches.length).toBeGreaterThan(0);
+    expect(ranked.reason).toContain("on-profile: chess");
+  });
+
+  it("should require every item token in one topic, matching the ranker's subset rule", () => {
+    // "elite chess" against a digest tagged bare "chess" proves nothing —
+    // the qualifier is absent, so it must not count toward that subject.
+    expect(matchedTopics(["chess"], ["elite chess"])).toEqual([]);
+    expect(matchedTopics(["elite chess"], ["chess"])).toEqual(["chess"]);
   });
 });
 

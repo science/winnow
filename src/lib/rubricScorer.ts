@@ -111,22 +111,33 @@ function isSubset(a: Set<string>, b: Set<string>): boolean {
   return true;
 }
 
-/** A profile item matches a digest topic iff every item token appears in
- * that single topic — broad "chess" covers "chess openings", but never the
- * reverse: a digest topic missing the qualifier ("chess" vs avoid item
- * "comic chess") proves nothing about the video. Bidirectional substring
- * here is what made every chess video hit both the seek and avoid lists
- * (the 2026-07 gotham mis-ranking). No token union across digest topics:
- * "computer science" must not match ["computer engine", "science"].
- * Returns the matched PROFILE item so reasons name the user's own words. */
-function topicMatch(digestTopics: string[], items: string[]): string | null {
+/** Every profile item the digest matches, in list order. A profile item
+ * matches a digest topic iff every item token appears in that single topic —
+ * broad "chess" covers "chess openings", but never the reverse: a digest
+ * topic missing the qualifier ("chess" vs avoid item "comic chess") proves
+ * nothing about the video. Bidirectional substring here is what made every
+ * chess video hit both the seek and avoid lists (the 2026-07 gotham
+ * mis-ranking). No token union across digest topics: "computer science" must
+ * not match ["computer engine", "science"]. Returns the matched PROFILE
+ * items so reasons (and subject breakdowns) name the user's own words.
+ *
+ * Exported for subject attribution in diagnostics: scoring and any report
+ * about scoring must share one matcher, or the report can credit a subject
+ * the ranker didn't. */
+export function matchedTopics(digestTopics: string[], items: string[]): string[] {
   const topicTokenSets = digestTopics.map(tokens);
+  const out: string[] = [];
   for (const item of items) {
     const itemTokens = tokens(item);
     if (itemTokens.size === 0) continue;
-    if (topicTokenSets.some((tt) => isSubset(itemTokens, tt))) return norm(item);
+    if (topicTokenSets.some((tt) => isSubset(itemTokens, tt))) out.push(norm(item));
   }
-  return null;
+  return out;
+}
+
+/** First match only — ranking asks a binary question, so it stops early. */
+function topicMatch(digestTopics: string[], items: string[]): string | null {
+  return matchedTopics(digestTopics, items)[0] ?? null;
 }
 
 interface Contribution {
