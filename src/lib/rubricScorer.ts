@@ -18,7 +18,7 @@ import {
 
 /** Participates in the two-phase score-cache hash — bump when ranking or
  * reason-composition semantics change. */
-export const RANKER_VERSION = 4;
+export const RANKER_VERSION = 5;
 
 /** Digest axes ≥ this value set the clickbait flag regardless of profile. */
 const CLICKBAIT_FLAG_THRESHOLD = 4;
@@ -47,14 +47,30 @@ export const EMPTY_TARGET: ProfileTarget = {
   tonesAvoid: EMPTY_LIST,
 };
 
+/** Topic weight floor, as a fraction of the total numeric-axis weight.
+ *
+ * Derived, not tuned. An off-profile video earns TOPICS_MORE_MISS_CREDIT on
+ * the topic contribution and can earn full credit everywhere else, so its
+ * ceiling is (W + 0.35F)/(W + F) for field weight W and topic weight F.
+ * Requiring that to stay under TIER_THRESHOLDS.top (75) gives F > 0.625W;
+ * 0.7 clears it with margin. The ratio form is what matters: the ceiling
+ * works out to ~73 for ANY W, so the guarantee survives the translator
+ * emitting a different importance mix on the next run — which it does
+ * (docs/CUT_SCORE_RANKING.md §5).
+ *
+ * The invariant: production quality alone can carry a video to the top of
+ * Worth-a-look, never into Top picks. Only relevance does that. */
+export const TOPIC_WEIGHT_FLOOR_RATIO = 0.7;
+
 export interface RankedScore {
   score: number;
   reason: string;
   clickbait: boolean;
-  /** True when an avoided topic clamped the score to AVOID_TOPIC_SCORE_CAP.
-   * Reported so later adjustments (applyChannelBoost) can honor the veto
-   * instead of quietly lifting the video back over the fold. */
-  cappedByAvoidTopic: boolean;
+  /** True when a hard cap clamped the score to AVOID_TOPIC_SCORE_CAP — an
+   * avoided topic or a quality veto. Reported so later adjustments
+   * (applyChannelBoost) honor the cap instead of quietly lifting the video
+   * back over the fold. */
+  capped: boolean;
 }
 
 /** How much a subscribed channel lifts its videos. Deliberately modest: the
@@ -73,7 +89,7 @@ export const SUBSCRIBED_CHANNEL_BOOST = 8;
 export function applyChannelBoost(ranked: RankedScore, subscribed: boolean): RankedScore {
   if (!subscribed) return ranked;
   const raw = Math.min(100, ranked.score + SUBSCRIBED_CHANNEL_BOOST);
-  const score = ranked.cappedByAvoidTopic ? Math.min(raw, AVOID_TOPIC_SCORE_CAP) : raw;
+  const score = ranked.capped ? Math.min(raw, AVOID_TOPIC_SCORE_CAP) : raw;
   if (score === ranked.score) return ranked;
   return { ...ranked, score, reason: `${ranked.reason}; followed creator`.slice(0, 120) };
 }
@@ -165,8 +181,15 @@ function contributions(
   }
   if (target.topicsMore.items.length > 0 && target.topicsMore.importance > 0) {
     const matched = topicMatch(digest.topics, target.topicsMore.items);
+    // Floor the topic weight against the numeric axes accumulated above. Only
+    // when the profile actually names topics — with an empty seek list the
+    // floor would amplify a constraint that does not exist.
+    const fieldWeight = out.reduce((sum, c) => sum + c.weight, 0);
     out.push({
-      weight: target.topicsMore.importance,
+      weight: Math.max(
+        target.topicsMore.importance,
+        Math.round(TOPIC_WEIGHT_FLOOR_RATIO * fieldWeight),
+      ),
       credit: matched ? 1 : TOPICS_MORE_MISS_CREDIT,
       good: matched ? `on-profile: ${matched}` : null,
       bad: "off your stated interests",
@@ -233,18 +256,33 @@ export function rankVideo(digest: VideoDigest, target: ProfileTarget): RankedSco
       score: 50,
       reason: "No profile constraints to rank against yet",
       clickbait,
-      cappedByAvoidTopic: false,
+      capped: false,
     };
   }
   let score = Math.round(
     (100 * parts.reduce((sum, c) => sum + c.weight * c.credit, 0)) / totalWeight,
   );
-  if (avoidedTopic !== null) score = Math.min(score, AVOID_TOPIC_SCORE_CAP);
+  // Cut scores: bait is disqualifying, not discountable. Reuses the clickbait
+  // flag (severity or overreach >= 4) rather than inventing a second
+  // threshold — on the real capture that rule caught the bait and the
+  // science-provocateur videos while sparing merely-off-topic content.
+  // substanceDensity is deliberately NOT veto-eligible: it is
+  // genre-correlated, not garbage-correlated (live music legitimately scores
+  // 1), and vetoing it winnowed 46% of the capture.
+  let lead: string | null = avoidedTopic === null ? null : `avoided: ${avoidedTopic}`;
+  if (clickbait) {
+    lead ??=
+      digest.clickbaitSeverity >= CLICKBAIT_FLAG_THRESHOLD
+        ? FIELD_PHRASES.clickbaitSeverity.bad
+        : FIELD_PHRASES.claimOverreach.bad;
+  }
+  const capped = avoidedTopic !== null || clickbait;
+  if (capped) score = Math.min(score, AVOID_TOPIC_SCORE_CAP);
   return {
     score: Math.max(0, Math.min(100, score)),
-    reason: composeReason(parts, avoidedTopic === null ? null : `avoided: ${avoidedTopic}`),
+    reason: composeReason(parts, lead),
     clickbait,
-    cappedByAvoidTopic: avoidedTopic !== null,
+    capped,
   };
 }
 

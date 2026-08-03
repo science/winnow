@@ -441,7 +441,7 @@ export async function runTwoPhaseScoring(
       rankVideo(digest, target),
       video.channelId !== null && subscribedIds.has(video.channelId),
     );
-    // Explicit fields, not a spread: cappedByAvoidTopic is ranking bookkeeping
+    // Explicit fields, not a spread: capped is ranking bookkeeping
     // and must not leak into the persisted score cache.
     result.scores[video.id] = {
       score: ranked.score,

@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import type { ProfileTarget, VideoDigest } from "./types";
+import { TIER_THRESHOLDS } from "./tiers";
 import {
   applyChannelBoost,
   AVOID_TOPIC_SCORE_CAP,
@@ -295,6 +296,100 @@ describe("matchedTopics", () => {
   });
 });
 
+// Cut-score ranking (docs/CUT_SCORE_RANKING.md). Measured on the real capture:
+// topic match carried ~19% of the score, so 41% of Top picks were off-profile
+// videos winning on production quality alone.
+describe("cut-score ranking", () => {
+  const QUALITY: Omit<VideoDigest, "topics"> = {
+    summary: "Beautifully produced, honest, dense.",
+    format: "documentary",
+    emotionalTone: "calm",
+    hypeSignals: [],
+    substanceDensity: 5,
+    clickbaitSeverity: 1,
+    claimOverreach: 1,
+    intellectualDemand: 4,
+    productionEffort: 5,
+    novelty: 5,
+  };
+  const fullTarget = (topics: string[]): ProfileTarget =>
+    target({
+      fields: {
+        substanceDensity: { target: 5, importance: 7 },
+        clickbaitSeverity: { target: 1, importance: 8 },
+        claimOverreach: { target: 1, importance: 9 },
+        intellectualDemand: { target: 4, importance: 6 },
+      },
+      topicsMore: { items: topics, importance: 7 },
+    });
+
+  it("should keep an off-profile video out of Top picks however well produced", () => {
+    // The floor is derived, not tuned: at ratio 0.7 the best possible
+    // off-profile score is ~73 for ANY set of field weights, so this holds
+    // even when the translator emits a different importance mix next run.
+    const off = rankVideo({ ...QUALITY, topics: ["live music", "indie rock"] }, fullTarget(["chess"]));
+    expect(off.score).toBeLessThan(75);
+  });
+
+  it("should rank an on-profile mediocre video above an off-profile polished one", () => {
+    const t = fullTarget(["chess"]);
+    const onProfileMeh = rankVideo(
+      { ...QUALITY, topics: ["chess"], substanceDensity: 3, productionEffort: 2, novelty: 2 },
+      t,
+    );
+    const offProfilePolished = rankVideo({ ...QUALITY, topics: ["live music"] }, t);
+    expect(onProfileMeh.score).toBeGreaterThan(offProfilePolished.score);
+  });
+
+  it("should not apply the topic floor when the profile names no topics", () => {
+    // With an empty seek list the floor would amplify a constraint that does
+    // not exist. Quality axes alone must still rank normally.
+    const t = target({ fields: { substanceDensity: { target: 5, importance: 7 } } });
+    expect(rankVideo({ ...QUALITY, topics: ["anything"] }, t).score).toBe(100);
+  });
+
+  it("should cap a bait-flagged video behind the fold even when on-profile", () => {
+    // Garbage is disqualifying, not discountable: the veto reuses the existing
+    // clickbait flag (clickbaitSeverity >= 4 || claimOverreach >= 4), which on
+    // the real capture caught the bait and the science-provocateur videos while
+    // sparing merely-off-topic content.
+    const baity = rankVideo(
+      { ...QUALITY, topics: ["chess"], claimOverreach: 4 },
+      fullTarget(["chess"]),
+    );
+    expect(baity.score).toBeLessThanOrEqual(AVOID_TOPIC_SCORE_CAP);
+    expect(baity.clickbait).toBe(true);
+  });
+
+  it("should name the veto in the reason so curation stays auditable", () => {
+    const baity = rankVideo(
+      { ...QUALITY, topics: ["chess"], clickbaitSeverity: 5 },
+      fullTarget(["chess"]),
+    );
+    expect(baity.reason.toLowerCase()).toMatch(/bait|overclaim/);
+  });
+
+  it("should keep a vetoed video capped despite a subscribed-channel boost", () => {
+    // Subscribing must not launder a creator's junk past a quality veto.
+    const baity = rankVideo(
+      { ...QUALITY, topics: ["chess"], clickbaitSeverity: 5 },
+      fullTarget(["chess"]),
+    );
+    expect(applyChannelBoost(baity, true).score).toBeLessThanOrEqual(AVOID_TOPIC_SCORE_CAP);
+  });
+
+  it("should not veto low-substance content that is honest and well made", () => {
+    // substanceDensity is genre-correlated, not garbage-correlated: live music
+    // and performance legitimately score 1. Vetoing it winnowed 46% of the real
+    // capture, so it is NOT veto-eligible — off-profile is the topic axis's job.
+    const music = rankVideo(
+      { ...QUALITY, topics: ["live music"], substanceDensity: 1 },
+      fullTarget(["chess"]),
+    );
+    expect(music.score).toBeGreaterThan(TIER_THRESHOLDS.worthALook);
+  });
+});
+
 describe("canonicalizeTarget", () => {
   it("should strip null field constraints and clamp ranges (strict-schema null workaround)", () => {
     const t = canonicalizeTarget({
@@ -564,7 +659,7 @@ describe("targetHash", () => {
 });
 
 describe("applyChannelBoost — subscribing lifts a creator, it does not exempt them", () => {
-  const neutral = { score: 60, reason: "on-profile: chess", clickbait: false, cappedByAvoidTopic: false };
+  const neutral = { score: 60, reason: "on-profile: chess", clickbait: false, capped: false };
 
   it("should leave the score untouched for a channel the user has not subscribed to", () => {
     expect(applyChannelBoost(neutral, false)).toEqual(neutral);
@@ -583,7 +678,7 @@ describe("applyChannelBoost — subscribing lifts a creator, it does not exempt 
       score: AVOID_TOPIC_SCORE_CAP,
       reason: "avoided: comic chess",
       clickbait: false,
-      cappedByAvoidTopic: true,
+      capped: true,
     };
     const boosted = applyChannelBoost(capped, true);
     expect(boosted.score).toBe(AVOID_TOPIC_SCORE_CAP);
@@ -592,12 +687,12 @@ describe("applyChannelBoost — subscribing lifts a creator, it does not exempt 
   });
 
   it("should never exceed 100", () => {
-    const high = { score: 98, reason: "on-profile: chess", clickbait: false, cappedByAvoidTopic: false };
+    const high = { score: 98, reason: "on-profile: chess", clickbait: false, capped: false };
     expect(applyChannelBoost(high, true).score).toBe(100);
   });
 
   it("should preserve the clickbait flag", () => {
-    const bait = { score: 60, reason: "hype", clickbait: true, cappedByAvoidTopic: false };
+    const bait = { score: 60, reason: "hype", clickbait: true, capped: false };
     expect(applyChannelBoost(bait, true).clickbait).toBe(true);
   });
 });
@@ -608,11 +703,11 @@ describe("rankVideo — avoid-topic capping is reported to callers", () => {
       DIGEST,
       target({ topicsLess: { items: ["chess"], importance: 8 } }),
     );
-    expect(r.cappedByAvoidTopic).toBe(true);
+    expect(r.capped).toBe(true);
     expect(r.score).toBeLessThanOrEqual(AVOID_TOPIC_SCORE_CAP);
   });
 
   it("should not flag when no avoided topic was hit", () => {
-    expect(rankVideo(DIGEST, target({ topicsMore: { items: ["chess"], importance: 8 } })).cappedByAvoidTopic).toBe(false);
+    expect(rankVideo(DIGEST, target({ topicsMore: { items: ["chess"], importance: 8 } })).capped).toBe(false);
   });
 });

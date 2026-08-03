@@ -226,6 +226,26 @@ async function main(): Promise<void> {
   );
   console.log(`tiers → top=${top} worthALook=${worth} winnowed=${winnowed} (of ${scores.length} scored)`);
 
+  // --dump=<path>: persist the enriched digests + the target that ranked them,
+  // so threshold tuning runs offline against a fixed set (scripts/rank-sweep.ts)
+  // instead of paying for an enrichment pass per candidate parameter set.
+  const dumpArg = process.argv.find((a) => a.startsWith("--dump="));
+  if (dumpArg) {
+    const path = dumpArg.slice("--dump=".length);
+    const digests: Record<string, unknown> = {};
+    for (const [id, entry] of Object.entries(enrichmentCache ?? {})) {
+      const v = videos.find((x) => x.id === id);
+      digests[id] = {
+        title: v?.title ?? null,
+        channelTitle: v?.channelTitle ?? null,
+        hadTranscript: entry.hadTranscript,
+        digest: entry.digest,
+      };
+    }
+    writeFileSync(path, JSON.stringify({ target: result.target, digests }, null, 1));
+    console.log(`\ndumped ${Object.keys(digests).length} digests → ${path}`);
+  }
+
   // Subject breakdown: is a subject over-represented in what YouTube HANDS us
   // (supply-driven — the ranker is behaving, only a diversity constraint or a
   // different subscription mix would change it), or does it survive ranking at

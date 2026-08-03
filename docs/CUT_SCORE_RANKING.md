@@ -1,173 +1,180 @@
-# Cut-score ranking (planned)
+# Cut-score ranking
 
-Status: **proposed**, not implemented. Constants below are hypotheses to be
-validated by the measurement protocol in §6 before anything ships.
+Status: **shipped** (`RANKER_VERSION` 5, 2026-08-02). Two parts of the original
+proposal changed under measurement — see §4 and §5. Tuning data and method are
+kept here because the constants are only defensible with them.
 
 ## 1. The problem, measured
 
-Diagnostic run 2026-08-01/02, real gotham profile against the real 126-video
-capture (`npx vite-node scripts/twophase-diag.ts 126 openai --capture`,
-`DIAG_PROFILE=gotham`):
+Diagnostic against the real gotham profile and the real 126-video capture
+(`DIAG_PROFILE=gotham npx vite-node scripts/twophase-diag.ts 126 openai --capture`):
 
 - **114 of 126 videos (90%) matched no `topicsMore` item at all.**
 - **93 of 126 (74%) landed in "Worth a look"** — a large undifferentiated middle.
-- On the second run, **29 of 41 top picks (71%) were off-profile.**
+- **41% of Top picks were off-profile** (13 of 32), winning on production
+  quality alone.
 
-The feed is not sorting by "is this for me". It is sorting by "is this
-competently produced", and off-profile-but-polished content wins.
+The feed was not sorting by "is this for me". It was sorting by "is this
+competently produced".
 
-## 2. Why the current model produces this
+## 2. Why
 
-`rankVideo` takes a weighted average over commensurable credits, where topic
-match is one contribution among many:
-
-| run | field weights | topicsMore weight | topic share |
-|---|---|---|---|
-| 1 | substance 7, clickbait 8, overreach 8, demand 7 = **30** | **7** | 19% |
-| 2 | clickbait 9, overreach 8 = **17** | **8** | 32% |
-
-An off-profile video with perfect quality axes scores
-`(30·1 + 7·0.35)/37 = 88` — comfortably into Top picks without matching a
-single stated interest. That is not a bug in the arithmetic; it is the
-arithmetic working as designed. Relevance and quality are being traded off
-against each other, and quality has 4× the weight.
+`rankVideo` takes a weighted average in which topic match is one contribution
+among many. With the captured target (field weights 37, topic weight 7), topic
+match carried **~16%** of the score, so an off-profile video with perfect
+quality axes scored `(37·1 + 7·0.35)/44 = 89` — into Top picks without matching
+a single stated interest. The arithmetic was working as designed; the design
+traded relevance against quality and gave quality ~5× the weight.
 
 ## 3. The model
 
-Two stages, replacing one weighted average.
+Two mechanisms, both inside `rankVideo`.
 
-### Stage 1 — vetoes (fixed policy, profile-independent)
+### Vetoes — garbage is disqualifying, not discountable
 
-Garbage is **disqualifying, not discountable**. Above an intensity threshold a
-video is capped at `AVOID_TOPIC_SCORE_CAP` (45, just under the Worth-a-look
-threshold of 50) regardless of how well it matches.
+A video flagged `clickbait` is capped at `AVOID_TOPIC_SCORE_CAP` (45, just
+under the Worth-a-look threshold), regardless of how well it matches.
 
-This reuses the existing avoid-topic cap mechanism rather than inventing a
-second one, and it preserves the product principle: capped videos land in the
-**Winnowed** fold with a reason, still one click away. Nothing is deleted.
+The flag is the **pre-existing** `clickbaitSeverity >= 4 || claimOverreach >= 4`
+(`CLICKBAIT_FLAG_THRESHOLD`). No new threshold was introduced: the same
+condition that already demoted a video out of Top picks now caps it behind the
+fold. Capped videos remain visible in the Winnowed fold with a reason naming
+the veto — nothing is deleted.
 
-**Veto-eligible axes are integrity axes only** — those with a fixed bad
-direction, independent of taste:
+### Topic weight floor — relevance outranks polish
 
-| axis | bad direction | rationale |
-|---|---|---|
-| `clickbaitSeverity` | high | packaging lies about content |
-| `claimOverreach` | high | claims beyond the evidence |
-| `substanceDensity` | low | filler |
+`topicsMore` weight is floored at `TOPIC_WEIGHT_FLOOR_RATIO` (0.7) × the total
+numeric-axis weight, applied **only when the profile actually names topics**.
 
-**Not veto-eligible — preference axes**, where the desired value is a matter
-of taste and the profile supplies the target: `intellectualDemand`,
-`productionEffort`, `novelty`. Low intellectual demand is not garbage; someone
-may legitimately want background watching. Vetoing on these would encode one
-user's taste as a universal quality bar.
+Derived, not tuned. An off-profile video earns `TOPICS_MORE_MISS_CREDIT` (0.35)
+on the topic contribution and can earn full credit everywhere else, so its
+ceiling is `(W + 0.35F)/(W + F)`. Requiring that to stay under the Top-picks
+threshold of 75 gives `F > 0.625W`; 0.7 clears it with margin.
 
-### Stage 2 — weighted score below the cuts
+The **ratio** form is the point: the ceiling works out to ~73 for any `W`, so
+the guarantee survives the translator emitting a different importance mix next
+run — which it does (§5).
 
-For everything that survives Stage 1:
+> **Invariant:** production quality alone can carry a video to the top of
+> Worth-a-look, never into Top picks. Only relevance does that.
 
-- **Topic relevance gets a weight floor**, so subject match dominates instead
-  of being a minor term.
-- **Integrity axes contribute at reduced weight** — they have already done
-  their main job as vetoes; sub-threshold variation should nudge, not decide.
-- **Preference axes unchanged.**
+`TOPICS_MORE_MISS_CREDIT` stays at 0.35. Raising topic weight while keeping the
+miss credit is what makes this graduated rather than a collapse: off-profile
+content moves out of Top picks *without* being winnowed.
 
-`TOPICS_MORE_MISS_CREDIT = 0.35` stays. Raising topic weight while keeping the
-miss credit is what makes this graduated rather than a collapse: with a floor
-of 30 against run-1's field weights, an off-profile polished video moves
-`88 → (30·1 + 30·0.35)/60 = 68` — out of Top picks, into Worth a look, **not**
-winnowed. An on-profile mediocre video moves to
-`(30·0.5 + 30·1)/60 = 75` — into Top picks. That inversion is the entire goal.
+## 4. What changed from the proposal: `substanceDensity` is not veto-eligible
 
-## 4. Proposed constants (hypotheses)
+The proposal listed three integrity axes. Measurement rejected one.
 
-| constant | proposed | note |
-|---|---|---|
-| veto rule | `any integrity axis at 5`, **or** `two axes at ≥4` | single-axis 4s are the noisiest region; requiring corroboration resists cheap-model jitter |
-| `substanceDensity` veto | `≤2` (as the "at 5" equivalent: 1), `≤2` counts toward the two-axis rule | inverted direction |
-| topic weight floor | `≥ Σ(other weights)` | makes relevance ≥50% of the score regardless of what the translator emits |
-| integrity sub-threshold weight | `×0.5` of translated importance | |
+Vetoing `substanceDensity <= 2` **winnowed 46% of the capture** (58 of 126),
+and inspection showed why — it was catching:
 
-`CLICKBAIT_FLAG_THRESHOLD = 4` already exists and already demotes out of Top
-picks. This proposal promotes that demotion to a veto for the severe end while
-leaving the flag intact for the moderate end.
+```
+cb=1 ov=1 sub=1  Ora Cogan - Full Performance (Live on KEXP)
+cb=1 ov=1 sub=1  Cardinals - She Makes Me Real (Live on KEXP)
+cb=1 ov=1 sub=2  Stewart Copeland Plays "King Of Pain" | The Police
+cb=1 ov=1 sub=2  Dune: Part Three | Official Trailer
+```
 
-## 5. A second benefit: robustness to translator drift
+**`substanceDensity` is genre-correlated, not garbage-correlated.** A live
+music session is honest, well made, and legitimately scores 1 — it has no
+informational substance because it is not informational content. Vetoing on it
+would encode "informational content is the only good content" as universal
+policy, and would fire on music, performance, and film for every user.
 
-The two diagnostic runs produced **materially different targets from the same
-profile, model, and input**:
+Off-profile content is the topic axis's job, and the floor already handles it
+correctly: those videos land in Worth-a-look, not winnowed.
 
-- run 2 dropped `substanceDensity` and `intellectualDemand` entirely;
-- run 2 dropped `science` (a headline subject) and invented
-  `computer engineering`, while the profile explicitly rejects computer science;
-- resulting top-pick counts: **7 vs 41**.
+Veto rates on the capture:
+
+| rule | vetoed | share | flip rate between passes |
+|---|---|---|---|
+| `cb>=4 or ov>=4 or sub<=2` | 50 | 40% | 11% |
+| `cb>=4 or ov>=4` (**shipped**) | 7 | 6% | 4% |
+| a 5, or two axes ≥4 | 9 | 7% | 5% |
+
+The shipped rule catches the genuine offenders — *"The Internet Is
+Dead…And Nobody Cares"* (cb 4/ov 4), *"The Quantum Experiment That Breaks
+Time"* (ov 4), *"Harry Kane is a Top 1% Chess Player"* (ov 4) — while sparing
+KEXP sessions, stand-up compilations, and trailers.
+
+The proposal's corroboration rule ("a 5, or two ≥4") was designed to resist
+cheap-model jitter. It proved unnecessary once `substanceDensity` was dropped:
+a single-axis rule on the two integrity axes vetoes only 6%, so noise cannot
+produce mass vetoes. Corroboration was rejected as complexity buying nothing.
+
+### Axis stability (2 independent enrichment passes, same 126 videos)
+
+| axis | exact | ±1 | ±2+ |
+|---|---|---|---|
+| substanceDensity | 77% | 23% | 0% |
+| clickbaitSeverity | 69% | 31% | 0% |
+| claimOverreach | 74% | 26% | 0% |
+| intellectualDemand | 82% | 18% | 0% |
+| productionEffort | 67% | 33% | 0% |
+| novelty | 71% | 29% | 0% |
+
+No axis ever moved by 2+. Note this bounds re-scoring churn, not correctness:
+digests are cached per video, so in normal use a video is enriched once and its
+digest is fixed until a prompt-version bump.
+
+## 5. Robustness to translator drift
+
+Two diagnostic runs produced **materially different targets from the same
+profile, model, and input**: run 2 dropped `substanceDensity` and
+`intellectualDemand` entirely, dropped `science`, invented
+`computer engineering` (against a profile that rejects computer science), and
+produced 41 top picks against run 1's 7.
 
 Temperature cannot be pinned — both model families reject the parameter
-(`structuredCall.ts:53,92`). So this variance is inherent, not tunable away.
+(`structuredCall.ts:53,92`). This variance is inherent.
 
-Any design that leans on LLM-assigned importances for quality control is
-building on sand: when run 2 dropped `substanceDensity`, nothing was left to
-penalize filler. **Fixed cut scores do not depend on the translator emitting
-the axis at all.** That is an independent argument for this model beyond the
-relevance problem it was proposed to solve.
+This is why both mechanisms are **fixed policy rather than LLM-assigned
+weight**: when run 2 dropped `substanceDensity`, nothing was left to penalize
+filler. The veto does not depend on the translator emitting the axis, and the
+floor is a ratio so it adapts to whatever weights arrive.
 
 Exposure is bounded but real: the target is cached by
 `targetInputHashFor(profile, feedback, model)`, so it re-rolls whenever the
-profile is edited **or a vote is cast** — every vote re-rolls the whole target
-and can reshuffle the feed for reasons unrelated to the vote.
+profile is edited **or a vote is cast** — every vote re-rolls the whole target.
 
-**Companion fix, separable:** make the `fields` schema require non-null
-objects with `importance: 0` meaning "not expressed", instead of allowing
-`null`. Forcing an explicit judgment per axis should reduce silent drop-outs.
-Worth doing regardless of whether cut scores ship.
+**Open companion fix:** require the translator's `fields` to be non-null with
+`importance: 0` meaning "not expressed", instead of allowing `null`. Forcing an
+explicit judgment per axis should reduce silent drop-outs. Not built.
 
-## 6. Measurement protocol (do this before choosing constants)
+## 6. Result on the capture
 
-Choosing thresholds by intuition is how the July feed-collapse happened. The
-tuning must be offline, deterministic, and repeatable:
+| | before | after |
+|---|---|---|
+| Top picks | 32 | 22 |
+| **off-profile share of Top picks** | **41% (13)** | **0% (0)** |
+| Worth a look | 79 | 82 |
+| Winnowed | 15 | 22 |
 
-1. **Dump digests once.** Add `--dump-digests <path>` to `twophase-diag.ts`,
-   writing the enriched digests for the capture. One paid enrichment pass.
-2. **Sweep offline.** A pure script/test loads the dumped digests, holds one
-   target fixed, and sweeps veto thresholds × topic-weight floors, printing
-   the resulting tier distribution for each cell. Zero API cost, fully
-   deterministic, and the choice of constants becomes auditable.
-3. **Axis stability check.** Enrich the same subset twice and measure how often
-   each axis moves by ≥1 and how often a veto decision flips. **If
-   `clickbaitSeverity` flips across the 4 boundary often, the single-axis veto
-   is unsafe and only the two-axis rule survives.** This is the measurement
-   that decides §4's veto rule.
-4. **Feed-collapse guard.** No candidate ships if it winnows an implausible
-   fraction of the capture. `scoresCollapse` (≥95% in one tier) is a symptom
-   detector, not prevention — the sweep table is the prevention.
+Raising topic weight *beyond* the floor changes nothing until +40, where it
+starts winnowing on-profile content — confirming the floor sits at the right
+point rather than merely a workable one.
 
-## 7. Risks
+## 7. Method (reusable)
 
-- **Over-winnowing.** The July 2026 collapse came from harsh scoring
-  (`TOPICS_MORE_MISS_CREDIT` at 0 sank entire feeds). Mitigated by §6 step 2
-  and by keeping the miss credit at 0.35.
-- **Noisy cheap-model axes.** A hard threshold turns a 3-vs-4 judgment by
-  `gpt-5.4-nano` into a binary outcome. Mitigated by the two-axis
-  corroboration rule; §6 step 3 decides whether that is sufficient.
-- **Auditability.** A vetoed video must say so. Reason strings need to name
-  the veto ("winnowed: bait-style packaging"), consistent with how
-  avoid-topic caps already lead their reason.
+1. `twophase-diag.ts --dump=<path>` — one paid enrichment pass, persists digests
+   plus the target that ranked them.
+2. `scripts/rank-sweep.ts <dump>` — pure, offline, deterministic: tier
+   distribution and off-profile share for the live ranker, plus the effect of
+   further topic weight. No API cost per candidate, so constants are chosen
+   from a table rather than intuited (the July 2026 feed-collapse came from
+   intuiting them).
+3. Two dumps from separate passes give the axis-stability table.
 
-## 8. Rollout
+`scripts/rank-sweep.ts` imports the real `rankVideo` and mirrors `tiers.ts`
+bucketing — a reimplementation could drift and describe a feed the user will
+never see.
 
-- Bump `RANKER_VERSION` (ranking semantics change ⇒ clean cache invalidation).
-- Vetoes outrank `applyChannelBoost`, exactly as avoid-topic caps already do —
-  subscribing to a creator must not launder their junk past a quality veto.
-- TDD per house rules; the guarantee tests are "a vetoed video stays winnowed
-  despite a channel boost" and "an on-profile mediocre video outranks an
-  off-profile polished one".
+## 8. Guarantees pinned by tests
 
-## 9. Open decisions
-
-1. **Veto severity** — cap at 45 (Winnowed fold, visible, auditable) vs a
-   harder exclusion. Recommendation: cap, consistent with avoid-topic and with
-   the never-delete principle.
-2. **User-tunable thresholds in Settings?** Recommendation: no, initially.
-   MVP-first; do not add config for hypothetical needs.
-3. **Does the topic-weight floor apply when the profile names no topics?**
-   Recommendation: no — with an empty `topicsMore` the floor would amplify a
-   constraint that does not exist.
+- An off-profile video stays out of Top picks however well produced.
+- An on-profile mediocre video outranks an off-profile polished one.
+- A vetoed video stays capped despite a subscribed-channel boost — subscribing
+  must not launder a creator's junk past a quality veto.
+- Low-substance honest content (live music) is **not** vetoed.
+- No topic floor when the profile names no topics.
