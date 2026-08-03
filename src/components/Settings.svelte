@@ -13,7 +13,7 @@
   import type { EnrichmentEntry, VideoScore } from "../lib/types";
   import { scores } from "../stores/feedStore";
   import { feedback } from "../stores/feedbackStore";
-  import { scoreFeed } from "../services/scoring/scorer";
+  import { pendingVotes, requestFeedbackFlush, scoreFeed } from "../services/scoring/scorer";
   import {
     MIN_VOTES_FOR_SUGGESTION,
     suggestProfileUpdate,
@@ -31,6 +31,7 @@
   let saved = $state(false);
   let captureMessage = $state("");
   let targetLines = $state<string[] | null>(null);
+  let pending = $state<{ pending: boolean; count: number }>({ pending: false, count: 0 });
   let newProfileName = $state("");
   let renamingId = $state<string | null>(null);
   let retranslating = $state(false);
@@ -121,14 +122,18 @@
   }
 
   async function rescoreAll(): Promise<void> {
+    // The explicit apply gesture for votes held back by write-behind.
+    requestFeedbackFlush();
     await storageRemove(profileKeys($activeProfileId).scores);
     scores.set({});
     await scoreFeed();
+    await loadTarget();
   }
 
   async function loadTarget(): Promise<void> {
     const stored = await storageGet<StoredTarget>(profileKeys($activeProfileId).profileTarget);
     targetLines = stored ? describeTarget(stored.target) : null;
+    pending = await pendingVotes($activeProfileId);
   }
   // Reactive on the active profile: switching profiles swaps the viewer to
   // that profile's translated target.
@@ -313,9 +318,16 @@
     </label>
     <p class="text-xs text-ink-faint">
       Editing the profile re-scores your whole feed on the next refresh (a few cents with a cheap
-      model). Your Good pick / Not for me votes steer future scoring automatically; “Re-score
-      everything” below applies them to the whole feed at once.
+      model). Your Good pick / Not for me votes are applied the next time most of your feed is new
+      content — so learning from them never reshuffles a feed you're still reading. “Re-score
+      everything” below applies them immediately.
     </p>
+    {#if pending.pending}
+      <p class="text-xs text-ink-muted" data-testid="pending-votes">
+        {pending.count}
+        {pending.count === 1 ? "vote is" : "votes are"} waiting to be applied.
+      </p>
+    {/if}
   </section>
 
   <section class="space-y-3">

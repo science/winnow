@@ -134,9 +134,14 @@ weight**: when run 2 dropped `substanceDensity`, nothing was left to penalize
 filler. The veto does not depend on the translator emitting the axis, and the
 floor is a ratio so it adapts to whatever weights arrive.
 
-Exposure is bounded but real: the target is cached by
-`targetInputHashFor(profile, feedback, model)`, so it re-rolls whenever the
-profile is edited **or a vote is cast** — every vote re-rolls the whole target.
+**Mitigated 2026-08-02 by write-behind feedback.** `targetInputHashFor` no
+longer includes votes, so a vote does not re-roll the target. Votes accumulate
+and are folded in when the feed is already mostly new content
+(`FEEDBACK_FLUSH_NEW_FRACTION`, measured against the digest cache) or on an
+explicit "Re-score everything". This does not reduce the drift — it relocates
+it to a moment where the feed was going to look different anyway, so a re-roll
+is invisible. The voted video itself still moves tiers instantly via
+`bucketVideos`' vote override, so voting stays responsive.
 
 **Open companion fix:** require the translator's `fields` to be non-null with
 `importance: 0` meaning "not expressed", instead of allowing `null`. Forcing an

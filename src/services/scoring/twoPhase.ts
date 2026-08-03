@@ -133,20 +133,50 @@ export async function translateProfile(
 export interface StoredTarget {
   inputHash: string;
   target: ProfileTarget;
+  /** Which votes were folded into this target. Votes accumulate without
+   * re-translating (see FEEDBACK_FLUSH_NEW_FRACTION); this is how a pending
+   * set is detected. */
+  feedbackHash?: string;
+  /** Size of that vote set, for the "N votes pending" hint only. */
+  feedbackCount?: number;
 }
 
-/** Cache key for the translated target: every input that changes what the
- * translator would say. */
-function targetInputHashFor(profile: Profile, feedback: FeedbackExample[], model: string): string {
+/** Cache key for the translated target. Deliberately EXCLUDES votes: the
+ * translator returns a materially different target between runs on identical
+ * input (docs/CUT_SCORE_RANKING.md §5), so re-translating on every vote
+ * reshuffles the whole feed for reasons unrelated to the vote. The direct
+ * engine already worked this way — votes ride in prompts, an explicit gesture
+ * applies them feed-wide. */
+function targetInputHashFor(profile: Profile, model: string): string {
   return fnv1a(
-    [
-      profile.moreOf,
-      profile.lessOf,
-      String(TRANSLATOR_PROMPT_VERSION),
-      model,
-      JSON.stringify(feedback),
-    ].join("|"),
+    [profile.moreOf, profile.lessOf, String(TRANSLATOR_PROMPT_VERSION), model].join("|"),
   );
+}
+
+function feedbackHashFor(feedback: FeedbackExample[]): string {
+  return fnv1a(JSON.stringify(feedback));
+}
+
+/** Share of the feed that must be videos we have never digested before a
+ * pending vote set is folded in. Write-behind flush point: when most of the
+ * feed is new, the re-translation's drift is invisible because the feed was
+ * going to look different anyway. Below it, a re-roll would visibly reorder
+ * videos the user is still looking at. (Observed: a day-or-two gap returns
+ * mostly new uploads plus rotated recommendations; a 30-minute gap returns
+ * nearly the same feed.) */
+export const FEEDBACK_FLUSH_NEW_FRACTION = 0.5;
+
+/** Votes recorded but not yet folded into the translated target. `count` is a
+ * display hint, not accounting — it floors at 1 whenever a set differs, since
+ * toggling a vote off can leave the count unchanged while the set changed. */
+export function pendingFeedback(
+  stored: StoredTarget | null,
+  feedback: FeedbackExample[],
+): { pending: boolean; count: number } {
+  if (!stored || stored.feedbackHash === feedbackHashFor(feedback)) {
+    return { pending: false, count: 0 };
+  }
+  return { pending: true, count: Math.max(1, feedback.length - (stored.feedbackCount ?? 0)) };
 }
 
 /** Stable identity of the subscribed-channel set. Sorted so set iteration
@@ -175,18 +205,18 @@ function scoresHashFor(
 }
 
 /** Predict the scoresHash the next run will produce, or null when the cached
- * translation is stale (profile/votes/model changed) and the hash cannot be
- * known without an LLM call. Lets the UI decide whether last run's stored
- * scores are still current enough to display while a run is in flight. */
+ * translation is stale (profile or model changed) and the hash cannot be known
+ * without an LLM call. Lets the UI decide whether last run's stored scores are
+ * still current enough to display while a run is in flight. Votes no longer
+ * make this unknowable — they are applied on a flush, not per vote. */
 export async function expectedScoresHash(
   profile: Profile,
-  feedback: FeedbackExample[],
   model: string,
   loadTarget: () => Promise<StoredTarget | null> = () => storageGet<StoredTarget>(KEYS.profileTarget),
   subscribedIds?: ReadonlySet<string>,
 ): Promise<string | null> {
   const stored = await loadTarget();
-  if (stored?.inputHash !== targetInputHashFor(profile, feedback, model)) return null;
+  if (stored?.inputHash !== targetInputHashFor(profile, model)) return null;
   return scoresHashFor(canonicalizeTarget(stored.target), model, subscribedIds);
 }
 
@@ -230,6 +260,9 @@ export interface TwoPhaseDeps {
   saveEnrichment?: (cache: Record<string, EnrichmentEntry>) => Promise<void>;
   loadTarget?: () => Promise<StoredTarget | null>;
   saveTarget?: (stored: StoredTarget) => Promise<void>;
+  /** Apply pending votes now regardless of how new the feed is — the
+   * "Re-score everything" gesture. */
+  forceFeedbackFlush?: boolean;
   /** Also persist fresh transcript excerpts for direct mode's cache. */
   saveExcerpt?: (videoId: string, excerpt: string) => Promise<void>;
   sleep?: (ms: number) => Promise<void>;
@@ -293,12 +326,26 @@ export async function runTwoPhaseScoring(
     scoresHash: "",
   };
 
-  // Phase 2a first — it's one cheap call, and an auth failure here aborts
-  // before we spend anything on enrichment.
-  const targetInputHash = targetInputHashFor(deps.profile, feedback, deps.model);
+  // Reading the digest cache is free; the paid enrichment calls stay below.
+  // It has to happen before Phase 2a because "how much of this feed is new"
+  // decides whether pending votes get folded into the translation.
+  const cache = (await loadEnrichment()) ?? {};
+  const newShare =
+    videos.length === 0 ? 0 : videos.filter((v) => !cache[v.id]).length / videos.length;
+
+  // Phase 2a — one cheap call, and an auth failure here aborts before we
+  // spend anything on enrichment.
+  const targetInputHash = targetInputHashFor(deps.profile, deps.model);
   const storedTarget = await loadTarget();
+  const feedbackHash = feedbackHashFor(feedback);
+  // Write-behind flush: apply accumulated votes when the user asked (Re-score
+  // everything) or when the feed is mostly new anyway.
+  const flushFeedback =
+    storedTarget !== null &&
+    storedTarget.feedbackHash !== feedbackHash &&
+    (deps.forceFeedbackFlush === true || newShare >= FEEDBACK_FLUSH_NEW_FRACTION);
   let target: ProfileTarget;
-  if (storedTarget?.inputHash === targetInputHash) {
+  if (storedTarget?.inputHash === targetInputHash && !flushFeedback) {
     target = canonicalizeTarget(storedTarget.target);
   } else {
     try {
@@ -320,14 +367,18 @@ export async function runTwoPhaseScoring(
       result.unknownIds = videos.map((v) => v.id);
       return result;
     }
-    await saveTarget({ inputHash: targetInputHash, target });
+    await saveTarget({
+      inputHash: targetInputHash,
+      target,
+      feedbackHash,
+      feedbackCount: feedback.length,
+    });
   }
   result.target = target;
   const subscribedIds = deps.subscribedIds ?? new Set<string>();
   result.scoresHash = scoresHashFor(target, deps.model, subscribedIds);
 
-  // Phase 1 — figure out which videos need work.
-  const cache = (await loadEnrichment()) ?? {};
+  // Phase 1 — figure out which videos need work (cache loaded above).
   const digests = new Map<string, VideoDigest>();
   const provisional: Video[] = [];
   for (const video of videos) {

@@ -32,6 +32,7 @@ import { coalesceRuns } from "../../lib/singleFlight";
 import {
   enrichmentModelFor,
   expectedScoresHash,
+  pendingFeedback,
   runTwoPhaseScoring,
   softScoresHashFor,
   type StoredTarget,
@@ -244,6 +245,31 @@ export async function enrichWithTranscripts(
   };
 }
 
+/** Write-behind feedback (docs/CUT_SCORE_RANKING.md §5): votes are recorded
+ * immediately but only folded into the profile translation when the feed is
+ * already being reshuffled, or when the user explicitly asks. A module flag
+ * rather than an argument, so it survives run coalescing. */
+let feedbackFlushRequested = false;
+
+/** "Re-score everything" is the explicit apply gesture for pending votes. */
+export function requestFeedbackFlush(): void {
+  feedbackFlushRequested = true;
+}
+
+/** Votes recorded but not yet folded into the translation. Builds the example
+ * set exactly as a run would, so the count can't disagree with what a flush
+ * would actually apply. */
+export async function pendingVotes(
+  profileId: string,
+): Promise<{ pending: boolean; count: number }> {
+  await feedbackReady;
+  const stored = await storageGet<StoredTarget>(profileKeys(profileId).profileTarget);
+  return pendingFeedback(
+    stored,
+    recentExamples(get(feedbackStore), FEEDBACK_PROMPT_CAP, ENRICHMENT_PROMPT_VERSION),
+  );
+}
+
 /** Wire runScoring into the app stores. Safe to call any time; no-ops when
  * unconfigured (no key / empty profile) or when nothing needs scoring.
  * Concurrent calls coalesce: the feed remounts on every watch → back
@@ -381,6 +407,9 @@ async function scoreFeedTwoPhase(
     FEEDBACK_PROMPT_CAP,
     ENRICHMENT_PROMPT_VERSION,
   );
+  // Consumed once per run: a requested flush must not leak into the next one.
+  const forceFeedbackFlush = feedbackFlushRequested;
+  feedbackFlushRequested = false;
   const loadTarget = () => storageGet<StoredTarget>(runKeys.profileTarget);
   const saveTarget = (s: StoredTarget) => storageSet(runKeys.profileTarget, s);
 
@@ -395,13 +424,7 @@ async function scoreFeedTwoPhase(
   await subscriptionsReady;
   const $subscribedIds = get(subscribedIds);
   const stored = await storageGet<StoredScores>(runKeys.scores);
-  const currentHash = await expectedScoresHash(
-    $profile,
-    feedbackExamples,
-    model,
-    loadTarget,
-    $subscribedIds,
-  );
+  const currentHash = await expectedScoresHash($profile, model, loadTarget, $subscribedIds);
   const softHash = softScoresHashFor($profile, model, $subscribedIds);
   const displayable =
     stored && (stored.profileHash === currentHash || stored.softHash === softHash);
@@ -426,6 +449,7 @@ async function scoreFeedTwoPhase(
     model,
     profile: $profile,
     feedback: feedbackExamples,
+    forceFeedbackFlush,
     subscribedIds: $subscribedIds,
     loadTarget,
     saveTarget,

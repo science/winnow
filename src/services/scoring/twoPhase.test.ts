@@ -8,6 +8,7 @@ import {
   contentHashFor,
   enrichBatch,
   expectedScoresHash,
+  pendingFeedback,
   runTwoPhaseScoring,
   softScoresHashFor,
   type StoredTarget,
@@ -175,16 +176,17 @@ describe("runTwoPhaseScoring", () => {
     // profile) must never render as if they were current.
     const { callFn } = stubCall();
     const deps = memoryDeps(callFn);
-    expect(await expectedScoresHash(profile, [], "stub-nano", deps.loadTarget!)).toBeNull();
+    expect(await expectedScoresHash(profile, "stub-nano", deps.loadTarget!)).toBeNull();
 
     const result = await runTwoPhaseScoring([video("aaaaaaaaaa1")], deps);
-    expect(await expectedScoresHash(profile, [], "stub-nano", deps.loadTarget!)).toBe(
+    expect(await expectedScoresHash(profile, "stub-nano", deps.loadTarget!)).toBe(
       result.scoresHash,
     );
-    // Any translation input change (profile text, votes, model) → unknown again.
+    // Profile text or model change → unknown again. Votes deliberately do
+    // NOT invalidate it; they are applied on a flush (deferred-feedback suite).
     const edited: Profile = { ...profile, moreOf: "woodworking" };
-    expect(await expectedScoresHash(edited, [], "stub-nano", deps.loadTarget!)).toBeNull();
-    expect(await expectedScoresHash(profile, [], "other-model", deps.loadTarget!)).toBeNull();
+    expect(await expectedScoresHash(edited, "stub-nano", deps.loadTarget!)).toBeNull();
+    expect(await expectedScoresHash(profile, "other-model", deps.loadTarget!)).toBeNull();
   });
 
   it("should keep the soft scores hash stable across votes but not across profile or model changes", () => {
@@ -327,6 +329,89 @@ describe("runTwoPhaseScoring", () => {
       profile: { ...profile, moreOf: "woodworking", updatedAt: 1 },
     });
     expect(a.scoresHash).not.toBe(b.scoresHash);
+  });
+});
+
+// Write-behind feedback: a vote is recorded immediately but not acted on until
+// the feed is already being reshuffled. The translator returns a materially
+// different target between runs on identical input (docs/CUT_SCORE_RANKING.md
+// §5), so re-translating per vote reshuffles the feed for reasons unrelated to
+// the vote. Deferring puts that drift where it is invisible.
+describe("runTwoPhaseScoring — deferred feedback", () => {
+  const vote = [{ vote: "up" as const, title: "T", channel: "C", duration: "1:00" }];
+
+  it("should not re-translate when only votes changed", async () => {
+    const { callFn, calls } = stubCall();
+    const deps = memoryDeps(callFn);
+    await runTwoPhaseScoring([video("aaaaaaaaaa1")], deps);
+    const before = calls.filter((c) => c.name === "translate_profile").length;
+
+    // Same videos (nothing new to enrich), one new vote.
+    await runTwoPhaseScoring([video("aaaaaaaaaa1")], { ...deps, feedback: vote });
+    expect(calls.filter((c) => c.name === "translate_profile")).toHaveLength(before);
+  });
+
+  it("should fold in pending votes when the feed is mostly new", async () => {
+    const { callFn, calls } = stubCall();
+    const deps = memoryDeps(callFn);
+    await runTwoPhaseScoring([video("aaaaaaaaaa1")], deps);
+    const before = calls.filter((c) => c.name === "translate_profile").length;
+
+    // A day-or-two gap: the refetch is overwhelmingly content never seen.
+    const fresh = ["bbbbbbbbbb1", "bbbbbbbbbb2", "bbbbbbbbbb3"].map((id) => video(id));
+    await runTwoPhaseScoring([video("aaaaaaaaaa1"), ...fresh], { ...deps, feedback: vote });
+    expect(calls.filter((c) => c.name === "translate_profile")).toHaveLength(before + 1);
+  });
+
+  it("should fold in pending votes on an explicit flush regardless of new-video share", async () => {
+    const { callFn, calls } = stubCall();
+    const deps = memoryDeps(callFn);
+    await runTwoPhaseScoring([video("aaaaaaaaaa1")], deps);
+    const before = calls.filter((c) => c.name === "translate_profile").length;
+
+    await runTwoPhaseScoring([video("aaaaaaaaaa1")], {
+      ...deps,
+      feedback: vote,
+      forceFeedbackFlush: true,
+    });
+    expect(calls.filter((c) => c.name === "translate_profile")).toHaveLength(before + 1);
+  });
+
+  it("should not re-translate on a flush when no votes are pending", async () => {
+    const { callFn, calls } = stubCall();
+    const deps = memoryDeps(callFn);
+    await runTwoPhaseScoring([video("aaaaaaaaaa1")], { ...deps, feedback: vote });
+    const before = calls.filter((c) => c.name === "translate_profile").length;
+
+    await runTwoPhaseScoring([video("aaaaaaaaaa1")], {
+      ...deps,
+      feedback: vote,
+      forceFeedbackFlush: true,
+    });
+    expect(calls.filter((c) => c.name === "translate_profile")).toHaveLength(before);
+  });
+
+  it("should still re-translate immediately when the profile text changes", async () => {
+    // Editing the profile IS the user asking for a recalculation.
+    const { callFn, calls } = stubCall();
+    const deps = memoryDeps(callFn);
+    await runTwoPhaseScoring([video("aaaaaaaaaa1")], deps);
+    const before = calls.filter((c) => c.name === "translate_profile").length;
+
+    await runTwoPhaseScoring([video("aaaaaaaaaa1")], {
+      ...deps,
+      profile: { ...profile, moreOf: "something else entirely" },
+    });
+    expect(calls.filter((c) => c.name === "translate_profile")).toHaveLength(before + 1);
+  });
+
+  it("should report which votes are still pending", async () => {
+    const { callFn } = stubCall();
+    const deps = memoryDeps(callFn);
+    await runTwoPhaseScoring([video("aaaaaaaaaa1")], deps);
+    const applied = await deps.loadTarget!();
+    expect(pendingFeedback(applied, [])).toEqual({ pending: false, count: 0 });
+    expect(pendingFeedback(applied, vote)).toEqual({ pending: true, count: 1 });
   });
 });
 
