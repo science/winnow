@@ -4,6 +4,7 @@ import { bucketVideos, scoresCollapse, type Tiers } from "../lib/tiers";
 import { KEYS, profileKeys, storageGet, storageSet } from "../lib/storage";
 import { loadFeeds } from "../services/youtube/feedSource";
 import { feedback } from "./feedbackStore";
+import { playbackReady, prunePositionsTo } from "./playbackStore";
 import { profilesReady, profilesState } from "./profilesStore";
 import { refreshSubscriptions } from "./subscriptionsStore";
 import { log } from "../lib/logger";
@@ -149,6 +150,10 @@ export async function pruneStaleEntries(current: Video[]): Promise<void> {
     watched.set(pruned);
     await storageSet(KEYS.watched, pruned);
   }
+  // Resume points follow the same window as watched marks — a video you can
+  // no longer see is a position you can no longer use.
+  await playbackReady;
+  await prunePositionsTo(ids);
   const votedIds = new Set(Object.keys(get(feedback)));
   for (const p of get(profilesState).profiles) {
     const stored = await storageGet<Record<string, unknown>>(profileKeys(p.id).feedback);

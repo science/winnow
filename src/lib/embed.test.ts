@@ -39,6 +39,34 @@ describe("embedUrl", () => {
 
   it("should never mute to smuggle playback past the browser's autoplay policy", () => {
     expect(embedUrl("abc123DEF45")).not.toContain("mute");
+    expect(embedUrl("abc123DEF45", { startSec: 30, jsApi: true, origin: "moz-extension://x" })).not.toContain("mute");
+  });
+
+  it("should append a start offset when resuming", () => {
+    expect(embedUrl("abc123DEF45", { startSec: 754 })).toContain("start=754");
+  });
+
+  it("should round a fractional resume offset to a whole second", () => {
+    expect(embedUrl("abc123DEF45", { startSec: 754.83 })).toContain("start=754");
+  });
+
+  it("should omit start when there is nothing to resume", () => {
+    expect(embedUrl("abc123DEF45")).not.toContain("start=");
+    expect(embedUrl("abc123DEF45", { startSec: 0 })).not.toContain("start=");
+  });
+
+  it("should request the player JS API with the page's own origin", () => {
+    // The extension-tier gate proved this is the ONLY origin the player
+    // answers: the DNR referer value and an omitted origin both get silence.
+    const url = embedUrl("abc123DEF45", { jsApi: true, origin: "moz-extension://abcd-1234" });
+    expect(url).toContain("enablejsapi=1");
+    expect(url).toContain(`origin=${encodeURIComponent("moz-extension://abcd-1234")}`);
+  });
+
+  it("should not enable the JS API without an origin to hand it", () => {
+    // enablejsapi with a wrong/absent origin yields a player that never
+    // reports — worse than not asking, because it looks wired up.
+    expect(embedUrl("abc123DEF45", { jsApi: true })).not.toContain("enablejsapi");
   });
 });
 
@@ -87,12 +115,16 @@ describe("embed Referer rule (YouTube error 153 guard)", () => {
     }
   });
 
-  it("should match the exact URL the Watch page embeds", () => {
+  it("should match the exact URL the inline player embeds", () => {
     const path = manifest.declarative_net_request!.rule_resources[0]!.path;
     const rules = readPublicJson<DnrRule[]>(path);
     const filter = rules[0]!.condition.urlFilter!;
     // ||host/path matches any-scheme, any-subdomain-anchored URLs; the plain
     // substring must appear in the real embed URL or the rule is dead weight.
     expect(embedUrl("abc123DEF45")).toContain(filter.replace(/^\|\|/, ""));
+    // ...including the fully-optioned URL the player actually uses.
+    expect(
+      embedUrl("abc123DEF45", { startSec: 754, jsApi: true, origin: "moz-extension://abcd-1234" }),
+    ).toContain(filter.replace(/^\|\|/, ""));
   });
 });

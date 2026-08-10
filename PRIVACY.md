@@ -22,6 +22,8 @@ This is the only place any of your data leaves your machine, it happens only aft
 
 **Stores everything else locally.** Your API keys, profile text, votes, cached scores, your subscribed-channel list, and settings live in Firefox extension storage on your machine. Nothing is synced or uploaded. Uninstalling the extension deletes all of it.
 
+**Remembers where you stopped watching.** So a long video resumes instead of restarting, Winnow records how far into each video you got — read from the embedded player in your own browser, stored locally alongside everything else, capped at the 500 most recent, and deleted when the video leaves your feed window or you finish it. This is more detailed than a simple watched/not-watched mark, so it is called out explicitly. It is never transmitted anywhere, including to YouTube: the player is embedded from youtube-nocookie.com, which is why YouTube cannot remember your place for you.
+
 ## What Winnow never does
 
 - No Winnow server: no data is ever sent to the developer or any Winnow-operated service.

@@ -1,6 +1,8 @@
 // Watch-page embed helpers. The YouTube player renders inside a cross-origin
 // iframe, so assertions go through frameLocator.
 import { expect, type FrameLocator, type Page } from "@playwright/test";
+import type { Video } from "../../src/lib/types";
+import type { PlaybackPosition } from "../../src/lib/playbackPosition";
 
 function embedFrame(page: Page): FrameLocator {
   return page.frameLocator("[data-testid='watch-embed']");
@@ -36,6 +38,52 @@ export async function expectEmbedPlayable(page: Page): Promise<void> {
       .or(embedFrame(page).getByRole("button", { name: /^Pause/ })),
   ).toBeVisible({ timeout: 30_000 });
   await expect(embedFrame(page).getByText("Video player configuration error")).toBeHidden();
+}
+
+// --- resume points ----------------------------------------------------------
+
+/** Seed the feed AND stored playback positions, then open demo mode. */
+export async function openFeedDemoWithPositions(
+  page: Page,
+  videos: Video[],
+  positions: Record<string, PlaybackPosition>,
+): Promise<void> {
+  await page.addInitScript(
+    (state) => {
+      // Seed once — see openFeedDemoWithSeed.
+      if (localStorage.getItem("winnow:e2e-seeded")) return;
+      localStorage.clear();
+      localStorage.setItem("winnow:e2e-seeded", "1");
+      localStorage.setItem("winnow:videos:v1", JSON.stringify(state.videos));
+      localStorage.setItem("winnow:playback:v1", JSON.stringify(state.positions));
+    },
+    { videos: { fetchedAt: Date.now(), videos }, positions },
+  );
+  await page.goto("/feed.html?demo=1");
+}
+
+export async function getEmbedSrc(page: Page): Promise<string> {
+  return (await page.getByTestId("watch-embed").getAttribute("src")) ?? "";
+}
+
+export async function expectResumeOffset(page: Page, sec: number): Promise<void> {
+  await expect(page.getByTestId("watch-embed")).toHaveAttribute("src", new RegExp(`[?&]start=${sec}(&|$)`));
+}
+
+export async function expectNoResumeOffset(page: Page): Promise<void> {
+  await expect(page.getByTestId("watch-embed")).not.toHaveAttribute("src", /[?&]start=/);
+}
+
+export async function getResumeNoticeText(page: Page): Promise<string> {
+  return page.getByTestId("resume-notice").innerText();
+}
+
+export async function expectNoResumeNotice(page: Page): Promise<void> {
+  await expect(page.getByTestId("resume-notice")).toHaveCount(0);
+}
+
+export async function clickStartFromBeginning(page: Page): Promise<void> {
+  await page.getByTestId("restart-video").click();
 }
 
 export async function expectEmbedConfigurationError(page: Page): Promise<void> {

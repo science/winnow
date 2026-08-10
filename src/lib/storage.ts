@@ -13,6 +13,9 @@ export const KEYS = {
   videos: "winnow:videos:v1",
   scores: "winnow:scores:v1",
   watched: "winnow:watched:v1",
+  /** Account-level, deliberately NOT per-profile: where you are in a video is
+   * a fact about you and the video, not about an interest profile. */
+  playback: "winnow:playback:v1",
   transcripts: "winnow:transcripts:v1",
   feedback: "winnow:feedback:v1",
   models: "winnow:models:v1",

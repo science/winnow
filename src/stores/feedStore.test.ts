@@ -45,6 +45,22 @@ describe("pruneStaleEntries", () => {
     expect(cache).toEqual({ stays0000001: entry("kept") });
   });
 
+  it("should drop playback positions for videos that left the feed window", async () => {
+    watched.set({});
+    const { positions, playbackReady } = await import("./playbackStore");
+    await playbackReady;
+    positions.set({
+      stays0000001: { positionSec: 100, durationSec: 600, updatedAt: 1 },
+      leaves000001: { positionSec: 200, durationSec: 600, updatedAt: 2 },
+    });
+
+    await pruneStaleEntries([video("stays0000001")]);
+
+    expect(Object.keys(get(positions))).toEqual(["stays0000001"]);
+    const stored = await storageGet<Record<string, unknown>>(KEYS.playback);
+    expect(Object.keys(stored ?? {})).toEqual(["stays0000001"]);
+  });
+
   it("should prune enrichment digests with the feed window, keeping voted videos", async () => {
     watched.set({});
     await toggleVote({ ...video("votedenrich"), scoreState: "unknown" }, "up");

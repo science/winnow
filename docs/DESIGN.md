@@ -7,6 +7,7 @@ YouTube's feed optimizes for engagement: minutes watched, clicks, return visits.
 Non-negotiables (rejected features, forever):
 
 - **No autoplay-next.** The video the user clicked starts playing on open (start-on-open is intent, not a dark pattern); nothing ever queues or plays after it ends.
+- **Resuming where you left off is user-serving memory, not a queue.** A long video reopens at the position it stopped at, with a visible way back to the start. It still ends where it ends.
 - **No infinite scroll.** The feed is bounded and has a bottom, and says so.
 - **No engagement-ranked anything.** Ordering is score tiers × recency.
 - **Nothing is silently deleted.** Winnowed-out videos sit behind a one-click fold with the reason each was filtered — the curation must stay auditable or the user can't trust it.
@@ -58,6 +59,7 @@ All persistence via `src/lib/storage.ts` (browser.storage.local → localStorage
 | `winnow:videos:v1` | `{ fetchedAt, videos[] }` | merged+deduped subs+home, cap 300, TTL 30 min |
 | `winnow:scores:v1` | `{ profileHash, scores: {videoId: {score, reason, clickbait, scoredAt, model}} }` | invalidated whole when profileHash mismatches |
 | `winnow:watched:v1` | `{videoId: watchedAt}` | written when a card's player opens; pruned with videos |
+| `winnow:playback:v1` | `{videoId: {positionSec, durationSec, updatedAt}}` | resume points, account-level (not per-profile); written throttled (~5 s) during playback and flushed on close/tab-hide; entry deleted once within `FINISHED_TAIL_SEC` of the end; cap 500 (oldest `updatedAt` evicted); pruned with videos |
 | `winnow:transcripts:v1` | `{videoId: {excerpt, source: "player" ("timedtext"\|"innertube" in pre-2026-07-14 entries), fetchedAt}}` | successes only; pruned with videos (voted ids kept) |
 | `winnow:feedback:v1` | `{videoId: FeedbackEntry}` — vote + votedAt + display-field snapshot + score-at-vote + digest-at-vote (`digest`/`digestPromptVersion`, additive 2026-07-21; absent on older entries, null when unenriched) | cap 200 (oldest evicted); never pruned with videos |
 | `winnow:models:v1` | `{ anthropic: string[], openai: string[], fetchedAt }` — model catalog for the Settings picker | refreshed only on explicit "Refresh model list"; picker works offline from this |
