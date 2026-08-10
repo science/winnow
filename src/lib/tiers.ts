@@ -76,6 +76,12 @@ export function bucketVideos(
  * badges are noise and the profile needs sharpening.
  */
 export function scoresCollapse(videos: ScoredVideo[]): boolean {
+  // A run in flight is not a verdict. Two-phase scoring publishes ranked
+  // scores only when the run ends, so mid-run the scored set is whatever
+  // survived from last run — a small remnant collapses trivially and the hint
+  // would blame the profile for work that hasn't happened yet. "unknown"
+  // (finished, unscorable) is deliberately not a suppressor.
+  if (videos.some((v) => v.scoreState === "pending")) return false;
   const scored = videos.filter((v) => v.scoreState === "scored" && v.score !== undefined);
   if (scored.length < 5) return false;
   const tiers = bucketVideos(scored);

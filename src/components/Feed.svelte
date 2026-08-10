@@ -52,7 +52,11 @@
       {#if $status.phase === "fetching"}
         {$status.detail}
       {:else if $status.phase === "scoring"}
-        Scoring {$status.scoredCount}/{$status.scoreTotal}…
+        {#if $status.scoreTotal > 0}
+          Scoring {$status.scoredCount}/{$status.scoreTotal}…
+        {:else}
+          Scoring…
+        {/if}
       {:else if $status.phase === "loading"}
         Loading…
       {/if}
@@ -162,17 +166,27 @@
         data-testid="scoring-progress"
         aria-live="polite"
       >
-        <p class="text-sm text-ink-muted">
-          Vetting {$status.scoredCount} of {$status.scoreTotal} videos…
-        </p>
+        <!-- Two-phase scoring has no countable total until enrichment starts;
+             an indeterminate bar beats "0 of 0 videos" and a 0% fill. -->
+        {#if $status.scoreTotal > 0}
+          <p class="text-sm text-ink-muted">
+            Vetting {$status.scoredCount} of {$status.scoreTotal} videos…
+          </p>
+        {:else}
+          <p class="text-sm text-ink-muted">Vetting your feed…</p>
+        {/if}
         {#if $status.detail}
           <p class="mt-1 text-xs text-ink-faint">{$status.detail}</p>
         {/if}
         <div class="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-surface">
-          <div
-            class="h-full rounded-full bg-accent transition-all duration-300"
-            style="width: {$status.scoreTotal > 0 ? ($status.scoredCount / $status.scoreTotal) * 100 : 0}%"
-          ></div>
+          {#if $status.scoreTotal > 0}
+            <div
+              class="h-full rounded-full bg-accent transition-all duration-300"
+              style="width: {($status.scoredCount / $status.scoreTotal) * 100}%"
+            ></div>
+          {:else}
+            <div class="h-full w-1/3 animate-pulse rounded-full bg-accent"></div>
+          {/if}
         </div>
       </section>
     {:else if unvetted.length > 0}

@@ -157,4 +157,25 @@ describe("scoresCollapse", () => {
     expect(scoresCollapse([video({ score: 80 })])).toBe(false);
     expect(scoresCollapse(Array.from({ length: 10 }, () => video({ scoreState: "pending", score: undefined })))).toBe(false);
   });
+
+  it("should not fire while a scoring run is still in flight", () => {
+    // Mid-run the scored set is last run's leftovers (two-phase publishes
+    // ranked scores only at the end); a leftover handful collapses trivially.
+    // "Not finished" is not a verdict about the profile.
+    const midRun = [
+      ...Array.from({ length: 8 }, () => video({ score: 80 })),
+      ...Array.from({ length: 20 }, () => video({ scoreState: "pending", score: undefined })),
+    ];
+    expect(scoresCollapse(midRun)).toBe(false);
+  });
+
+  it("should still fire once the run finishes, even with unscorable leftovers", () => {
+    // "unknown" is a finished failure, not work in progress — it must not
+    // suppress the hint forever.
+    const done = [
+      ...Array.from({ length: 8 }, () => video({ score: 80 })),
+      video({ scoreState: "unknown", score: undefined }),
+    ];
+    expect(scoresCollapse(done)).toBe(true);
+  });
 });
