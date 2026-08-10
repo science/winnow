@@ -3,7 +3,6 @@
   import { isDemoMode } from "./services/youtube/feedSource";
   import { isConfigured, profile, settings, settingsReady } from "./stores/settingsStore";
   import Feed from "./components/Feed.svelte";
-  import Watch from "./components/Watch.svelte";
   import Settings from "./components/Settings.svelte";
   import Onboarding from "./components/Onboarding.svelte";
 
@@ -28,8 +27,6 @@
   <main>
     {#if !ready}
       <!-- storage load is near-instant; avoid flashing onboarding -->
-    {:else if $route.name === "watch"}
-      <Watch videoId={$route.videoId} />
     {:else if $route.name === "settings"}
       <Settings />
     {:else if !configured}

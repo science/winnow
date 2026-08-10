@@ -17,6 +17,7 @@ Firefox extension (MV3). One Svelte SPA on an extension page (`feed.html`); an i
 
 ```
 toolbar button ─► feed.html (Svelte SPA, hash routes #/, #/watch/<id>, #/settings)
+                                  #/watch/<id> = the feed with that card's player expanded inline
                     │
                     ├─ services/youtube/ytPage.ts ──── fetch(youtube.com, credentials:include)
                     │     └─ feedParser.ts             ytInitialData → Video[]   (subscriptions + home)
@@ -27,7 +28,7 @@ toolbar button ─► feed.html (Svelte SPA, hash routes #/, #/watch/<id>, #/set
                     │     ├─ openaiScorer.ts           gpt-5.4-mini, strict json_schema
                     │     └─ demoScorer.ts             ?demo=1 offline stub
                     │
-                    └─ stores/feedStore.ts ─────────── tiers (derived) → Feed/VideoCard/Watch
+                    └─ stores/feedStore.ts ─────────── tiers (derived) → playerStore.displayTiers → Feed/FeedItem
 ```
 
 Why an extension and not a webapp: riding the user's logged-in session is the only way to (1) read the actual homepage recommendations (no public API exists), (2) fetch transcripts (CORS-blocked for webapps), and (3) avoid the entire Google OAuth apparatus. The cost is parsing YouTube's undocumented `ytInitialData` — see Fragility below.
@@ -56,7 +57,7 @@ All persistence via `src/lib/storage.ts` (browser.storage.local → localStorage
 | `winnow:profile:v1` | `{ moreOf, lessOf, updatedAt }` | LEGACY — migration source for `winnow:profiles:v1`, kept as rollback safety; no longer read or written otherwise |
 | `winnow:videos:v1` | `{ fetchedAt, videos[] }` | merged+deduped subs+home, cap 300, TTL 30 min |
 | `winnow:scores:v1` | `{ profileHash, scores: {videoId: {score, reason, clickbait, scoredAt, model}} }` | invalidated whole when profileHash mismatches |
-| `winnow:watched:v1` | `{videoId: watchedAt}` | written on Watch open; pruned with videos |
+| `winnow:watched:v1` | `{videoId: watchedAt}` | written when a card's player opens; pruned with videos |
 | `winnow:transcripts:v1` | `{videoId: {excerpt, source: "player" ("timedtext"\|"innertube" in pre-2026-07-14 entries), fetchedAt}}` | successes only; pruned with videos (voted ids kept) |
 | `winnow:feedback:v1` | `{videoId: FeedbackEntry}` — vote + votedAt + display-field snapshot + score-at-vote + digest-at-vote (`digest`/`digestPromptVersion`, additive 2026-07-21; absent on older entries, null when unenriched) | cap 200 (oldest evicted); never pruned with videos |
 | `winnow:models:v1` | `{ anthropic: string[], openai: string[], fetchedAt }` — model catalog for the Settings picker | refreshed only on explicit "Refresh model list"; picker works offline from this |

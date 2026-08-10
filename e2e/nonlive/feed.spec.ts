@@ -6,9 +6,9 @@ import {
   getWinnowedFoldText,
   clickWinnowedFold,
   clickFirstVideoInTier,
-  expectWatchViewForSomeVideo,
+  expectInlinePlayerOpen,
   expectStartOnOpenEmbed,
-  clickBackToFeed,
+  closeInlinePlayer,
   expectFeedBottomMarker,
 } from "../helpers";
 
@@ -34,15 +34,15 @@ test("should bucket demo videos into tiers with the bait behind the fold", async
   await expectFeedBottomMarker(page);
 });
 
-test("should open the watch view from a card with start-on-open playback, and return", async ({ page }) => {
+test("should play a card in place with start-on-open playback, and close again", async ({ page }) => {
   await openFeedDemo(page);
   await waitForScoredFeed(page);
 
   await clickFirstVideoInTier(page, "top");
-  await expectWatchViewForSomeVideo(page);
+  await expectInlinePlayerOpen(page);
   await expectStartOnOpenEmbed(page);
 
-  await clickBackToFeed(page);
+  await closeInlinePlayer(page);
   await waitForScoredFeed(page);
 });
 
@@ -50,10 +50,11 @@ test("should mark a video watched after viewing it", async ({ page }) => {
   await openFeedDemo(page);
   await waitForScoredFeed(page);
   await clickFirstVideoInTier(page, "top");
-  await expectWatchViewForSomeVideo(page);
-  await clickBackToFeed(page);
+  await expectInlinePlayerOpen(page);
+  await closeInlinePlayer(page);
   await waitForScoredFeed(page);
-  // Watched cards show the checkmark and sink to the bottom of their tier.
+  // Watched cards show the checkmark and sink to the bottom of their tier
+  // once the player closes (the order holds still while it is open).
   const top = await getTierVideoTitles(page, "top");
   expect(top[top.length - 1]).toMatch(/✓/);
 });

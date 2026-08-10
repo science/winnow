@@ -9,18 +9,22 @@
     watched = false,
     hideScoreNumber = false,
     showSubscribe = false,
+    open = false,
   }: {
     video: ScoredVideo;
     watched?: boolean;
     hideScoreNumber?: boolean;
     /** Discovery surfaces this — the main feed's videos are already yours. */
     showSubscribe?: boolean;
+    /** This card's inline player is expanded below it. */
+    open?: boolean;
   } = $props();
 </script>
 
 <a
   href={`#/watch/${video.id}`}
-  class={`group flex gap-4 rounded-lg p-3 no-underline transition-colors hover:bg-surface-hover ${watched ? "opacity-45" : ""}`}
+  aria-expanded={open}
+  class={`group flex gap-4 rounded-lg p-3 no-underline transition-colors hover:bg-surface-hover ${watched && !open ? "opacity-45" : ""} ${open ? "rounded-b-none bg-surface-raised" : ""}`}
   data-testid="video-card"
 >
   <div class="relative w-48 shrink-0 self-start">

@@ -1,15 +1,56 @@
 <script lang="ts">
-  import { onMount } from "svelte";
-  import { collapsed, initFeed, refresh, status, tiers, transcriptCoverage, videos, watched } from "../stores/feedStore";
+  import { onDestroy, onMount } from "svelte";
+  import { collapsed, initFeed, refresh, status, transcriptCoverage, videos, watched } from "../stores/feedStore";
   import { profilesState, switchProfile } from "../stores/profilesStore";
-  import { discovered, discoveryStatus, discoveryTiers } from "../stores/discoveryStore";
+  import { discovered, discoveryStatus } from "../stores/discoveryStore";
+  import {
+    closePlayer,
+    displayDiscoveryTiers,
+    displayTiers,
+    openPlayer,
+    openVideoId,
+  } from "../stores/playerStore";
+  import { route } from "../lib/router";
   import { regenerateQueriesAndDiscover, runDiscovery } from "../services/discovery/discovery";
   import { scoreFeed } from "../services/scoring/scorer";
-  import VideoCard from "./VideoCard.svelte";
+  import FeedItem from "./FeedItem.svelte";
+  import InlinePlayer from "./InlinePlayer.svelte";
 
   let showWinnowed = $state(false);
   let showUnvetted = $state(false);
   let showDiscoveryWinnowed = $state(false);
+
+  // The hash IS the open-player state. This must be a plain subscription, not
+  // an $effect: it runs synchronously inside the hashchange handler, so the
+  // feed order is held and the watched mark written BEFORE Svelte re-renders.
+  // An $effect runs after the DOM update, by which point the keyed each has
+  // already moved the card and reloaded its iframe.
+  const unsubscribeRoute = route.subscribe((r) => {
+    if (r.name === "watch") openPlayer(r.videoId);
+    else closePlayer();
+  });
+  onDestroy(unsubscribeRoute);
+
+  const tiers = displayTiers;
+  const discoveryTiers = displayDiscoveryTiers;
+
+  // A deep link can point at a video that aged out of the window (or at one
+  // behind a fold). Render it standalone rather than showing nothing.
+  const openInFeed = $derived(
+    $openVideoId !== null &&
+      [...$tiers.top, ...$tiers.worthALook, ...$tiers.winnowed, ...$tiers.unscored, ...$discoveryTiers.top, ...$discoveryTiers.worthALook, ...$discoveryTiers.winnowed, ...$discoveryTiers.unscored].some(
+        (v) => v.id === $openVideoId,
+      ),
+  );
+
+  // Deep links land inside folds too; open the one holding the video.
+  $effect(() => {
+    const id = $openVideoId;
+    if (id === null) return;
+    if ($tiers.winnowed.some((v) => v.id === id)) showWinnowed = true;
+    if ($tiers.unscored.some((v) => v.id === id)) showUnvetted = true;
+    if ($discoveryTiers.winnowed.some((v) => v.id === id)) showDiscoveryWinnowed = true;
+  });
 
   const discoveryBusy = $derived(
     $discoveryStatus.phase === "generating" || $discoveryStatus.phase === "searching",
@@ -97,6 +138,12 @@
     <p class="rounded-md border border-caution/40 bg-caution/10 px-3 py-2 text-sm text-caution">{warning}</p>
   {/each}
 
+  <!-- Outside the status chain on purpose: a deep-linked video that isn't in
+       the window must get a player immediately, not behind feed loading. -->
+  {#if $openVideoId !== null && !openInFeed}
+    <InlinePlayer videoId={$openVideoId} />
+  {/if}
+
   {#if $status.phase === "signedOut"}
     <section class="rounded-lg bg-surface-raised p-8 text-center" data-testid="signed-out">
       <h2 class="text-lg font-medium">You're not signed in to YouTube</h2>
@@ -146,7 +193,7 @@
       <section data-testid="tier-top">
         <h2 class="mb-2 text-sm font-semibold uppercase tracking-wider text-accent">Top picks</h2>
         {#each $tiers.top as video (video.id)}
-          <VideoCard {video} watched={watchedSet.has(video.id)} hideScoreNumber={$collapsed} />
+          <FeedItem {video} watched={watchedSet.has(video.id)} hideScoreNumber={$collapsed} />
         {/each}
       </section>
     {/if}
@@ -155,7 +202,7 @@
       <section data-testid="tier-worth">
         <h2 class="mb-2 text-sm font-semibold uppercase tracking-wider text-ink-muted">Worth a look</h2>
         {#each $tiers.worthALook as video (video.id)}
-          <VideoCard {video} watched={watchedSet.has(video.id)} hideScoreNumber={$collapsed} />
+          <FeedItem {video} watched={watchedSet.has(video.id)} hideScoreNumber={$collapsed} />
         {/each}
       </section>
     {/if}
@@ -203,7 +250,7 @@
         {#if showUnvetted}
           <div class="mt-2 opacity-70">
             {#each unvetted as video (video.id)}
-              <VideoCard {video} watched={watchedSet.has(video.id)} />
+              <FeedItem {video} watched={watchedSet.has(video.id)} />
             {/each}
             {#if $status.phase === "idle"}
               <button
@@ -231,7 +278,7 @@
         {#if showWinnowed}
           <div class="mt-2 opacity-70">
             {#each $tiers.winnowed as video (video.id)}
-              <VideoCard {video} watched={watchedSet.has(video.id)} hideScoreNumber={$collapsed} />
+              <FeedItem {video} watched={watchedSet.has(video.id)} hideScoreNumber={$collapsed} />
             {/each}
           </div>
         {/if}
@@ -287,7 +334,7 @@
       {#if discoveryBrowsable.length > 0}
         <div data-testid="discovery-results">
           {#each discoveryBrowsable as video (video.id)}
-            <VideoCard
+            <FeedItem
               {video}
               watched={watchedSet.has(video.id)}
               hideScoreNumber={$collapsed}
@@ -310,7 +357,7 @@
         {#if showDiscoveryWinnowed}
           <div class="mt-2 opacity-70" data-testid="discovery-winnowed">
             {#each $discoveryTiers.winnowed as video (video.id)}
-              <VideoCard {video} watched={watchedSet.has(video.id)} hideScoreNumber={$collapsed} />
+              <FeedItem {video} watched={watchedSet.has(video.id)} hideScoreNumber={$collapsed} />
             {/each}
           </div>
         {/if}

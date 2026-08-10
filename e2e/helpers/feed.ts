@@ -294,6 +294,24 @@ export async function expectVideoInTier(
   await expect(page.getByTestId(`tier-${tier}`).getByTestId("video-card").filter({ hasText: title })).toBeVisible();
 }
 
+/** Position-sensitive tier assertions. Locator-based (not a titles snapshot)
+ * so they retry — order changes land a tick after the click that causes them. */
+export async function expectFirstVideoInTier(
+  page: Page,
+  tier: "top" | "worth" | "winnowed",
+  title: string,
+): Promise<void> {
+  await expect(page.getByTestId(`tier-${tier}`).getByTestId("video-card").first()).toContainText(title);
+}
+
+export async function expectLastVideoInTier(
+  page: Page,
+  tier: "top" | "worth" | "winnowed",
+  title: string,
+): Promise<void> {
+  await expect(page.getByTestId(`tier-${tier}`).getByTestId("video-card").last()).toContainText(title);
+}
+
 export async function expectVideoNotInTier(
   page: Page,
   tier: "top" | "worth" | "winnowed",
@@ -302,8 +320,58 @@ export async function expectVideoNotInTier(
   await expect(page.getByTestId(`tier-${tier}`).getByTestId("video-card").filter({ hasText: title })).not.toBeVisible();
 }
 
-export async function expectWatchViewForSomeVideo(page: Page): Promise<void> {
-  await expect(page.locator("iframe[src*='youtube-nocookie.com/embed/']")).toBeVisible();
+// --- the inline player -------------------------------------------------------
+
+/** Deep-link straight to a video's player (the feed renders behind it). */
+export async function openFeedDemoAtWatch(page: Page, videoId: string): Promise<void> {
+  await page.goto(`/feed.html?demo=1#/watch/${videoId}`);
+}
+
+export async function clickVideoCard(page: Page, title: string): Promise<void> {
+  await cardByTitle(page, title).click();
+}
+
+export async function expectInlinePlayerOpen(page: Page): Promise<void> {
+  await expect(page.getByTestId("watch-embed")).toBeVisible();
+}
+
+/** The structural claim: the player lives inside the named card's own feed
+ * item, i.e. directly under that card — not somewhere else on the page. */
+export async function expectInlinePlayerUnder(page: Page, title: string): Promise<void> {
+  await expect(
+    page.getByTestId("feed-item").filter({ hasText: title }).getByTestId("watch-embed"),
+  ).toBeVisible();
+}
+
+export async function expectNoInlinePlayer(page: Page): Promise<void> {
+  await expect(page.getByTestId("watch-embed")).toHaveCount(0);
+}
+
+export async function expectSinglePlayerOpen(page: Page): Promise<void> {
+  await expect(page.getByTestId("watch-embed")).toHaveCount(1);
+}
+
+export async function closeInlinePlayer(page: Page): Promise<void> {
+  await page.getByTestId("close-player").click();
+}
+
+/** The feed is still mounted around the player (it never navigated away). */
+export async function expectFeedStillVisible(page: Page): Promise<void> {
+  await expect(page.getByRole("button", { name: /refresh/i })).toBeVisible();
+  await expect(page.getByTestId("tier-top")).toBeVisible();
+}
+
+/** Mark the live iframe element so a later check can tell "still the same
+ * element" from "torn down and rebuilt" — the only honest way to prove
+ * playback survived, since a recreated iframe reloads the video. */
+export async function stampPlayerFrame(page: Page): Promise<void> {
+  await page
+    .getByTestId("watch-embed")
+    .evaluate((el) => el.setAttribute("data-e2e-stamp", "alive"));
+}
+
+export async function expectPlayerFrameSurvived(page: Page): Promise<void> {
+  await expect(page.getByTestId("watch-embed")).toHaveAttribute("data-e2e-stamp", "alive");
 }
 
 /** Start-on-open: the clicked video is asked to play immediately (autoplay=1,
@@ -312,10 +380,6 @@ export async function expectStartOnOpenEmbed(page: Page): Promise<void> {
   const src = await page.locator("iframe[src*='youtube-nocookie.com']").getAttribute("src");
   expect(src).toContain("autoplay=1");
   expect(src).not.toContain("mute");
-}
-
-export async function clickBackToFeed(page: Page): Promise<void> {
-  await page.getByRole("link", { name: /back to feed/i }).click();
 }
 
 export async function expectOnboardingVisible(page: Page): Promise<void> {
