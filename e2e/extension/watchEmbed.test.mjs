@@ -13,41 +13,11 @@
 //
 // Run: npm run test:e2e:ext  (builds + zips first; manual tier, not CI)
 import { strict as assert } from "node:assert";
-import { existsSync, readFileSync } from "node:fs";
-import { resolve } from "node:path";
 import { test } from "node:test";
-import { Builder, By, until } from "selenium-webdriver";
-import firefox from "selenium-webdriver/firefox.js";
+import { By, until } from "selenium-webdriver";
+import { buildDriver, openExtensionPage } from "./driver.mjs";
 
-const ROOT = resolve(import.meta.dirname, "../..");
-// Resolve the zip from the CURRENT version. Hardcoding it (as this did until
-// 2026-07-31, at "0.1.0") makes the tier silently install whatever ancient
-// build is still lying in web-ext-artifacts and report a pass on it — the
-// exact failure mode this tier exists to catch.
-const VERSION = JSON.parse(readFileSync(resolve(ROOT, "package.json"), "utf8")).version;
-const ZIP = process.env["WINNOW_ZIP"] ?? resolve(ROOT, `web-ext-artifacts/winnow-${VERSION}.zip`);
-// Pre-seeded so the extension-page URL is deterministic (Firefox otherwise
-// assigns a random per-profile UUID).
-const UUID = "d3adbeef-0000-4000-8000-000000000001";
 const VIDEO_ID = "jNQXAC9IVRw"; // "Me at the zoo" — stable, embeddable
-
-async function buildDriver(extraPrefs = {}) {
-  assert.ok(existsSync(ZIP), `${ZIP} missing — run \`npm run zip\` first`);
-  const options = new firefox.Options()
-    .addArguments("-headless")
-    .setPreference(
-      "extensions.webextensions.uuids",
-      JSON.stringify({ "winnow@misuse.org": UUID }),
-    );
-  for (const [k, v] of Object.entries(extraPrefs)) options.setPreference(k, v);
-  const builder = new Builder().forBrowser("firefox").setFirefoxOptions(options);
-  if (existsSync("/snap/bin/geckodriver")) {
-    builder.setFirefoxService(new firefox.ServiceBuilder("/snap/bin/geckodriver"));
-  }
-  const driver = await builder.build();
-  await driver.installAddon(ZIP, true);
-  return driver;
-}
 
 // Poll until the player commits: the error screen, an already-playing player
 // (start-on-open; Play flips to Pause), or the Play button (autoplay blocked
@@ -64,7 +34,7 @@ async function buildDriver(extraPrefs = {}) {
 const PLAY_BUTTON_SETTLE_MS = 4000;
 
 async function waitForPlayerOutcome(driver) {
-  await driver.get(`moz-extension://${UUID}/feed.html?demo=1#/watch/${VIDEO_ID}`);
+  await openExtensionPage(driver, `feed.html?demo=1#/watch/${VIDEO_ID}`);
   await driver.wait(until.elementLocated(By.css("[data-testid='watch-embed']")), 15_000);
   let playSeenAt = null;
   return driver.wait(async () => {
