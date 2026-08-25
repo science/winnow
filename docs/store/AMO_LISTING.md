@@ -35,7 +35,7 @@ YouTube's algorithm optimizes for minutes watched. Winnow optimizes for somethin
 
 Source code: https://github.com/science/winnow
 
-## Version notes (What's new — 0.2.2)
+## Version notes (What's new — 0.2.3)
 
 Better filtering, and a calmer way to watch.
 
@@ -45,7 +45,7 @@ Better filtering, and a calmer way to watch.
 - **Go deeper.** A button that turns your profile into YouTube searches and vets the results, so you can find creators beyond your subscriptions. Runs only when pressed; creators you already follow are marked.
 - **Inline player with resume.** Videos open in place instead of on a separate page, and pick up where you left off. Still nothing autoplays after them.
 
-Permissions are unchanged from 0.2.1.
+Permissions are unchanged from the previously listed versions.
 
 ## Categories
 
@@ -68,7 +68,7 @@ Winnow is a client-only extension: no backend, no telemetry, no remote scripts, 
 
    The extension does read the user's signed-in YouTube pages, but it does so the way any page fetch works: `fetch(..., { credentials: "include" })` against `youtube.com`, with the browser attaching the user's cookies itself. The extension never enumerates, reads, stores, or transmits any cookie value, and it holds no API that could — `browser.cookies` is not available to it. There is no `webRequest`, no content script, and no code running on youtube.com itself.
 
-   (An earlier development build did request `cookies`, to sign an account write. That feature is not in this version; the permission and all of its code are removed. Version 0.2.1, currently listed, likewise did not request it.)
+   (An earlier development build did request `cookies`, to sign an account write. That feature is not in this version; the permission and all of its code are removed. The previously listed versions 0.2.1 and 0.2.2 likewise did not request it.)
 
 2. **DNR header rewrites (`dnr-rules.json`, 2 rules).**
    (a) `Origin: https://www.youtube.com` on requests to `youtube.com/youtubei/v1/*` (XHR only). These are the extension's own cookie-less InnerTube calls that fetch a video's caption track, so the AI can score what a video actually says rather than what its title claims. Google's anti-abuse layer rejects the `moz-extension://…` origin Firefox would otherwise stamp on them. The rule is scoped to that path prefix on youtube.com and to requests the extension itself makes; it does not touch requests from any web page, and it is not an authentication mechanism — those transcript requests are deliberately unauthenticated.

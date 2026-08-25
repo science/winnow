@@ -1,6 +1,6 @@
 # Winnow Privacy Policy
 
-*Last updated: 2026-08-24 (v0.2.2)*
+*Last updated: 2026-08-24 (v0.2.3)*
 
 Winnow is a client-only Firefox extension. It has no server, no accounts, no telemetry, and no analytics. The developer receives no data of any kind from your use of Winnow. Everything below happens on your machine, under your control.
 
