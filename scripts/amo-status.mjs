@@ -40,6 +40,11 @@ function credentials() {
 /** AMO's JWT scheme: HS256, short-lived, one per request run. */
 function authHeader() {
   const { issuer, secret } = credentials();
+  if (!issuer || !secret) {
+    console.error("credentials/env.production is missing the JWT issuer/secret pair.");
+    process.exit(1);
+  }
+  /** @param {Record<string, unknown>} obj */
   const b64 = (obj) => Buffer.from(JSON.stringify(obj)).toString("base64url");
   const iat = Math.floor(Date.now() / 1000);
   const head = b64({ alg: "HS256", typ: "JWT" });
@@ -48,6 +53,11 @@ function authHeader() {
   return { Authorization: `JWT ${head}.${body}.${sig}` };
 }
 
+/**
+ * @param {string} url
+ * @param {Record<string, string>} headers
+ * @returns {Promise<any>}
+ */
 async function get(url, headers) {
   const res = await fetch(url, { headers });
   if (!res.ok) throw new Error(`${res.status} ${res.statusText} for ${url}`);
