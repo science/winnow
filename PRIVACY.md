@@ -1,16 +1,16 @@
 # Winnow Privacy Policy
 
-*Last updated: 2026-07-19 (v0.2.0)*
+*Last updated: 2026-08-24 (v0.2.2)*
 
 Winnow is a client-only Firefox extension. It has no server, no accounts, no telemetry, and no analytics. The developer receives no data of any kind from your use of Winnow. Everything below happens on your machine, under your control.
 
 ## What Winnow does with data
 
-**Reads your YouTube feeds, locally.** Winnow fetches youtube.com pages (your subscriptions feed, homepage recommendations, and your subscribed-channel list) using your own logged-in browser session, and parses the video and channel lists out of them. To YouTube this looks like ordinary page visits from your own browser. Transcript fetches are deliberately cookie-less.
+**Reads your YouTube feeds, locally.** Winnow fetches youtube.com pages (your subscriptions feed, homepage recommendations, your subscribed-channel list, and — only when you press "Go deeper" — search-result pages) using your own logged-in browser session, and parses the video and channel lists out of them. To YouTube this looks like ordinary page visits from your own browser. Transcript fetches are deliberately cookie-less.
 
-**Subscribes to a channel — only when you click Subscribe.** This is the one and only thing Winnow writes to your YouTube account. Pressing Subscribe on a discovered creator subscribes you to exactly that channel, the same as pressing Subscribe on youtube.com. Nothing else about your account is ever posted, changed, or deleted: Winnow does not comment, like, rate, add to playlists, alter your watch history, or unsubscribe you from anything. If the subscribe request fails, Winnow opens YouTube's own subscribe-confirmation page instead so you stay in control of what happens.
+**Reads only — Winnow never changes your YouTube account.** Winnow does not subscribe, unsubscribe, comment, like, rate, add to playlists, or alter your watch history. It has no permission to read your cookies and no code that could: the pages it fetches are requested the way any page request works, with your browser attaching your session itself. The one YouTube request Winnow makes that isn't a page read is a caption-track fetch for scoring, and that one is deliberately sent without your session at all.
 
-To authorize that one request, Winnow reads your youtube.com session cookie (`SAPISID`) and uses it to sign the request in the way Google's own site does — this is what the extension's `cookies` permission is for, and it is used for nothing else. The cookie is read in your browser, used to compute a one-way hash for that single request, and never stored or transmitted anywhere else.
+**Searches YouTube when you press "Go deeper".** That button turns your interest profile into ordinary YouTube searches and reads the result pages, the same as typing them into YouTube's search box. It runs only when you press it. Creators you already follow are marked in the results so you can tell what's new; being marked is a display and ranking detail, computed on your machine from the subscription list Winnow read.
 
 **Sends scoring inputs to the AI provider you configure.** To rank videos, Winnow sends the AI provider you chose (Anthropic or OpenAI) — under your own API key — the following:
 

@@ -62,6 +62,9 @@ export async function openFeedDemoWithProfiles(
     activeProfileId: string;
     perProfileScores?: Record<string, unknown>;
     perProfileFeedback?: Record<string, unknown>;
+    /** Channels the user follows on YouTube (winnow:subscriptions:v1). Seeded
+     * fresh so the TTL keeps the demo channels fixture from overwriting it. */
+    subscriptions?: { channelId: string; channelTitle: string }[];
   },
 ): Promise<void> {
   await page.addInitScript(
@@ -88,8 +91,14 @@ export async function openFeedDemoWithProfiles(
       for (const [id, blob] of Object.entries(s.perProfileFeedback ?? {})) {
         localStorage.setItem(`winnow:feedback:v2:${id}`, JSON.stringify(blob));
       }
+      if (s.subscriptions) {
+        localStorage.setItem(
+          "winnow:subscriptions:v1",
+          JSON.stringify({ fetchedAt: s.now, channels: s.subscriptions, degraded: false }),
+        );
+      }
     },
-    state,
+    { ...state, now: Date.now() },
   );
   await page.goto("/feed.html?demo=1");
 }
@@ -155,25 +164,10 @@ export async function getDiscoveryStatusText(page: Page): Promise<string> {
   return page.getByTestId("discovery-status").innerText();
 }
 
-// --- subscribing to a discovered creator ------------------------------------
+// --- creators you already follow --------------------------------------------
 
-/** The first discovery card offering a Subscribe button. */
-function firstSubscribableCard(page: Page) {
-  return page
-    .getByTestId("discovery-results")
-    .getByTestId("video-card")
-    .filter({ has: page.getByTestId("subscribe") })
-    .first();
-}
-
-export async function clickSubscribeOnFirstDiscovery(page: Page): Promise<string> {
-  const card = firstSubscribableCard(page);
-  const title = await card.locator("h3").innerText();
-  await card.getByTestId("subscribe").click();
-  return title;
-}
-
-/** Wait for the named discovery card to report itself subscribed. */
+/** Wait for the named discovery card to show the already-following badge.
+ * The set is read from YouTube (/feed/channels); Winnow never writes it. */
 export async function waitForSubscribedBadge(page: Page, title: string): Promise<void> {
   await expect(
     page
@@ -184,23 +178,15 @@ export async function waitForSubscribedBadge(page: Page, title: string): Promise
   ).toBeVisible({ timeout: 10_000 });
 }
 
-export async function getDiscoverySubscribeCount(page: Page): Promise<number> {
-  return page.getByTestId("discovery-results").getByTestId("subscribe").count();
+export async function getSubscribedBadgeCount(page: Page): Promise<number> {
+  return page.getByTestId("discovery-results").getByTestId("subscribed-badge").count();
 }
 
-/** Vote state of the named discovery card's "Good pick" button. */
-export async function isDiscoveryUpvoted(page: Page, title: string): Promise<boolean> {
-  const pressed = await page
-    .getByTestId("discovery")
-    .getByTestId("video-card")
-    .filter({ hasText: title })
-    .getByTestId("vote-up")
-    .getAttribute("aria-pressed");
-  return pressed === "true";
-}
-
-export async function expectNoSubscribeInMainFeed(page: Page): Promise<void> {
-  await expect(page.getByTestId("tier-top").getByTestId("subscribe")).toHaveCount(0);
+/** Winnow reads the YouTube account and never writes to it: no surface may
+ * offer a subscribe action. */
+export async function expectNoSubscribeAction(page: Page): Promise<void> {
+  await expect(page.getByTestId("subscribe")).toHaveCount(0);
+  await expect(page.getByTestId("subscribe-fallback")).toHaveCount(0);
 }
 
 export async function waitForScoredFeed(page: Page): Promise<void> {

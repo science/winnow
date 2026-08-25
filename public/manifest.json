@@ -31,7 +31,7 @@
     "96": "icon-96.png",
     "128": "icon-128.png"
   },
-  "permissions": ["storage", "declarativeNetRequestWithHostAccess", "cookies"],
+  "permissions": ["storage", "declarativeNetRequestWithHostAccess"],
   "host_permissions": ["*://*.youtube.com/*", "*://*.youtube-nocookie.com/*"],
   "declarative_net_request": {
     "rule_resources": [

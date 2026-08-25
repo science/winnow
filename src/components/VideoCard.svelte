@@ -2,20 +2,20 @@
   import type { ScoredVideo } from "../lib/types";
   import ScoreBadge from "./ScoreBadge.svelte";
   import VoteButtons from "./VoteButtons.svelte";
-  import SubscribeButton from "./SubscribeButton.svelte";
+  import SubscribedBadge from "./SubscribedBadge.svelte";
 
   let {
     video,
     watched = false,
     hideScoreNumber = false,
-    showSubscribe = false,
+    showSubscribed = false,
     open = false,
   }: {
     video: ScoredVideo;
     watched?: boolean;
     hideScoreNumber?: boolean;
-    /** Discovery surfaces this — the main feed's videos are already yours. */
-    showSubscribe?: boolean;
+    /** Discovery surfaces this — every main-feed video is already yours. */
+    showSubscribed?: boolean;
     /** This card's inline player is expanded below it. */
     open?: boolean;
   } = $props();
@@ -72,8 +72,8 @@
     {/if}
     <div class="flex flex-wrap items-center gap-1.5">
       <VoteButtons {video} />
-      {#if showSubscribe}
-        <SubscribeButton {video} />
+      {#if showSubscribed}
+        <SubscribedBadge {video} />
       {/if}
     </div>
   </div>

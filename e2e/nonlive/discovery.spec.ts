@@ -12,12 +12,13 @@ import {
   getDiscoveryWinnowedTitles,
   expectDiscoveryTitleHidden,
   getDiscoveryStatusText,
-  clickSubscribeOnFirstDiscovery,
   waitForSubscribedBadge,
-  getDiscoverySubscribeCount,
-  isDiscoveryUpvoted,
-  expectNoSubscribeInMainFeed,
+  getSubscribedBadgeCount,
+  expectNoSubscribeAction,
 } from "../helpers";
+// Pure lib import (not a selector): the demo search results derive their
+// channel ids from the query hash, so a spec can name one exactly.
+import { fnv1a } from "../../src/lib/profileHash";
 
 // Demo discovery is fully deterministic: the query pool comes from the
 // profile's comma-separated moreOf phrases ("<phrase> deep dive"), each
@@ -29,11 +30,21 @@ const TEN_PHRASES = "alpha, beta, gamma, delta, epsilon, zeta, eta, theta, iota,
 const LEISURE = { id: "leisure1", name: "Leisure", moreOf: TEN_PHRASES, lessOf: "" };
 const OTHER = { id: "other0001", name: "Other", moreOf: "something else entirely", lessOf: "" };
 
-function openWithProfiles(page: Parameters<typeof openFeedDemoWithProfiles>[0]) {
+/** Channel id of the nth demo search result for a query — mirrors
+ * demoSearchResults in src/services/discovery/discovery.ts. */
+function demoChannelId(query: string, index: number): string {
+  return `UCdemo${fnv1a(query).slice(0, 5)}${index}`;
+}
+
+function openWithProfiles(
+  page: Parameters<typeof openFeedDemoWithProfiles>[0],
+  subscriptions?: { channelId: string; channelTitle: string }[],
+) {
   return openFeedDemoWithProfiles(page, {
     videos: [demoVideo({ id: "sharedvid003", source: "subscriptions", title: "Feed Video" })],
     profiles: [LEISURE, OTHER],
     activeProfileId: LEISURE.id,
+    subscriptions,
   });
 }
 
@@ -123,39 +134,43 @@ test("should point at regenerating queries when the pool is spent and nothing ne
     .toMatch(/regenerate/i);
 });
 
-test("should subscribe to a discovered creator, badge it, and record it as a good pick", async ({ page }) => {
-  await openWithProfiles(page);
+test("should badge a discovered creator the user already follows", async ({ page }) => {
+  // "alpha deep dive — result 3" is the third result (index 2) of the first
+  // demo query, and demo-scores into the browsable list.
+  await openWithProfiles(page, [
+    { channelId: demoChannelId("alpha deep dive", 2), channelTitle: "Demo Creator" },
+  ]);
   await waitForScoredFeed(page);
 
   await clickGoDeeper(page);
   await waitForDiscoveryResults(page);
 
-  const before = await getDiscoverySubscribeCount(page);
-  expect(before).toBeGreaterThan(0);
-
-  const title = await clickSubscribeOnFirstDiscovery(page);
-  await waitForSubscribedBadge(page, title);
-
-  // Subscribing is an up-vote-equivalent: the ranking must learn from it.
-  expect(await isDiscoveryUpvoted(page, title)).toBe(true);
+  await waitForSubscribedBadge(page, "alpha deep dive — result 3");
+  // Only the followed creator is badged — the rest are genuinely new.
+  expect(await getSubscribedBadgeCount(page)).toBe(1);
 });
 
-test("should offer subscribe only on discoveries, not on the main feed", async ({ page }) => {
-  await openWithProfiles(page);
-  await waitForScoredFeed(page);
-  await expectNoSubscribeInMainFeed(page);
-});
-
-test("should keep the subscribed badge after a reload", async ({ page }) => {
-  await openWithProfiles(page);
+test("should keep the already-following badge after a reload", async ({ page }) => {
+  await openWithProfiles(page, [
+    { channelId: demoChannelId("alpha deep dive", 2), channelTitle: "Demo Creator" },
+  ]);
   await waitForScoredFeed(page);
   await clickGoDeeper(page);
   await waitForDiscoveryResults(page);
-
-  const title = await clickSubscribeOnFirstDiscovery(page);
-  await waitForSubscribedBadge(page, title);
+  await waitForSubscribedBadge(page, "alpha deep dive — result 3");
 
   await page.reload();
   await waitForScoredFeed(page);
-  await waitForSubscribedBadge(page, title);
+  await waitForSubscribedBadge(page, "alpha deep dive — result 3");
+});
+
+test("should never offer to subscribe from inside Winnow", async ({ page }) => {
+  // Winnow reads the YouTube account and writes nothing to it.
+  await openWithProfiles(page);
+  await waitForScoredFeed(page);
+  await expectNoSubscribeAction(page);
+
+  await clickGoDeeper(page);
+  await waitForDiscoveryResults(page);
+  await expectNoSubscribeAction(page);
 });

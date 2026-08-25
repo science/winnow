@@ -338,7 +338,7 @@
               {video}
               watched={watchedSet.has(video.id)}
               hideScoreNumber={$collapsed}
-              showSubscribe
+              showSubscribed
             />
           {/each}
         </div>

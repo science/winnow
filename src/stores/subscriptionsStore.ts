@@ -74,14 +74,3 @@ export async function refreshSubscriptions(
     return [];
   }
 }
-
-/** Record a channel the user just subscribed to, without waiting for the
- * next /feed/channels refresh to reflect it. */
-export async function addSubscribedChannel(channel: SubscribedChannel): Promise<void> {
-  await subscriptionsReady;
-  const current = get(subscribedChannels);
-  if (current.some((c) => c.channelId === channel.channelId)) return;
-  const next = [...current, channel];
-  subscribedChannels.set(next);
-  await persist(next, get(subscriptionsDegraded));
-}
