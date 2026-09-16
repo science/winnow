@@ -1,11 +1,13 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { embedUrl, watchUrl } from "../lib/embed";
+  import { embedOrigin, embedUrl, watchUrl } from "../lib/embed";
   import { formatDuration } from "../lib/format";
   import { navigate } from "../lib/router";
   import type { ScoredVideo } from "../lib/types";
   import { listenToPlayer } from "../services/player/playerTelemetry";
+  import { embedRefererReady } from "../services/player/embedReferer";
   import { flushPositions, playbackReady, recordPosition, resumeStartFor } from "../stores/playbackStore";
+  import { settings, settingsReady } from "../stores/settingsStore";
 
   let {
     videoId,
@@ -18,14 +20,20 @@
 
   let panel = $state<HTMLElement | null>(null);
   let frame = $state<HTMLIFrameElement | null>(null);
-  // Null until the stored position is read — the iframe waits rather than
-  // starting at 0 and yanking the user back a moment later.
+  // Null until the stored position, the settings, and the Referer rule are
+  // ready — the iframe waits rather than loading one player and reloading
+  // into another (or into error 153) a moment later.
   let startSec = $state<number | null>(null);
 
   const src = $derived(
     startSec === null
       ? null
-      : embedUrl(videoId, { startSec, jsApi: true, origin: location.origin }),
+      : embedUrl(videoId, {
+          startSec,
+          jsApi: true,
+          origin: location.origin,
+          signedIn: $settings.accountWrites,
+        }),
   );
 
   function close(): void {
@@ -38,7 +46,7 @@
 
   onMount(() => {
     panel?.scrollIntoView({ block: "nearest" });
-    void playbackReady.then(() => {
+    void Promise.all([playbackReady, settingsReady, embedRefererReady()]).then(() => {
       startSec = resumeStartFor(videoId);
     });
 
@@ -74,7 +82,9 @@
     const el = frame;
     const url = src;
     if (!el || !url) return;
-    const stop = listenToPlayer(el, (telemetry) => recordPosition(videoId, telemetry));
+    const stop = listenToPlayer(el, embedOrigin($settings.accountWrites), (telemetry) =>
+      recordPosition(videoId, telemetry),
+    );
     return () => {
       stop();
       void flushPositions();
@@ -93,8 +103,8 @@
     >
   </div>
 
-  <!-- embedUrl carries the start-on-open/nocookie rationale; the DNR rule in
-       public/dnr-rules.json injects the Referer YouTube requires (error 153).
+  <!-- embedUrl carries the start-on-open/player-host rationale; the DNR rule
+       from embedRefererReady injects the Referer YouTube requires (error 153).
        allow="autoplay" is required or the browser ignores autoplay=1. -->
   <div class="aspect-video w-full overflow-hidden rounded-lg bg-black">
     {#if src}

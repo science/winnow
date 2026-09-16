@@ -183,3 +183,22 @@ export async function readActiveProfile(page: Page): Promise<Profile | null> {
   if (!state) return null;
   return state.profiles.find((p) => p.id === state.activeProfileId) ?? null;
 }
+
+// --- YouTube account access (Settings → YouTube account) -------------------
+
+function accountWritesToggle(page: Page) {
+  return page.getByLabel(/let winnow act on my youtube account/i);
+}
+
+export async function openSettingsDemo(page: Page): Promise<void> {
+  await page.goto("/feed.html?demo=1#/settings");
+}
+
+export async function setAccountWrites(page: Page, on: boolean): Promise<void> {
+  await accountWritesToggle(page).setChecked(on);
+}
+
+export async function expectAccountWrites(page: Page, on: boolean): Promise<void> {
+  if (on) await expect(accountWritesToggle(page)).toBeChecked();
+  else await expect(accountWritesToggle(page)).not.toBeChecked();
+}

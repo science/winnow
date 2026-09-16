@@ -3,9 +3,9 @@
 // new permissions, no content script, no script load). This is the seam
 // per-video resume positions are built on.
 //
-// The DNR rule matches ANY sub_frame to the nocookie embed path, so a
-// hand-built iframe gets the Referer too — which is why this test needs no
-// src/ code at all to prove the seam.
+// The DNR Referer rule matches any embed sub_frame a Winnow page loads (the
+// app registers it at startup), so a hand-built iframe gets the Referer too —
+// which is why this test needs no player code to prove the seam.
 //
 // Swept 2026-08-09 against three `origin` param candidates. Only the page's
 // own origin works, and the result is not close:
@@ -23,7 +23,7 @@
 import { strict as assert } from "node:assert";
 import { test } from "node:test";
 import { By, until } from "selenium-webdriver";
-import { buildDriver, openExtensionPage } from "./driver.mjs";
+import { buildDriver, openExtensionPage, waitForEmbedRefererRule } from "./driver.mjs";
 
 const VIDEO_ID = "jNQXAC9IVRw"; // "Me at the zoo" — stable, embeddable
 // The round-trip needs a video longer than FINISHED_TAIL_SEC*2: "Me at the
@@ -97,6 +97,7 @@ test("the player reports an advancing clock to a moz-extension page", async () =
   await driver.manage().setTimeouts({ script: 60_000 });
   try {
     await openExtensionPage(driver, "feed.html?demo=1");
+    await waitForEmbedRefererRule(driver);
     const { events } = await driver.executeAsyncScript(
       PROBE,
       VIDEO_ID,

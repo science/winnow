@@ -10,6 +10,7 @@ import {
   expectStartOnOpenEmbed,
   closeInlinePlayer,
   expectFeedBottomMarker,
+  expectLastInTierWatched,
 } from "../helpers";
 
 // Demo fixtures score deterministically (stub scorer, fnv1a of videoId):
@@ -55,6 +56,5 @@ test("should mark a video watched after viewing it", async ({ page }) => {
   await waitForScoredFeed(page);
   // Watched cards show the checkmark and sink to the bottom of their tier
   // once the player closes (the order holds still while it is open).
-  const top = await getTierVideoTitles(page, "top");
-  expect(top[top.length - 1]).toMatch(/✓/);
+  await expectLastInTierWatched(page, "top");
 });

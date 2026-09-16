@@ -1,6 +1,6 @@
 # Winnow Privacy Policy
 
-*Last updated: 2026-08-24 (v0.2.3)*
+*Last updated: 2026-09-16 (the opt-in account setting below arrives in the release after v0.2.3)*
 
 Winnow is a client-only Firefox extension. It has no server, no accounts, no telemetry, and no analytics. The developer receives no data of any kind from your use of Winnow. Everything below happens on your machine, under your control.
 
@@ -8,7 +8,9 @@ Winnow is a client-only Firefox extension. It has no server, no accounts, no tel
 
 **Reads your YouTube feeds, locally.** Winnow fetches youtube.com pages (your subscriptions feed, homepage recommendations, your subscribed-channel list, and — only when you press "Go deeper" — search-result pages) using your own logged-in browser session, and parses the video and channel lists out of them. To YouTube this looks like ordinary page visits from your own browser. Transcript fetches are deliberately cookie-less.
 
-**Reads only — Winnow never changes your YouTube account.** Winnow does not subscribe, unsubscribe, comment, like, rate, add to playlists, or alter your watch history. It has no permission to read your cookies and no code that could: the pages it fetches are requested the way any page request works, with your browser attaching your session itself. The one YouTube request Winnow makes that isn't a page read is a caption-track fetch for scoring, and that one is deliberately sent without your session at all.
+**Reads only by default — Winnow doesn't change your YouTube account unless you turn that on.** Out of the box, Winnow does not subscribe, unsubscribe, comment, like, rate, add to playlists, or alter your watch history. It has no permission to read your cookies and no code that could: the pages it fetches are requested the way any page request works, with your browser attaching your session itself. The one YouTube request Winnow makes that isn't a page read is a caption-track fetch for scoring, and that one is deliberately sent without your session at all.
+
+**Optional: let Winnow act on your YouTube account.** Settings → YouTube account has one switch, off by default. Turned on, videos play in YouTube's regular player (youtube.com) instead of the privacy-enhanced one (youtube-nocookie.com). That player runs with your YouTube sign-in, exactly as it would on youtube.com, so YouTube learns what you watch in Winnow: plays can appear in your watch history and influence your recommendations. The player's reporting goes straight from your browser to YouTube; Winnow still never sees your cookies. Turn the switch off and the privacy-enhanced player comes back.
 
 **Searches YouTube when you press "Go deeper".** That button turns your interest profile into ordinary YouTube searches and reads the result pages, the same as typing them into YouTube's search box. It runs only when you press it. Creators you already follow are marked in the results so you can tell what's new; being marked is a display and ranking detail, computed on your machine from the subscription list Winnow read.
 
@@ -22,7 +24,7 @@ This is the only place any of your data leaves your machine, it happens only aft
 
 **Stores everything else locally.** Your API keys, profile text, votes, cached scores, your subscribed-channel list, and settings live in Firefox extension storage on your machine. Nothing is synced or uploaded. Uninstalling the extension deletes all of it.
 
-**Remembers where you stopped watching.** So a long video resumes instead of restarting, Winnow records how far into each video you got — read from the embedded player in your own browser, stored locally alongside everything else, capped at the 500 most recent, and deleted when the video leaves your feed window or you finish it. This is more detailed than a simple watched/not-watched mark, so it is called out explicitly. It is never transmitted anywhere, including to YouTube: the player is embedded from youtube-nocookie.com, which is why YouTube cannot remember your place for you.
+**Remembers where you stopped watching.** So a long video resumes instead of restarting, Winnow records how far into each video you got — read from the embedded player in your own browser, stored locally alongside everything else, capped at the 500 most recent, and deleted when the video leaves your feed window or you finish it. This is more detailed than a simple watched/not-watched mark, so it is called out explicitly. Winnow never transmits it anywhere. With the default privacy-enhanced player, YouTube doesn't learn it either, which is why YouTube can't remember your place for you; if you turn on the account setting above, YouTube's own player reports your viewing to YouTube as it does on youtube.com.
 
 ## What Winnow never does
 

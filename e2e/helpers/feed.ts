@@ -199,6 +199,14 @@ export async function getTierVideoTitles(page: Page, tier: "top" | "worth" | "wi
   return cards.locator("h3").allInnerTexts();
 }
 
+/** Watched cards carry a checkmark and sink to the bottom of their tier. The
+ * sink lands when the held order is released, which happens on the async
+ * hashchange after a close — so this retries rather than reading once. */
+export async function expectLastInTierWatched(page: Page, tier: "top" | "worth" | "winnowed"): Promise<void> {
+  const cards = page.getByTestId(`tier-${tier}`).getByTestId("video-card");
+  await expect(cards.last().locator("h3")).toContainText("✓");
+}
+
 export async function getWinnowedFoldText(page: Page): Promise<string> {
   return page.getByTestId("winnowed-fold").innerText();
 }
@@ -363,7 +371,7 @@ export async function expectPlayerFrameSurvived(page: Page): Promise<void> {
 /** Start-on-open: the clicked video is asked to play immediately (autoplay=1,
  *  unmuted). Autoplay-NEXT remains forbidden — nothing queues after. */
 export async function expectStartOnOpenEmbed(page: Page): Promise<void> {
-  const src = await page.locator("iframe[src*='youtube-nocookie.com']").getAttribute("src");
+  const src = await page.getByTestId("watch-embed").getAttribute("src");
   expect(src).toContain("autoplay=1");
   expect(src).not.toContain("mute");
 }

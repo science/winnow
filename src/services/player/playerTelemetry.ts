@@ -7,7 +7,7 @@
 // carrying currentTime/duration/playerState. It is LISTEN-ONLY — Winnow never
 // sends the player a command.
 
-import { parsePlayerMessage, PLAYER_ORIGIN, type PlayerTelemetry } from "../../lib/playerMessage";
+import { parsePlayerMessage, type PlayerTelemetry } from "../../lib/playerMessage";
 
 /** The player answers polls rather than pushing on its own: stopping the
  * `listening` posts after the first reply froze the position at the first
@@ -16,9 +16,13 @@ import { parsePlayerMessage, PLAYER_ORIGIN, type PlayerTelemetry } from "../../l
  * of the player — one tiny postMessage twice a second. */
 const HANDSHAKE_INTERVAL_MS = 500;
 
-/** Start listening to a player. Returns a disposer. */
+/** Start listening to a player. `playerOrigin` is the origin of the page
+ * loaded in the frame (lib/embed.ts#embedOrigin) — the only origin whose
+ * messages are accepted and the only one polls are posted to. Returns a
+ * disposer. */
 export function listenToPlayer(
   iframe: HTMLIFrameElement,
+  playerOrigin: string,
   onUpdate: (telemetry: PlayerTelemetry) => void,
 ): () => void {
   let timer: ReturnType<typeof setInterval> | null = null;
@@ -34,7 +38,7 @@ export function listenToPlayer(
     try {
       iframe.contentWindow?.postMessage(
         JSON.stringify({ event: "listening", id: 1, channel: "widget" }),
-        PLAYER_ORIGIN,
+        playerOrigin,
       );
     } catch {
       // Frame not navigable yet — the next tick retries.
@@ -44,7 +48,7 @@ export function listenToPlayer(
   const onMessage = (event: MessageEvent): void => {
     // Hard origin + source filter: this listener is on the extension page,
     // where any frame could post to us.
-    if (event.source !== iframe.contentWindow || event.origin !== PLAYER_ORIGIN) return;
+    if (event.source !== iframe.contentWindow || event.origin !== playerOrigin) return;
     const telemetry = parsePlayerMessage(event.data);
     if (!telemetry) return;
     onUpdate(telemetry);

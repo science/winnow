@@ -84,6 +84,7 @@ describe("suggestProfileUpdate", () => {
       anthropicModel: "claude-haiku-4-5",
       openaiModel: "gpt-5.4-mini",
       scoringStrategy: "two-phase",
+      accountWrites: false,
     });
     profile.set(PROFILE);
     feedback.set({

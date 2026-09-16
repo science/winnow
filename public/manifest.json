@@ -35,7 +35,7 @@
   "host_permissions": ["*://*.youtube.com/*", "*://*.youtube-nocookie.com/*"],
   "declarative_net_request": {
     "rule_resources": [
-      { "id": "embed_referer", "enabled": true, "path": "dnr-rules.json" }
+      { "id": "innertube_origin", "enabled": true, "path": "dnr-rules.json" }
     ]
   }
 }

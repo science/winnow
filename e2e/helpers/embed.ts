@@ -87,7 +87,17 @@ export async function clickStartFromBeginning(page: Page): Promise<void> {
 }
 
 export async function expectEmbedConfigurationError(page: Page): Promise<void> {
-  await expect(embedFrame(page).getByText("Video player configuration error")).toBeVisible({
+  // YouTube renders the message twice (a plain span and an attributed-string
+  // span, seen 2026-09-16); either one being visible is the error screen.
+  await expect(embedFrame(page).getByText("Video player configuration error").first()).toBeVisible({
     timeout: 30_000,
   });
+}
+
+/** Which player the watch page loaded, by host. */
+export async function expectEmbedHost(page: Page, host: string): Promise<void> {
+  await expect(page.getByTestId("watch-embed")).toHaveAttribute(
+    "src",
+    new RegExp(`^https://${host.replace(/\./g, "\\.")}/embed/`),
+  );
 }

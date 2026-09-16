@@ -62,7 +62,7 @@ Permissions are unchanged from the previously listed versions.
 
 ## Notes to reviewer
 
-Winnow is a client-only extension: no backend, no telemetry, no remote scripts, and **no writes to the user's YouTube account** — it reads the user's own feeds and renders a re-ranked view of them. Four things in the package deserve explanation:
+Winnow is a client-only extension: no backend, no telemetry, no remote scripts, and **no writes to the user's YouTube account unless the user opts in** — it reads the user's own feeds and renders a re-ranked view of them. Four things in the package deserve explanation:
 
 1. **Permissions, and specifically why there is no `cookies` permission.** The manifest requests `storage`, `declarativeNetRequestWithHostAccess`, and host access to `youtube.com` / `youtube-nocookie.com` — nothing else.
 
@@ -70,11 +70,13 @@ Winnow is a client-only extension: no backend, no telemetry, no remote scripts, 
 
    (An earlier development build did request `cookies`, to sign an account write. That feature is not in this version; the permission and all of its code are removed. The previously listed versions 0.2.1 and 0.2.2 likewise did not request it.)
 
-2. **DNR header rewrites (`dnr-rules.json`, 2 rules).**
+2. **DNR header rewrites (one static rule in `dnr-rules.json`, one dynamic rule).**
    (a) `Origin: https://www.youtube.com` on requests to `youtube.com/youtubei/v1/*` (XHR only). These are the extension's own cookie-less InnerTube calls that fetch a video's caption track, so the AI can score what a video actually says rather than what its title claims. Google's anti-abuse layer rejects the `moz-extension://…` origin Firefox would otherwise stamp on them. The rule is scoped to that path prefix on youtube.com and to requests the extension itself makes; it does not touch requests from any web page, and it is not an authentication mechanism — those transcript requests are deliberately unauthenticated.
-   (b) `Referer: https://winnow.misuse.org/` on `youtube-nocookie.com/embed/*` sub-frames, so the privacy-enhanced embed player works from the extension page (YouTube returns player error 153 to an embed with no Referer).
+   (b) `Referer: https://winnow.misuse.org/` on `youtube-nocookie.com/embed/*` and `youtube.com/embed/*` sub-frames, so the embed player works from the extension page (YouTube returns player error 153 to an embed with no Referer). It is registered at runtime (`src/services/player/embedReferer.ts`) as a dynamic rule with `initiatorDomains` set to the extension's own moz-extension host, so it applies only to players the extension's page embeds, never to embeds on websites the user visits. It has to be dynamic because that host differs per install.
 
-3. **Credentialed youtube.com fetches.** The extension fetches `youtube.com`, `/feed/subscriptions`, `/feed/channels`, and `/results?search_query=…` with the user's own session (host permission) and parses the embedded `ytInitialData` JSON — the user's own feed, subscription list, and searches, read on the user's machine, for the user's consumption. All four are ordinary GETs. The extension issues no POST to any Google endpoint: it never comments, likes, rates, subscribes, unsubscribes, edits playlists, or alters watch history.
+3. **Credentialed youtube.com fetches.** The extension fetches `youtube.com`, `/feed/subscriptions`, `/feed/channels`, and `/results?search_query=…` with the user's own session (host permission) and parses the embedded `ytInitialData` JSON — the user's own feed, subscription list, and searches, read on the user's machine, for the user's consumption. All four are ordinary GETs. The extension issues no POST to any Google endpoint: it never comments, likes, rates, subscribes, unsubscribes, or edits playlists.
+
+   **One opt-in setting, off by default: "Let Winnow act on my YouTube account"** (Settings → YouTube account). When the user turns it on, videos play in the standard `youtube.com/embed` player instead of `youtube-nocookie.com/embed`. That player runs with the user's YouTube sign-in, so its own playback reporting can add the video to the user's watch history, which is the reason for the setting. The extension makes no additional requests for this and still reads no cookies. With the setting off (the default), the extension doesn't alter watch history.
 
 4. **Large minified bundle.** `assets/feed-*.js` inlines the `@anthropic-ai/sdk` and `openai` npm packages for direct browser→provider API calls with the user's own key (hence the `anthropic-dangerous-direct-browser-access` header in Anthropic requests — the SDK's sanctioned browser mode for BYO-key apps). Source zip with build instructions (`BUILD.md`) is submitted alongside; `npm ci && npm run build` on Node 24.14.0 reproduces `dist/` exactly. The linter's single `UNSAFE_VAR_ASSIGNMENT` warning is Svelte 5's internal template reconciler (trusted compiler-generated strings); application source contains no `innerHTML`/`{@html}`.
 

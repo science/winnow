@@ -19,6 +19,7 @@ export const DEFAULT_SETTINGS: Settings = {
   anthropicModel: ANTHROPIC_MODEL,
   openaiModel: OPENAI_MODEL,
   scoringStrategy: "two-phase",
+  accountWrites: false,
 };
 
 export const settings = writable<Settings>(DEFAULT_SETTINGS);

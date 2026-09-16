@@ -7,9 +7,6 @@
 // Same discipline as feedParser: a surprising shape is a skip, never a throw.
 // This is a third-party wire format that can change without notice.
 
-/** The only origin production accepts messages from. */
-export const PLAYER_ORIGIN = "https://www.youtube-nocookie.com";
-
 /** YT.PlayerState.ENDED */
 const STATE_ENDED = 0;
 

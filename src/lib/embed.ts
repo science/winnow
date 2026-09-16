@@ -1,7 +1,13 @@
-// Embed URLs live here (not inline in Watch.svelte) so the unit tests can
-// hold them in sync with the DNR Referer rule in public/dnr-rules.json —
-// YouTube rejects referrer-less embed requests with player error 153, and
-// extension pages never send a referrer without that rule.
+// Embed URLs live here (not inline in the player) so the unit tests can hold
+// them in sync with the DNR Referer rule built below — YouTube rejects
+// referrer-less embed requests with player error 153, and extension pages
+// never send a referrer without that rule.
+
+const ANONYMOUS_ORIGIN = "https://www.youtube-nocookie.com";
+/** In an extension page holding the youtube.com host permission, Firefox
+ * treats the embed frame as top-level, so its cookies are the account's own
+ * unpartitioned session (measured 2026-09-16, Firefox 155). */
+const SIGNED_IN_ORIGIN = "https://www.youtube.com";
 
 export interface EmbedOptions {
   /** Resume point in seconds; 0/absent starts from the beginning. */
@@ -10,6 +16,15 @@ export interface EmbedOptions {
   jsApi?: boolean;
   /** The page's OWN origin (`location.origin`). Required with jsApi. */
   origin?: string;
+  /** Load the youtube.com player, which plays as the signed-in account (its
+   *  plays reach watch history). Otherwise the privacy-enhanced player. */
+  signedIn?: boolean;
+}
+
+/** The origin a player's page — and therefore its postMessage telemetry —
+ *  comes from. */
+export function embedOrigin(signedIn: boolean): string {
+  return signedIn ? SIGNED_IN_ORIGIN : ANONYMOUS_ORIGIN;
 }
 
 /** autoplay=1 = start-on-open: the video the user clicked plays immediately
@@ -24,7 +39,7 @@ export interface EmbedOptions {
  *  omitted origin both produce total silence, so asking without a correct
  *  origin yields a player that looks wired up and reports nothing. */
 export function embedUrl(videoId: string, opts: EmbedOptions = {}): string {
-  let url = `https://www.youtube-nocookie.com/embed/${videoId}?autoplay=1&rel=0&modestbranding=1`;
+  let url = `${embedOrigin(opts.signedIn ?? false)}/embed/${videoId}?autoplay=1&rel=0&modestbranding=1`;
   const start = Math.floor(opts.startSec ?? 0);
   if (start > 0) url += `&start=${start}`;
   if (opts.jsApi && opts.origin) {
@@ -35,4 +50,39 @@ export function embedUrl(videoId: string, opts: EmbedOptions = {}): string {
 
 export function watchUrl(videoId: string): string {
   return `https://www.youtube.com/watch?v=${videoId}`;
+}
+
+export const EMBED_REFERER_RULE_ID = 1001;
+
+export interface DnrModifyHeadersRule {
+  id: number;
+  priority: number;
+  action: {
+    type: "modifyHeaders";
+    requestHeaders: { header: string; operation: "set"; value: string }[];
+  };
+  condition: { regexFilter: string; resourceTypes: "sub_frame"[]; initiatorDomains: string[] };
+}
+
+/** The Referer rewrite for both players, scoped to frames Winnow's own pages
+ *  load. It has to be registered at runtime: the scope is this install's
+ *  moz-extension host, which a static ruleset can't name — and an unscoped
+ *  rule rewrites the Referer of embeds on every site the user browses.
+ *  Never a youtube.com referer: YouTube rejects its own domain (error 152). */
+export function embedRefererRules(extensionHost: string): DnrModifyHeadersRule[] {
+  return [
+    {
+      id: EMBED_REFERER_RULE_ID,
+      priority: 1,
+      action: {
+        type: "modifyHeaders",
+        requestHeaders: [{ header: "Referer", operation: "set", value: "https://winnow.misuse.org/" }],
+      },
+      condition: {
+        regexFilter: "^https://www\\.youtube(-nocookie)?\\.com/embed/",
+        resourceTypes: ["sub_frame"],
+        initiatorDomains: [extensionHost],
+      },
+    },
+  ];
 }

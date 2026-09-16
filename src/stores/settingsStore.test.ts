@@ -10,6 +10,7 @@ const base: Settings = {
   anthropicModel: "claude-haiku-4-5",
   openaiModel: "gpt-5.4-mini",
   scoringStrategy: "two-phase",
+  accountWrites: false,
 };
 const emptyProfile: Profile = { moreOf: "", lessOf: "", updatedAt: 0 };
 const someProfile: Profile = { moreOf: "deep technical dives", lessOf: "", updatedAt: 1 };
@@ -58,6 +59,14 @@ describe("stored-settings migration", () => {
     expect(merged.anthropicModel).toBe("claude-haiku-4-5");
     expect(merged.openaiModel).toBe("gpt-5.4-mini");
     expect(merged.openaiApiKey).toBe("sk-openai");
+  });
+});
+
+describe("account writes", () => {
+  it("should default to read-only, including for settings stored before the option existed", () => {
+    expect(DEFAULT_SETTINGS.accountWrites).toBe(false);
+    const legacy = { provider: "openai" as const, anthropicApiKey: null, openaiApiKey: "sk-openai" };
+    expect({ ...DEFAULT_SETTINGS, ...legacy }.accountWrites).toBe(false);
   });
 });
 

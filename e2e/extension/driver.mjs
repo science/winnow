@@ -20,21 +20,42 @@ export const UUID = "d3adbeef-0000-4000-8000-000000000001";
 export async function buildDriver(extraPrefs = {}) {
   assert.ok(existsSync(ZIP), `${ZIP} missing — run \`npm run zip\` first`);
   const options = new firefox.Options()
-    // -remote-allow-system-access is what lets openExtensionPage below run
-    // privileged script; see its comment.
-    .addArguments("-headless", "-remote-allow-system-access")
+    .addArguments("-headless")
     .setPreference(
       "extensions.webextensions.uuids",
       JSON.stringify({ "winnow@misuse.org": UUID }),
     );
   for (const [k, v] of Object.entries(extraPrefs)) options.setPreference(k, v);
   const builder = new Builder().forBrowser("firefox").setFirefoxOptions(options);
-  if (existsSync("/snap/bin/geckodriver")) {
-    builder.setFirefoxService(new firefox.ServiceBuilder("/snap/bin/geckodriver"));
-  }
+  // --allow-system-access is what lets openExtensionPage and chromeScript
+  // run privileged script. geckodriver 0.37.1 (2026-09-04) refuses the old
+  // spelling, a "-remote-allow-system-access" Firefox argument, outright.
+  builder.setFirefoxService(
+    new firefox.ServiceBuilder(
+      existsSync("/snap/bin/geckodriver") ? "/snap/bin/geckodriver" : undefined,
+    ).addArguments("--allow-system-access"),
+  );
   const driver = await builder.build();
   await driver.installAddon(ZIP, true);
   return driver;
+}
+
+/**
+ * Run script in the browser's chrome (privileged) context, then return to
+ * content. For test setup the page itself can't do: planting cookies,
+ * observing network requests.
+ *
+ * @param {import("selenium-webdriver").WebDriver} driver
+ * @param {string} script
+ * @param {...unknown} args
+ */
+export async function chromeScript(driver, script, ...args) {
+  await driver.setContext(firefox.Context.CHROME);
+  try {
+    return await driver.executeScript(script, ...args);
+  } finally {
+    await driver.setContext(firefox.Context.CONTENT);
+  }
 }
 
 /**
@@ -52,16 +73,38 @@ export async function buildDriver(extraPrefs = {}) {
  */
 export async function openExtensionPage(driver, path) {
   const url = `moz-extension://${UUID}/${path}`;
-  await driver.setContext(firefox.Context.CHROME);
-  await driver.executeScript(
+  await chromeScript(
+    driver,
     `const win = Services.wm.getMostRecentWindow("navigator:browser");
      win.gBrowser.selectedTab = win.gBrowser.addTab(arguments[0], {
        triggeringPrincipal: Services.scriptSecurityManager.getSystemPrincipal(),
      });`,
     url,
   );
-  await driver.setContext(firefox.Context.CONTENT);
   const handles = await driver.getAllWindowHandles();
   await driver.switchTo().window(handles[handles.length - 1]);
   return url;
+}
+
+/**
+ * Wait until the open Winnow page has registered its embed Referer rule. The
+ * app registers it at startup, asynchronously; the player awaits it, but a
+ * test that builds its own iframe has to wait explicitly or race into
+ * YouTube's error 153.
+ *
+ * @param {import("selenium-webdriver").WebDriver} driver
+ */
+export async function waitForEmbedRefererRule(driver) {
+  await driver.wait(
+    () =>
+      driver.executeAsyncScript(
+        `const callback = arguments[arguments.length - 1];
+         browser.declarativeNetRequest.getDynamicRules().then(
+           (rules) => callback(rules.some((r) => r.condition.initiatorDomains?.includes(location.host))),
+           () => callback(false),
+         );`,
+      ),
+    10_000,
+    "the embed Referer rule was never registered",
+  );
 }

@@ -81,6 +81,10 @@ export interface Settings {
   anthropicModel: string;
   openaiModel: string;
   scoringStrategy: ScoringStrategy;
+  /** Drops the read-only promise: Winnow may act on the YouTube account.
+   *  Today that means the signed-in player, whose plays reach watch history.
+   *  Off by default — a product decision, see docs/DESIGN.md. */
+  accountWrites: boolean;
 }
 
 export interface Profile {

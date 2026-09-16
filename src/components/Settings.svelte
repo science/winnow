@@ -464,6 +464,30 @@
   </section>
 
   <section class="space-y-3">
+    <h2 class="text-lg font-medium">YouTube account</h2>
+    <label class="flex items-start gap-3 text-sm">
+      <input
+        type="checkbox"
+        class="mt-1"
+        checked={$settings.accountWrites}
+        onchange={(e) => {
+          const accountWrites = e.currentTarget.checked;
+          settings.update((s) => ({ ...s, accountWrites }));
+        }}
+      />
+      <span>
+        <span class="block font-medium text-ink">Let Winnow act on my YouTube account</span>
+        <span class="block text-ink-muted">
+          Off by default: Winnow only reads your feeds and never changes anything on YouTube.
+          Turned on, videos play in YouTube's regular signed-in player instead of the
+          privacy-enhanced one, so YouTube sees what you watch here — plays can show up in your
+          watch history and shape your recommendations, the same as watching on youtube.com.
+        </span>
+      </span>
+    </label>
+  </section>
+
+  <section class="space-y-3">
     <h2 class="text-lg font-medium">Feedback</h2>
     <p class="text-sm text-ink-muted" data-testid="feedback-count">
       You've rated {voteCount} {voteCount === 1 ? "video" : "videos"} (Good pick / Not for me).

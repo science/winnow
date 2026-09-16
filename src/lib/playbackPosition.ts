@@ -1,7 +1,9 @@
 // Where the user stopped watching each video, and whether that's worth
-// resuming. The embed is cookie-less by design (youtube-nocookie.com), so
-// YouTube can never resume for us — server-side "continue watching" is a
-// signed-in youtube.com feature. The position has to be ours.
+// resuming. The default embed is cookie-less by design (youtube-nocookie.com),
+// so YouTube can't resume for us — server-side "continue watching" is a
+// signed-in youtube.com feature, and even the opt-in signed-in player
+// (Settings.accountWrites) is not documented to honor it. The position has
+// to be ours.
 
 /** Below this, "resuming" would just be an annoying jump past the intro. */
 export const RESUME_MIN_SEC = 15;
