@@ -6,6 +6,7 @@
   import type { ScoredVideo } from "../lib/types";
   import { listenToPlayer } from "../services/player/playerTelemetry";
   import { embedRefererReady } from "../services/player/embedReferer";
+  import { recordWatch } from "../services/youtube/watchHistory";
   import { flushPositions, playbackReady, recordPosition, resumeStartFor } from "../stores/playbackStore";
   import { settings, settingsReady } from "../stores/settingsStore";
 
@@ -48,6 +49,8 @@
     panel?.scrollIntoView({ block: "nearest" });
     void Promise.all([playbackReady, settingsReady, embedRefererReady()]).then(() => {
       startSec = resumeStartFor(videoId);
+      // Once per open, like a watch-page visit; restarting doesn't re-record.
+      if ($settings.accountWrites) void recordWatch(videoId);
     });
 
     // Escape is a bonus, not the contract: while focus is inside the

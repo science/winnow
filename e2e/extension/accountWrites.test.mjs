@@ -13,6 +13,11 @@
 // is scoped to this install's moz-extension host; a web page's embed must
 // keep its own Referer.
 //
+// Also gates the watch-history ping: embedded plays never reach history, so
+// with the option on Winnow sends the watch page's own playback ping — from
+// the extension page, with the account's cookies. It runs outside demo mode
+// (demo mode never touches the network), on a seeded minimal config.
+//
 // Every test first visits youtube.com, which installs YouTube's service
 // worker — the state of any real YouTube user's profile. With it
 // registered, Firefox re-issues the embed navigation with youtube.com as its
@@ -24,7 +29,7 @@ import { strict as assert } from "node:assert";
 import { createServer } from "node:http";
 import { test } from "node:test";
 import { By, until } from "selenium-webdriver";
-import { buildDriver, chromeScript, openExtensionPage } from "./driver.mjs";
+import { UUID, buildDriver, chromeScript, openExtensionPage } from "./driver.mjs";
 
 const VIDEO_ID = "dQw4w9WgXcQ"; // 3:33 — long enough not to finish mid-test
 const PLAYBACK_KEY = "winnow:playback:v1";
@@ -74,6 +79,43 @@ const [key, callback] = arguments;
 const raw = localStorage.getItem(key);
 callback(raw === null ? null : JSON.parse(raw));
 `;
+
+/** Record every watch-history ping (el=detailpage, unlike the embedded
+ * player's el=embedded pings) with its status and whether it carried the
+ * marker cookie. */
+const OBSERVE_HISTORY_PINGS = `
+const seen = (window.__winnowHistoryPings = []);
+Services.obs.addObserver({ observe(subject) {
+  const ch = subject.QueryInterface(Ci.nsIHttpChannel);
+  const url = new URL(ch.URI.spec);
+  if (url.origin !== "https://s.youtube.com" || url.pathname !== "/api/stats/playback") return;
+  if (url.searchParams.get("el") !== "detailpage") return;
+  let cookie = "";
+  try { cookie = ch.getRequestHeader("Cookie"); } catch {}
+  seen.push({
+    docid: url.searchParams.get("docid"),
+    status: ch.responseStatus,
+    marker: cookie.includes("WINNOW_E2E_SESSION=1"),
+    from: ch.loadInfo.triggeringPrincipal.originNoSuffix,
+  });
+}}, "http-on-examine-response");`;
+
+const STORAGE_SET = `
+const [items, callback] = arguments;
+browser.storage.local.set(items).then(() => callback("ok"), (e) => callback(String(e)));
+`;
+
+/** A real (non-demo) install's minimal config: a provider key and profile
+ * text pass the onboarding gate; the headless profile is signed out, so no
+ * feed loads and the fake key is never used. */
+async function seedRealConfig(driver, accountWrites) {
+  await openExtensionPage(driver, "feed.html#/settings");
+  const result = await driver.executeAsyncScript(STORAGE_SET, {
+    "winnow:settings:v1": { provider: "openai", openaiApiKey: "sk-e2e-not-a-key", accountWrites },
+    "winnow:profile:v1": { moreOf: "chess", lessOf: "", updatedAt: 1 },
+  });
+  assert.equal(result, "ok");
+}
 
 async function enableAccountWrites(driver) {
   await openExtensionPage(driver, "feed.html?demo=1#/settings");
@@ -212,5 +254,42 @@ test("the Referer rewrite applies to Winnow's player only, never to other sites'
   } finally {
     await driver.quit();
     server.close();
+  }
+});
+
+test("account writes on: opening a video records it in watch history", async () => {
+  const driver = await buildDriver({ "media.autoplay.default": 0 });
+  await driver.manage().setTimeouts({ script: 20_000 });
+  try {
+    await installYouTubeServiceWorker(driver);
+    await chromeScript(driver, PLANT_MARKER);
+    await chromeScript(driver, OBSERVE_HISTORY_PINGS);
+    await seedRealConfig(driver, true);
+    await openExtensionPage(driver, `feed.html#/watch/${VIDEO_ID}`);
+    await driver.wait(until.elementLocated(By.css("[data-testid='watch-embed']")), 15_000);
+    const pings = await driver.wait(async () => {
+      const all = await chromeScript(driver, "return window.__winnowHistoryPings;");
+      return all.length > 0 ? all : null;
+    }, 30_000, "no watch-history ping was sent");
+    assert.deepEqual(pings, [
+      { docid: VIDEO_ID, status: 204, marker: true, from: `moz-extension://${UUID}` },
+    ]);
+  } finally {
+    await driver.quit();
+  }
+});
+
+test("account writes off: opening a video sends no watch-history ping", async () => {
+  const driver = await buildDriver({ "media.autoplay.default": 0 });
+  try {
+    await chromeScript(driver, OBSERVE_HISTORY_PINGS);
+    await seedRealConfig(driver, false);
+    await openExtensionPage(driver, `feed.html#/watch/${VIDEO_ID}`);
+    await driver.wait(until.elementLocated(By.css("[data-testid='watch-embed']")), 15_000);
+    // The on-case pings within a few seconds of the frame appearing.
+    await driver.sleep(10_000);
+    assert.deepEqual(await chromeScript(driver, "return window.__winnowHistoryPings;"), []);
+  } finally {
+    await driver.quit();
   }
 });
