@@ -7,16 +7,15 @@ import { parseChannelsPage, parseFeedPage } from "./feedParser";
 import { fetchFeedPage, SignedOutError } from "./ytPage";
 import { proxySubscribedChannels } from "../../lib/subscriptions";
 import { log } from "../../lib/logger";
+import { isDemoMode } from "../../lib/demoMode";
+
+export { isDemoMode };
 
 export interface FeedLoad {
   videos: Video[];
   /** Non-fatal per-feed failures, for the status line. */
   warnings: string[];
   signedOut: boolean;
-}
-
-export function isDemoMode(): boolean {
-  return typeof location !== "undefined" && new URLSearchParams(location.search).has("demo");
 }
 
 /** ?slow=1 alongside ?demo=1: the demo scorer delays each batch so e2e can

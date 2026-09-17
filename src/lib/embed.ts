@@ -68,6 +68,13 @@ export interface DnrModifyHeadersRule {
  *  load. It has to be registered at runtime: the scope is this install's
  *  moz-extension host, which a static ruleset can't name — and an unscoped
  *  rule rewrites the Referer of embeds on every site the user browses.
+ *
+ *  www.youtube.com is the second initiator because once youtube.com has
+ *  installed its service worker, Firefox re-issues the signed-in player's
+ *  navigation with youtube.com as its initiator (measured 2026-09-16; a
+ *  tabIds-scoped rule doesn't match the re-issued request either). Embeds on
+ *  other sites keep their own initiator, so they stay untouched.
+ *
  *  Never a youtube.com referer: YouTube rejects its own domain (error 152). */
 export function embedRefererRules(extensionHost: string): DnrModifyHeadersRule[] {
   return [
@@ -81,7 +88,7 @@ export function embedRefererRules(extensionHost: string): DnrModifyHeadersRule[]
       condition: {
         regexFilter: "^https://www\\.youtube(-nocookie)?\\.com/embed/",
         resourceTypes: ["sub_frame"],
-        initiatorDomains: [extensionHost],
+        initiatorDomains: [extensionHost, "www.youtube.com"],
       },
     },
   ];

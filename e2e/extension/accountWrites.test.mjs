@@ -13,6 +13,12 @@
 // is scoped to this install's moz-extension host; a web page's embed must
 // keep its own Referer.
 //
+// Every test first visits youtube.com, which installs YouTube's service
+// worker — the state of any real YouTube user's profile. With it
+// registered, Firefox re-issues the embed navigation with youtube.com as its
+// initiator (measured 2026-09-16 in the user's browser: error 153 on every
+// signed-in play). A fresh profile never shows that.
+//
 // Run: npm run test:e2e:ext  (manual tier, live network to YouTube)
 import { strict as assert } from "node:assert";
 import { createServer } from "node:http";
@@ -40,9 +46,33 @@ Services.obs.addObserver({ observe(subject) {
   seen.push({ url: ch.URI.spec, referer });
 }}, "http-on-examine-response");`;
 
+/** Visit youtube.com so its service worker is registered, as it is in any
+ * real YouTube user's profile. */
+async function installYouTubeServiceWorker(driver) {
+  await driver.get("https://www.youtube.com/");
+  await driver.wait(
+    () =>
+      chromeScript(
+        driver,
+        `const regs = Cc["@mozilla.org/serviceworkers/manager;1"]
+           .getService(Ci.nsIServiceWorkerManager).getAllRegistrations();
+         for (let i = 0; i < regs.length; i++) {
+           const r = regs.queryElementAt(i, Ci.nsIServiceWorkerRegistrationInfo);
+           if (r.scope === "https://www.youtube.com/" && r.activeWorker) return true;
+         }
+         return false;`,
+      ),
+    30_000,
+    "youtube.com never installed its service worker",
+  );
+}
+
+/** Read a key the page persisted. Demo mode keeps its state in the page's
+ * localStorage, never in browser.storage.local (lib/storage.ts). */
 const READ_STORAGE = `
 const [key, callback] = arguments;
-browser.storage.local.get(key).then((r) => callback(r[key] ?? null), () => callback(null));
+const raw = localStorage.getItem(key);
+callback(raw === null ? null : JSON.parse(raw));
 `;
 
 async function enableAccountWrites(driver) {
@@ -90,6 +120,7 @@ test("signed-in player: runs on the account's own cookies and still reports its 
   const driver = await buildDriver({ "media.autoplay.default": 0 });
   await driver.manage().setTimeouts({ script: 60_000 });
   try {
+    await installYouTubeServiceWorker(driver);
     await chromeScript(driver, PLANT_MARKER);
     await enableAccountWrites(driver);
     await openExtensionPage(driver, `feed.html?demo=1#/watch/${VIDEO_ID}`);
@@ -128,6 +159,7 @@ test("signed-in player: runs on the account's own cookies and still reports its 
 test("read-only (default): the privacy-enhanced player never sees the account cookies", async () => {
   const driver = await buildDriver({ "media.autoplay.default": 0 });
   try {
+    await installYouTubeServiceWorker(driver);
     await chromeScript(driver, PLANT_MARKER);
     await openExtensionPage(driver, `feed.html?demo=1#/watch/${VIDEO_ID}`);
     const frame = await driver.wait(
@@ -153,6 +185,7 @@ test("the Referer rewrite applies to Winnow's player only, never to other sites'
   const site = `http://127.0.0.1:${server.address().port}/`;
   const driver = await buildDriver();
   try {
+    await installYouTubeServiceWorker(driver);
     await chromeScript(driver, OBSERVE_EMBEDS);
     await enableAccountWrites(driver);
     const seenAtLeast = (n) =>
@@ -165,11 +198,17 @@ test("the Referer rewrite applies to Winnow's player only, never to other sites'
     // Navigating away before Winnow's embed has a response would cancel it.
     await seenAtLeast(1);
     await driver.get(site);
-    const seen = await seenAtLeast(2);
+    await seenAtLeast(2);
+    // A second visit covers a service worker the first embed might have
+    // registered in that site's partition — the case where Firefox would
+    // re-issue the site's embed navigation as youtube.com.
+    await driver.sleep(3000);
+    await driver.navigate().refresh();
+    const seen = await seenAtLeast(3);
 
-    const [winnow, other] = seen;
+    const [winnow, ...others] = seen;
     assert.equal(winnow.referer, "https://winnow.misuse.org/", JSON.stringify(seen));
-    assert.equal(other.referer, site, JSON.stringify(seen));
+    for (const other of others) assert.equal(other.referer, site, JSON.stringify(seen));
   } finally {
     await driver.quit();
     server.close();

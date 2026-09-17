@@ -127,10 +127,12 @@ test("the player reports an advancing clock to a moz-extension page", async () =
   }
 });
 
-/** Read a key out of the extension's real browser.storage.local. */
+/** Read a key the page persisted. Demo mode keeps its state in the page's
+ * localStorage, never in browser.storage.local (lib/storage.ts). */
 const READ_STORAGE = `
 const [key, callback] = arguments;
-browser.storage.local.get(key).then((r) => callback(r[key] ?? null), () => callback(null));
+const raw = localStorage.getItem(key);
+callback(raw === null ? null : JSON.parse(raw));
 `;
 
 test("a played video's position round-trips through storage and back into the player", async () => {

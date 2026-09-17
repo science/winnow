@@ -1,8 +1,12 @@
 // The single persistence chokepoint (see CLAUDE.md). Prefers
 // browser.storage.local (extension context); falls back to localStorage
-// (plain-browser dev / demo mode) and then to an in-memory map (tests).
+// (plain-browser dev, and demo mode everywhere) and then to an in-memory map
+// (tests). Demo mode never touches browser.storage.local: its fixture feed
+// would otherwise replace the user's real cache, and the refresh that
+// follows prunes watched marks, resume points, and caches to match.
 // All values JSON; all keys namespaced and versioned.
 
+import { isDemoMode } from "./demoMode";
 import { log } from "./logger";
 
 export const KEYS = {
@@ -56,6 +60,7 @@ declare const browser: { storage?: { local?: WebExtStorage } } | undefined;
 const memory = new Map<string, string>();
 
 function webExtArea(): WebExtStorage | null {
+  if (isDemoMode()) return null;
   try {
     return typeof browser !== "undefined" && browser?.storage?.local ? browser.storage.local : null;
   } catch {

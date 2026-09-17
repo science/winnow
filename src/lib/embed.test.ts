@@ -126,7 +126,16 @@ describe("embed Referer rule (YouTube error 153 guard)", () => {
     // Measured 2026-09-16 in real Firefox 155: an unscoped rule also rewrote
     // the Referer of embeds on ordinary websites, breaking their attribution
     // and any embed restricted to its own domain.
-    expect(rules[0]!.condition.initiatorDomains).toEqual([EXT_HOST]);
+    expect(rules[0]!.condition.initiatorDomains).toContain(EXT_HOST);
+    expect(rules[0]!.condition.initiatorDomains).toHaveLength(2);
+  });
+
+  it("should also cover the embed navigation Firefox re-issues as youtube.com", () => {
+    // Once youtube.com has installed its service worker (any real YouTube
+    // user's profile), Firefox re-issues the signed-in player's navigation
+    // with www.youtube.com as the initiator; without this the player shows
+    // error 153 on every play. Scoping by tabIds does not catch it.
+    expect(rules[0]!.condition.initiatorDomains).toContain("www.youtube.com");
   });
 
   it("should not claim youtube.com as the referer (YouTube rejects its own domain: error 152)", () => {
