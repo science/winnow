@@ -85,26 +85,3 @@ export async function openExtensionPage(driver, path) {
   await driver.switchTo().window(handles[handles.length - 1]);
   return url;
 }
-
-/**
- * Wait until the open Winnow page has registered its embed Referer rule. The
- * app registers it at startup, asynchronously; the player awaits it, but a
- * test that builds its own iframe has to wait explicitly or race into
- * YouTube's error 153.
- *
- * @param {import("selenium-webdriver").WebDriver} driver
- */
-export async function waitForEmbedRefererRule(driver) {
-  await driver.wait(
-    () =>
-      driver.executeAsyncScript(
-        `const callback = arguments[arguments.length - 1];
-         browser.declarativeNetRequest.getDynamicRules().then(
-           (rules) => callback(rules.some((r) => r.condition.initiatorDomains?.includes(location.host))),
-           () => callback(false),
-         );`,
-      ),
-    10_000,
-    "the embed Referer rule was never registered",
-  );
-}

@@ -3,9 +3,13 @@
 // new permissions, no content script, no script load). This is the seam
 // per-video resume positions are built on.
 //
-// The DNR Referer rule matches any embed sub_frame a Winnow page loads (the
-// app registers it at startup), so a hand-built iframe gets the Referer too —
-// which is why this test needs no player code to prove the seam.
+// The page's own player code (services/player/playerTelemetry.ts) does the
+// polling; the test only listens. A probe that posted the polls itself, from
+// Marionette's script sandbox, failed about one run in ten (measured
+// 2026-09-16): the sandbox's handle on the frame window goes dead when the
+// frame switches to YouTube's process, and in those runs it never recovered —
+// every post threw "can't access dead object" while the page's own code is
+// unaffected.
 //
 // Swept 2026-08-09 against three `origin` param candidates. Only the page's
 // own origin works, and the result is not close:
@@ -23,7 +27,7 @@
 import { strict as assert } from "node:assert";
 import { test } from "node:test";
 import { By, until } from "selenium-webdriver";
-import { buildDriver, openExtensionPage, waitForEmbedRefererRule } from "./driver.mjs";
+import { buildDriver, openExtensionPage } from "./driver.mjs";
 
 const VIDEO_ID = "jNQXAC9IVRw"; // "Me at the zoo" — stable, embeddable
 // The round-trip needs a video longer than FINISHED_TAIL_SEC*2: "Me at the
@@ -34,44 +38,18 @@ const PLAYBACK_KEY = "winnow:playback:v1";
 const PLAYER_ORIGIN = "https://www.youtube-nocookie.com";
 const COLLECT_MS = 12_000;
 
-/** Build an embed in the page, post the listening handshake, and collect
- * whatever the player posts back. Runs in page context. */
-const PROBE = `
-const [videoId, playerOrigin, ms, callback] = arguments;
-const src = "https://www.youtube-nocookie.com/embed/" + videoId +
-  "?autoplay=1&rel=0&modestbranding=1&enablejsapi=1&origin=" +
-  encodeURIComponent(location.origin);
-const iframe = document.createElement("iframe");
-iframe.src = src;
-iframe.allow = "autoplay; encrypted-media";
-iframe.width = 640;
-iframe.height = 360;
-document.body.appendChild(iframe);
-
+/** Collect what the player posts to the page. Runs in page context. */
+const SNIFF = `
+const [ms, callback] = arguments;
 const events = [];
 const onMessage = (e) => {
-  if (e.source !== iframe.contentWindow) return;
   const raw = typeof e.data === "string" ? e.data : JSON.stringify(e.data);
   events.push({ origin: e.origin, raw: String(raw).slice(0, 4000) });
 };
 window.addEventListener("message", onMessage);
-
-const handshake = () => {
-  try {
-    iframe.contentWindow.postMessage(
-      JSON.stringify({ event: "listening", id: 1, channel: "widget" }),
-      playerOrigin,
-    );
-  } catch (err) { /* frame not ready yet */ }
-};
-iframe.addEventListener("load", handshake);
-const timer = setInterval(handshake, 500);
-
 setTimeout(() => {
-  clearInterval(timer);
   window.removeEventListener("message", onMessage);
-  iframe.remove();
-  callback({ src, events });
+  callback({ events });
 }, ms);
 `;
 
@@ -96,14 +74,13 @@ test("the player reports an advancing clock to a moz-extension page", async () =
   const driver = await buildDriver({ "media.autoplay.default": 0 });
   await driver.manage().setTimeouts({ script: 60_000 });
   try {
-    await openExtensionPage(driver, "feed.html?demo=1");
-    await waitForEmbedRefererRule(driver);
-    const { events } = await driver.executeAsyncScript(
-      PROBE,
-      VIDEO_ID,
-      PLAYER_ORIGIN,
-      COLLECT_MS,
+    await openExtensionPage(driver, `feed.html?demo=1#/watch/${VIDEO_ID}`);
+    const frame = await driver.wait(
+      until.elementLocated(By.css("[data-testid='watch-embed']")),
+      15_000,
     );
+    assert.match(await frame.getAttribute("src"), /enablejsapi=1&origin=moz-extension%3A/);
+    const { events } = await driver.executeAsyncScript(SNIFF, COLLECT_MS);
     const samples = parseSamples(events);
 
     assert.ok(
@@ -118,7 +95,7 @@ test("the player reports an advancing clock to a moz-extension page", async () =
     assert.ok(withDuration, "no sample carried a positive duration");
 
     // Production hard-filters on event.origin, so every sample must carry the
-    // player's own origin — never an arbitrary sender's.
+    // player's own origin (the page has no other frame to post them).
     for (const s of samples) {
       assert.equal(s.origin, PLAYER_ORIGIN, `unexpected message origin ${s.origin}`);
     }
