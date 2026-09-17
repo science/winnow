@@ -1,5 +1,5 @@
 import { afterEach, describe, it, expect, vi } from "vitest";
-import { extractPlaybackTrackingUrl, recordWatch } from "./watchHistory";
+import { createWatchRecorder, extractPlaybackTrackingUrl, recordWatch } from "./watchHistory";
 
 const TRACKING = "https://s.youtube.com/api/stats/playback?cl=1&docid=vid12345678&el=detailpage&len=60";
 
@@ -72,5 +72,53 @@ describe("recordWatch", () => {
     const fetchFn = stubFetch(PAGE);
     expect(await recordWatch("vid12345678", { fetchFn })).toBe(false);
     expect(fetchFn).not.toHaveBeenCalled();
+  });
+});
+
+describe("createWatchRecorder", () => {
+  function setup(enabled = true) {
+    const record = vi.fn(async () => true);
+    let now = 0;
+    const recorder = createWatchRecorder("vid12345678", {
+      enabled: () => enabled,
+      record,
+      now: () => now,
+    });
+    /** Play `secs` seconds of video in half-second samples. */
+    const play = (secs: number, from = 0, durationSec = 600): void => {
+      for (let t = 0; t <= secs * 2; t++) {
+        now = (from + t / 2) * 1000;
+        recorder({ positionSec: from + t / 2, durationSec, ended: false });
+      }
+    };
+    return { record, play };
+  }
+
+  it("should record nothing before the user has watched the threshold", () => {
+    const { record, play } = setup();
+    play(29);
+    expect(record).not.toHaveBeenCalled();
+  });
+
+  it("should record the play once the threshold is watched, and only once", () => {
+    const { record, play } = setup();
+    play(30);
+    expect(record).toHaveBeenCalledTimes(1);
+    expect(record).toHaveBeenCalledWith("vid12345678");
+    play(60, 30);
+    expect(record).toHaveBeenCalledTimes(1);
+  });
+
+  it("should use the duration the player reported earlier when later samples omit it", () => {
+    const { record, play } = setup();
+    play(0, 0, 16);
+    play(8, 0, 0);
+    expect(record).toHaveBeenCalledTimes(1);
+  });
+
+  it("should never record when account writes are off", () => {
+    const { record, play } = setup(false);
+    play(120);
+    expect(record).not.toHaveBeenCalled();
   });
 });

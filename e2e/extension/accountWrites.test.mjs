@@ -15,7 +15,8 @@
 //
 // Also gates the watch-history ping: embedded plays never reach history, so
 // with the option on Winnow sends the watch page's own playback ping — from
-// the extension page, with the account's cookies. It runs outside demo mode
+// the extension page, with the account's cookies, and only once the video
+// has actually played for a while (lib/watchHistory.ts). It runs outside demo mode
 // (demo mode never touches the network), on a seeded minimal config.
 //
 // Every test first visits youtube.com, which installs YouTube's service
@@ -29,6 +30,7 @@ import { strict as assert } from "node:assert";
 import { createServer } from "node:http";
 import { test } from "node:test";
 import { By, until } from "selenium-webdriver";
+import { HISTORY_MIN_WATCH_SEC } from "../../src/lib/watchHistory.ts";
 import { UUID, buildDriver, chromeScript, openExtensionPage } from "./driver.mjs";
 
 const VIDEO_ID = "dQw4w9WgXcQ"; // 3:33 — long enough not to finish mid-test
@@ -257,7 +259,7 @@ test("the Referer rewrite applies to Winnow's player only, never to other sites'
   }
 });
 
-test("account writes on: opening a video records it in watch history", async () => {
+test("account writes on: a video is recorded in watch history once it has played a while", async () => {
   const driver = await buildDriver({ "media.autoplay.default": 0 });
   await driver.manage().setTimeouts({ script: 20_000 });
   try {
@@ -267,11 +269,19 @@ test("account writes on: opening a video records it in watch history", async () 
     await seedRealConfig(driver, true);
     await openExtensionPage(driver, `feed.html#/watch/${VIDEO_ID}`);
     await driver.wait(until.elementLocated(By.css("[data-testid='watch-embed']")), 15_000);
-    const pings = await driver.wait(async () => {
-      const all = await chromeScript(driver, "return window.__winnowHistoryPings;");
+    const pings = () => chromeScript(driver, "return window.__winnowHistoryPings;");
+
+    // Half the threshold in: a quick bail-out here must leave no trace.
+    await driver.sleep(HISTORY_MIN_WATCH_SEC * 500);
+    assert.deepEqual(await pings(), [], "recorded before the video had played long enough");
+
+    const sent = await driver.wait(async () => {
+      const all = await pings();
       return all.length > 0 ? all : null;
-    }, 30_000, "no watch-history ping was sent");
-    assert.deepEqual(pings, [
+    }, 60_000, "no watch-history ping was sent");
+    await driver.sleep(10_000);
+    assert.deepEqual(await pings(), sent, "recorded more than once");
+    assert.deepEqual(sent, [
       { docid: VIDEO_ID, status: 204, marker: true, from: `moz-extension://${UUID}` },
     ]);
   } finally {
@@ -279,15 +289,15 @@ test("account writes on: opening a video records it in watch history", async () 
   }
 });
 
-test("account writes off: opening a video sends no watch-history ping", async () => {
+test("account writes off: playing a video sends no watch-history ping", async () => {
   const driver = await buildDriver({ "media.autoplay.default": 0 });
   try {
     await chromeScript(driver, OBSERVE_HISTORY_PINGS);
     await seedRealConfig(driver, false);
     await openExtensionPage(driver, `feed.html#/watch/${VIDEO_ID}`);
     await driver.wait(until.elementLocated(By.css("[data-testid='watch-embed']")), 15_000);
-    // The on-case pings within a few seconds of the frame appearing.
-    await driver.sleep(10_000);
+    // Well past the point where the on-case records.
+    await driver.sleep((HISTORY_MIN_WATCH_SEC + 20) * 1000);
     assert.deepEqual(await chromeScript(driver, "return window.__winnowHistoryPings;"), []);
   } finally {
     await driver.quit();

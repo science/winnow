@@ -6,7 +6,7 @@
   import type { ScoredVideo } from "../lib/types";
   import { listenToPlayer } from "../services/player/playerTelemetry";
   import { embedRefererReady } from "../services/player/embedReferer";
-  import { recordWatch } from "../services/youtube/watchHistory";
+  import { createWatchRecorder } from "../services/youtube/watchHistory";
   import { flushPositions, playbackReady, recordPosition, resumeStartFor } from "../stores/playbackStore";
   import { settings, settingsReady } from "../stores/settingsStore";
 
@@ -37,6 +37,9 @@
         }),
   );
 
+  // One per video shown: restarting it doesn't record it again.
+  const recordWatch = $derived(createWatchRecorder(videoId, { enabled: () => $settings.accountWrites }));
+
   function close(): void {
     navigate({ name: "feed" });
   }
@@ -49,8 +52,6 @@
     panel?.scrollIntoView({ block: "nearest" });
     void Promise.all([playbackReady, settingsReady, embedRefererReady()]).then(() => {
       startSec = resumeStartFor(videoId);
-      // Once per open, like a watch-page visit; restarting doesn't re-record.
-      if ($settings.accountWrites) void recordWatch(videoId);
     });
 
     // Escape is a bonus, not the contract: while focus is inside the
@@ -85,9 +86,10 @@
     const el = frame;
     const url = src;
     if (!el || !url) return;
-    const stop = listenToPlayer(el, embedOrigin($settings.accountWrites), (telemetry) =>
-      recordPosition(videoId, telemetry),
-    );
+    const stop = listenToPlayer(el, embedOrigin($settings.accountWrites), (telemetry) => {
+      recordPosition(videoId, telemetry);
+      recordWatch(telemetry);
+    });
     return () => {
       stop();
       void flushPositions();

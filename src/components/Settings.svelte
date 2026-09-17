@@ -479,7 +479,8 @@
         <span class="block font-medium text-ink">Let Winnow act on my YouTube account</span>
         <span class="block text-ink-muted">
           Off by default: Winnow only reads your feeds and never changes anything on YouTube.
-          Turned on, each video you open here is added to your YouTube watch history, and videos
+          Turned on, a video you watch here for at least 30 seconds (or half of a shorter one) is
+          added to your YouTube watch history, and videos
           play in YouTube's regular signed-in player instead of the privacy-enhanced one — so
           YouTube sees what you watch here and it shapes your recommendations, the same as
           watching on youtube.com.
