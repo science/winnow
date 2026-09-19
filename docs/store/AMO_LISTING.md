@@ -35,7 +35,17 @@ YouTube's algorithm optimizes for minutes watched. Winnow optimizes for somethin
 
 Source code: https://github.com/science/winnow
 
-## Version notes (What's new — 0.2.3)
+## Version notes (What's new — 0.2.4)
+
+Watch history, if you want it.
+
+- **Opt-in account writes.** A new setting, off by default, under Settings → YouTube account. Leave it off and Winnow behaves exactly as before: it reads your feeds and changes nothing on your account.
+- **Plays can count toward your watch history.** With the setting on, a video you watch in Winnow for at least 30 seconds (or half of a shorter one) is added to your YouTube watch history, so what you watch here shapes your recommendations the same way watching on youtube.com does. A quick look that you bail out of is never recorded.
+- **Signed-in player.** With the setting on, videos play in YouTube's regular signed-in player instead of the privacy-enhanced one. This also fixes player error 153 for some signed-in users.
+
+Permissions are unchanged from the previously listed versions: no new permission is requested, and `cookies` is still not among them.
+
+## Version notes (previous release — 0.2.3)
 
 Better filtering, and a calmer way to watch.
 
