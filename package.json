@@ -16,6 +16,7 @@
     "test:e2e": "playwright test --project=nonlive",
     "test:e2e:live": "playwright test --project=live",
     "test:e2e:ext": "npm run zip && node --test e2e/extension/*.test.mjs",
+    "test:e2e:android": "npm run zip && WINNOW_TARGET=android node --test --test-concurrency=1 e2e/extension/*.test.mjs e2e/android/*.test.mjs",
     "zip": "npm run build && node scripts/zip.mjs",
     "sign": "npm run build && node scripts/sign.mjs",
     "source-zip": "node scripts/source-zip.mjs"
