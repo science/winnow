@@ -10,7 +10,8 @@ declare const browser: {
     create: (props: { url: string }) => Promise<unknown>;
     update: (id: number, props: { active: boolean }) => Promise<unknown>;
   };
-  windows: { update: (id: number, props: { focused: boolean }) => Promise<unknown> };
+  /** Absent on Firefox for Android, which implements no windows API. */
+  windows?: { update: (id: number, props: { focused: boolean }) => Promise<unknown> };
 };
 
 const FEED_URL = browser.runtime.getURL("feed.html");
@@ -21,7 +22,7 @@ browser.action.onClicked.addListener(() => {
     const tab = existing[0];
     if (tab?.id !== undefined) {
       await browser.tabs.update(tab.id, { active: true });
-      if (tab.windowId !== undefined) {
+      if (tab.windowId !== undefined && browser.windows) {
         await browser.windows.update(tab.windowId, { focused: true });
       }
     } else {
