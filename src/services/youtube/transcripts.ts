@@ -14,17 +14,12 @@
 // Both calls are cookie-less on purpose: the session adds nothing and a
 // logged-in cookie jar with an ANDROID client claim looks anomalous.
 
+import { ANDROID_CLIENT } from "../../lib/innertubeClient";
 import { log } from "../../lib/logger";
 
 export const TRANSCRIPT_EXCERPT_CHARS = 2000;
 
-// Reviewed constant (like model IDs). If YouTube retires this client
-// version, the live e2e spec and scripts/transcript-diag.ts surface it.
-export const ANDROID_CLIENT = {
-  clientName: "ANDROID",
-  clientVersion: "20.10.38",
-  androidSdkVersion: 30,
-} as const;
+export { ANDROID_CLIENT };
 
 export interface TranscriptResult {
   excerpt: string;

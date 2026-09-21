@@ -135,7 +135,12 @@
   {/if}
 
   {#each $status.warnings as warning (warning)}
-    <p class="rounded-md border border-caution/40 bg-caution/10 px-3 py-2 text-sm text-caution">{warning}</p>
+    <p
+      class="rounded-md border border-caution/40 bg-caution/10 px-3 py-2 text-sm text-caution"
+      data-testid="feed-warning"
+    >
+      {warning}
+    </p>
   {/each}
 
   <!-- Outside the status chain on purpose: a deep-linked video that isn't in

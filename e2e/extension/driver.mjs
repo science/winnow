@@ -176,3 +176,31 @@ export async function openExtensionPage(driver, path) {
   );
   return url;
 }
+
+const STORAGE_SET = `
+const [items, callback] = arguments;
+browser.storage.local.set(items).then(() => callback("ok"), (e) => callback(String(e)));
+`;
+
+/**
+ * A real (non-demo) install's minimal config: a provider key and profile
+ * text pass the onboarding gate. The test profile is signed out, so no feed
+ * loads and the fake key is never used.
+ *
+ * @param {import("selenium-webdriver").WebDriver} driver
+ * @param {{ accountWrites?: boolean }} [opts]
+ */
+export async function seedRealConfig(driver, { accountWrites = false } = {}) {
+  await openExtensionPage(driver, "feed.html#/settings");
+  const result = await driver.executeAsyncScript(STORAGE_SET, {
+    "winnow:settings:v1": { provider: "openai", openaiApiKey: "sk-e2e-not-a-key", accountWrites },
+    // The current schema, not the legacy winnow:profile:v1: by the time this
+    // page has loaded the app has already written its own profiles
+    // collection, and the legacy key is only migrated when there is none.
+    "winnow:profiles:v1": {
+      activeProfileId: "e2e",
+      profiles: [{ id: "e2e", name: "Default", moreOf: "chess", lessOf: "", updatedAt: 1 }],
+    },
+  });
+  assert.equal(result, "ok");
+}

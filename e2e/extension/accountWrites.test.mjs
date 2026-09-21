@@ -32,7 +32,14 @@ import { test } from "node:test";
 import { By, until } from "selenium-webdriver";
 import { HISTORY_MIN_WATCH_SEC } from "../../src/lib/watchHistory.ts";
 import { desktopPageUrl } from "../../src/lib/ytUrl.ts";
-import { UUID, buildDriver, chromeScript, exposeLocalPort, openExtensionPage } from "./driver.mjs";
+import {
+  UUID,
+  buildDriver,
+  chromeScript,
+  exposeLocalPort,
+  openExtensionPage,
+  seedRealConfig,
+} from "./driver.mjs";
 
 const VIDEO_ID = "dQw4w9WgXcQ"; // 3:33 — long enough not to finish mid-test
 const PLAYBACK_KEY = "winnow:playback:v1";
@@ -111,29 +118,6 @@ Services.obs.addObserver({ observe(subject) {
     from: ch.loadInfo.triggeringPrincipal.originNoSuffix,
   });
 }}, "http-on-examine-response");`;
-
-const STORAGE_SET = `
-const [items, callback] = arguments;
-browser.storage.local.set(items).then(() => callback("ok"), (e) => callback(String(e)));
-`;
-
-/** A real (non-demo) install's minimal config: a provider key and profile
- * text pass the onboarding gate; the headless profile is signed out, so no
- * feed loads and the fake key is never used. */
-async function seedRealConfig(driver, accountWrites) {
-  await openExtensionPage(driver, "feed.html#/settings");
-  const result = await driver.executeAsyncScript(STORAGE_SET, {
-    "winnow:settings:v1": { provider: "openai", openaiApiKey: "sk-e2e-not-a-key", accountWrites },
-    // The current schema, not the legacy winnow:profile:v1: by the time this
-    // page has loaded the app has already written its own profiles
-    // collection, and the legacy key is only migrated when there is none.
-    "winnow:profiles:v1": {
-      activeProfileId: "e2e",
-      profiles: [{ id: "e2e", name: "Default", moreOf: "chess", lessOf: "", updatedAt: 1 }],
-    },
-  });
-  assert.equal(result, "ok");
-}
 
 async function enableAccountWrites(driver) {
   await openExtensionPage(driver, "feed.html?demo=1#/settings");
@@ -283,7 +267,7 @@ test("account writes on: a video is recorded in watch history once it has played
     await installYouTubeServiceWorker(driver);
     await chromeScript(driver, PLANT_MARKER);
     await chromeScript(driver, OBSERVE_HISTORY_PINGS);
-    await seedRealConfig(driver, true);
+    await seedRealConfig(driver, { accountWrites: true });
     await openExtensionPage(driver, `feed.html#/watch/${VIDEO_ID}`);
     await driver.wait(until.elementLocated(By.css("[data-testid='watch-embed']")), 15_000);
     const pings = () => chromeScript(driver, `return ${STASH}.__winnowHistoryPings;`);
@@ -310,7 +294,7 @@ test("account writes off: playing a video sends no watch-history ping", async ()
   const driver = await buildDriver({ "media.autoplay.default": 0 });
   try {
     await chromeScript(driver, OBSERVE_HISTORY_PINGS);
-    await seedRealConfig(driver, false);
+    await seedRealConfig(driver, { accountWrites: false });
     await openExtensionPage(driver, `feed.html#/watch/${VIDEO_ID}`);
     await driver.wait(until.elementLocated(By.css("[data-testid='watch-embed']")), 15_000);
     // Well past the point where the on-case records.
