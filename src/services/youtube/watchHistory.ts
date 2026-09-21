@@ -14,6 +14,7 @@ import {
   type WatchCredit,
 } from "../../lib/watchHistory";
 import { watchUrl } from "../../lib/embed";
+import { desktopPageUrl } from "../../lib/ytUrl";
 import { extractJsonBlob } from "./pageExtract";
 
 /** The watch page's `playbackTracking.videostatsPlaybackUrl`, or null. */
@@ -36,7 +37,7 @@ export async function recordWatch(
   if (isDemoMode()) return false;
   const fetchFn = deps.fetchFn ?? fetch;
   try {
-    const page = await fetchFn(watchUrl(videoId), { credentials: "include" });
+    const page = await fetchFn(desktopPageUrl(watchUrl(videoId)), { credentials: "include" });
     if (!page.ok) throw new Error(`watch page HTTP ${page.status}`);
     const trackingUrl = extractPlaybackTrackingUrl(await page.text());
     if (!trackingUrl) throw new Error("no playback tracking URL on the watch page");

@@ -42,7 +42,8 @@ describe("recordWatch", () => {
     expect(await recordWatch("vid12345678", { fetchFn })).toBe(true);
     expect(fetchFn).toHaveBeenCalledTimes(2);
     const [pageCall, pingCall] = fetchFn.mock.calls;
-    expect(String(pageCall![0])).toBe("https://www.youtube.com/watch?v=vid12345678");
+    // The desktop page: a phone is otherwise redirected to m.youtube.com.
+    expect(String(pageCall![0])).toBe("https://www.youtube.com/watch?v=vid12345678&app=desktop");
     expect(pageCall![1]).toMatchObject({ credentials: "include" });
     const ping = new URL(String(pingCall![0]));
     expect(ping.pathname).toBe("/api/stats/playback");

@@ -64,9 +64,22 @@ describe("fetchSearchPage", () => {
     expect(mock).toHaveBeenCalledTimes(1);
     const [url, init] = mock.mock.calls[0]! as unknown as [string, RequestInit];
     expect(url).toBe(
-      "https://www.youtube.com/results?search_query=kpop%20stage%20mix%20%26%20more",
+      "https://www.youtube.com/results?search_query=kpop%20stage%20mix%20%26%20more&app=desktop",
     );
     expect(init.credentials).toBe("include");
+  });
+
+  it("should name the mobile site when YouTube redirects there anyway", async () => {
+    // m.youtube.com carries no `var ytInitialData` blob; without this the
+    // failure reads as a layout change instead of what it is.
+    const mock = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      url: "https://m.youtube.com/results?search_query=x",
+      text: async () => "<html>mobile</html>",
+    }));
+    vi.stubGlobal("fetch", mock);
+    await expect(fetchSearchPage("x")).rejects.toThrow(/mobile site/);
   });
 
   it("should not treat a signed-out search page as fatal", async () => {

@@ -4,6 +4,7 @@
 // user's session cookies.
 
 import { log } from "../../lib/logger";
+import { desktopPageUrl, isMobileRedirect } from "../../lib/ytUrl";
 import { extractJsonBlob } from "./pageExtract";
 
 export const FEED_URLS = {
@@ -99,12 +100,17 @@ export async function getInnertubeConfig(): Promise<InnertubeConfig | null> {
  * search works without one. */
 async function fetchYtPage(url: string): Promise<YtPage> {
   log.debug("fetching", url);
-  const res = await fetch(url, {
+  const res = await fetch(desktopPageUrl(url), {
     credentials: "include",
     headers: { "Accept-Language": "en-US,en;q=0.9" },
   });
   if (!res.ok) {
     throw new PageParseError(`YouTube returned HTTP ${res.status} for ${url}`);
+  }
+  if (isMobileRedirect(res.url)) {
+    throw new PageParseError(
+      "YouTube served its mobile site, which Winnow can't read — the desktop-page request was ignored.",
+    );
   }
   const html = await res.text();
   const loggedIn = extractLoggedIn(html);
