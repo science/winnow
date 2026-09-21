@@ -35,6 +35,22 @@ YouTube's algorithm optimizes for minutes watched. Winnow optimizes for somethin
 
 Source code: https://github.com/science/winnow
 
+## Version notes (DRAFT — next release, Firefox for Android)
+
+Winnow now works on Firefox for Android.
+
+- **Your feed loads on a phone.** Earlier versions were offered to Firefox for Android but could not read YouTube there — YouTube sends phones to its mobile site, which Winnow can't parse. Winnow now asks for the regular page. Nothing changes on desktop.
+- **A layout that fits.** Titles get room on a narrow screen, and the buttons are big enough to hit with a thumb.
+- **Everything else comes along:** the inline player with resume, fullscreen (Back leaves fullscreen and keeps your place), transcripts, Go deeper, profiles, and the opt-in watch-history setting all behave as they do on desktop. Tap a video and it plays; nothing plays after it.
+- **Fixed:** the toolbar button logged an error on Android every time it refocused an open Winnow tab.
+- **Sturdier scoring on a phone.** If Android closes the browser mid-scoring, Winnow keeps what it had already worked out instead of paying for it again.
+
+On Android, open Winnow from the ⋮ menu → Extensions. You need to be signed in to youtube.com in Firefox itself — the YouTube app's sign-in doesn't count.
+
+Permissions are unchanged from the previously listed versions.
+
+Notes to reviewer (addition for this version): every youtube.com page request now carries the query parameter `app=desktop` (`src/lib/ytUrl.ts`), so that a mobile user agent receives the same desktop document Winnow already parses instead of a redirect to m.youtube.com. It sets no cookie and is a no-op on desktop. No new host, permission, or remote code.
+
 ## Version notes (What's new — 0.2.4)
 
 Watch history, if you want it.
@@ -60,7 +76,7 @@ Permissions are unchanged from the previously listed versions.
 ## Categories
 
 - Firefox desktop: Search & Discovery (or closest available; second choice: Entertainment)
-- Android: not targeted (min Firefox for Android 142 declared, but untested — leave Android unchecked)
+- Android: supported from the first release after 0.2.4 (Search & Discovery, as on desktop). There is no "Android" checkbox to leave unticked: the manifest's `browser_specific_settings.gecko_android` key is what makes AMO offer a version to Firefox for Android, and it has been in the manifest since 0.2.0 — so 0.2.0–0.2.4 were offered to Android while broken there (every feed fetch hit YouTube's mobile site; confirmed against the released 0.2.4 zip on Firefox for Android 156). The minimum stays 142.0: `data_collection_permissions` only exists on Android from 142. Tested on 156.
 
 ## Links & fields
 

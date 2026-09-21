@@ -23,6 +23,8 @@ npm run build
 
 Then in Firefox: `about:debugging#/runtime/this-firefox` → **Load Temporary Add-on…** → select `dist/manifest.json` → click the winnow toolbar button. Make sure you're signed in to youtube.com in the same browser.
 
+**Firefox for Android** works too (142+): install from addons.mozilla.org, sign in to youtube.com *in Firefox* (not the YouTube app), and open Winnow from ⋮ → Extensions. For a development build on a phone or emulator: `npx web-ext run -t firefox-android --adb-device <serial> --firefox-apk org.mozilla.firefox -s dist`.
+
 Want to poke around without keys or a YouTube session? Open the feed page with `?demo=1` — fixture data and a stub scorer, fully offline.
 
 ## Privacy
@@ -45,7 +47,7 @@ Winnow parses the `ytInitialData` blob YouTube embeds in its own pages — the s
 ```bash
 npm run dev        # feed page at http://localhost:5173/feed.html (use ?demo=1)
 npm test           # unit tests — free tier: no network, no keys
-npm run test:e2e   # Playwright against the built page in demo mode
+npm run test:e2e   # Playwright against the built page in demo mode (desktop + phone-sized)
 npm run check      # svelte-check
 npm run zip        # package web-ext-artifacts/winnow-<version>.zip
 ```

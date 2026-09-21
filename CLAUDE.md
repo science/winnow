@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project overview
 
-Winnow is a Firefox browser extension (Manifest V3) that replaces the YouTube feed experience with an AI-curated one. It reads the user's real YouTube data (subscriptions feed + homepage recommendations) by fetching youtube.com pages with the user's own session cookies and parsing the embedded `ytInitialData` JSON, scores each video with an LLM (Anthropic or OpenAI, user-supplied keys) against a free-text interest profile, and renders a calm, bounded feed. Everything runs client-side; all state lives in `browser.storage.local`. No backend, no telemetry.
+Winnow is a Firefox browser extension (Manifest V3; desktop and Firefox for Android) that replaces the YouTube feed experience with an AI-curated one. It reads the user's real YouTube data (subscriptions feed + homepage recommendations) by fetching youtube.com pages with the user's own session cookies and parsing the embedded `ytInitialData` JSON, scores each video with an LLM (Anthropic or OpenAI, user-supplied keys) against a free-text interest profile, and renders a calm, bounded feed. Everything runs client-side; all state lives in `browser.storage.local`. No backend, no telemetry.
 
 Product principles (do not relitigate): **no autoplay-next, no infinite scroll, no engagement bait**. The video the user clicked does start playing on open (that's intent, not a dark pattern); nothing ever queues or plays after it ends. Winnowed-out videos are hidden behind a fold, never deleted — curation stays auditable.
 
@@ -17,7 +17,7 @@ npm run dev          # Vite dev server on 0.0.0.0:5173 (feed page in plain-brows
 npm run build        # Production build → dist/ (loadable as temporary add-on)
 npm run check        # svelte-check / TypeScript
 npm test             # Vitest unit tests (free tier — must pass with no API keys / no network)
-npm run test:e2e     # Playwright e2e against the built page in demo mode
+npm run test:e2e     # Playwright e2e against the built page in demo mode (desktop + phone-sized projects)
 npm run zip          # Build + package dist/ as web-ext zip artifact
 ```
 
@@ -72,6 +72,7 @@ Before implementing anything, search the codebase for existing infrastructure. E
 | E2E (free) | Playwright against the built feed page in demo mode (fixture data, storage shim) | `e2e/nonlive/` | CI |
 | Live | Real AI-provider calls (and manual real-YouTube checks) | `e2e/live/` (`npm run test:e2e:live`; keys from gitignored `.env.production` or env) | manual only; skip gracefully when keys absent |
 | Extension | Built zip installed into real headless Firefox (selenium + geckodriver), true `moz-extension://` origin, live YouTube network | `e2e/extension/` (`npm run test:e2e:ext`) | manual only; after manifest/DNR/embed changes |
+| Android | The same extension tests plus native-UI ones (toolbar button, fullscreen + Back) against real Firefox for Android on an emulator | `e2e/extension/` + `e2e/android/` (`npm run test:e2e:android`; `scripts/android-emulator.sh start` first) | manual only; after anything the extension tier covers, or layout/background.ts changes |
 
 Rules (movie-night conventions):
 - Every test touching an external API is live-tier. The free tier must pass with API keys absent and network blocked.

@@ -36,6 +36,10 @@ Why an extension and not a webapp: riding the user's logged-in session is the on
 
 Why direct scoring and not embeddings/RAG: at feed scale (~hundreds of items), an LLM judging each video against a nuanced free-text profile beats similarity search, which can't express exclusions ("less drama") or multi-dimensional taste. (Same conclusion movie-night reached — see `TWO_PHASE_SCORING.md` for the planned evolution.)
 
+## Platforms
+
+Firefox desktop and Firefox for Android, from one codebase with no platform branch. The API surface is deliberately tiny (`storage`, `tabs`, `action`, `runtime.getURL`, declarativeNetRequest), all of it available on Android; the one exception, `browser.windows`, does not exist there and is feature-detected. The background script is an event page (`background.scripts`) — Android has no background service workers. The UI is one responsive page; on Android the toolbar button lives in ⋮ → Extensions. Every youtube.com page fetch asks for the desktop page (`app=desktop`), because a phone's user agent is otherwise redirected to a mobile site Winnow can't read — see `DEVELOPMENT.md`.
+
 ## Data acquisition
 
 - `fetchFeedPage()` GETs `youtube.com/` and `/feed/subscriptions` with the session cookies (host permissions make extension fetches CORS-exempt), extracts the `var ytInitialData = {...}` blob, and detects signed-out state via ytcfg's `"LOGGED_IN":false`.
@@ -117,6 +121,7 @@ Cost (claude-haiku-4-5): cold start ~200 videos ≈ $0.10 without transcripts, r
 - Unit (free tier): pure `lib/` logic, parser fixtures, scorer orchestration with stub providers — no network, no keys. `npm test`.
 - E2E (free tier): Playwright against the built page in demo mode. `npm run test:e2e`.
 - E2E (live tier, manual): real Anthropic/OpenAI calls against seeded fixture videos — asserts score shape and that on-profile substance outscores bait. `npm run test:e2e:live`, keys from gitignored `.env.production`; skips when keys are absent.
+- Extension tier (manual): the built zip in real Firefox at a true `moz-extension://` origin, live YouTube network. `npm run test:e2e:ext`. The same tests run against Firefox for Android on an emulator, plus native-UI ones (toolbar button, fullscreen + Back): `npm run test:e2e:android`.
 - Real-YouTube checks stay manual: load the temporary add-on, sign in to YouTube, refresh, eyeball parsed feed vs youtube.com and curation quality. See `DEVELOPMENT.md` for the full loop and debugging playbook.
 
 ## Post-MVP roadmap
