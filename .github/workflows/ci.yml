@@ -30,6 +30,10 @@ jobs:
         run: npm run test:e2e
       - name: Build & package
         run: npm run zip
+      - name: Lint the built extension
+        # Static and offline. Flags manifest keys and APIs unsupported at the
+        # declared gecko / gecko_android minimum versions.
+        run: npm run lint:ext
       - name: Upload extension artifact
         uses: actions/upload-artifact@v4
         with:
