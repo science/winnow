@@ -2,12 +2,13 @@
 // the built zip installed, and a way to actually reach a moz-extension:// page.
 //
 // WINNOW_TARGET=android points the same tests at Firefox for Android on the
-// emulator (scripts/android-emulator.sh start; `npm run test:e2e:android`).
-// Two things that setup needs, both measured 2026-09-21 on Firefox 156:
-//  - adb must run as root. geckodriver pushes its profile into the app's
-//    storage and an unrooted adb fails it with "fchown failed: Operation not
-//    permitted". The google_apis emulator image allows `adb root`; a retail
-//    phone does not, so this tier is emulator-only.
+// emulator (scripts/android-emulator.sh start; `npm run test:e2e:android`)
+// or on a USB phone. What that setup needs, measured 2026-09-21 on Firefox 156:
+//  - On the emulator adb must run as root. geckodriver pushes its profile
+//    into the app's external storage and the API-34 emulator's unrooted adb
+//    fails it with "fchown failed: Operation not permitted". A retail Pixel 8
+//    (Android 17) needed no root, so a phone works too — see
+//    docs/DEVELOPMENT.md, Android tier, for the env vars.
 //  - Firefox for Android 153+ hangs in its onboarding under automation unless
 //    the launch intent carries `automationtest` (geckodriver 0.37 known issue).
 //  - The emulator has no GPU. With Firefox's default GPU-process WebRender a
@@ -41,6 +42,7 @@ export const ANDROID = process.env["WINNOW_TARGET"] === "android";
 const ANDROID_SERIAL = process.env["WINNOW_ANDROID_SERIAL"] ?? "emulator-5554";
 const ANDROID_PACKAGE = process.env["WINNOW_ANDROID_PACKAGE"] ?? "org.mozilla.firefox";
 const ADB = process.env["ADB"] ?? resolve(homedir(), "Android/Sdk/platform-tools/adb");
+const EMULATOR = ANDROID_SERIAL.startsWith("emulator-");
 
 function geckodriverPath() {
   if (process.env["GECKODRIVER"]) return process.env["GECKODRIVER"];
@@ -60,8 +62,18 @@ function androidOptions() {
     new RegExp(`^${ANDROID_SERIAL}\\s+device$`, "m").test(devices),
     `${ANDROID_SERIAL} is not connected — run scripts/android-emulator.sh start`,
   );
-  execFileSync(ADB, ["-s", ANDROID_SERIAL, "root"]);
-  execFileSync(ADB, ["-s", ANDROID_SERIAL, "wait-for-device"]);
+  // geckodriver wipes the target app's data at every session start. On a
+  // real phone org.mozilla.firefox is somebody's browser — tabs, logins and
+  // all — so a phone run must name a package installed for testing.
+  assert.ok(
+    EMULATOR || ANDROID_PACKAGE !== "org.mozilla.firefox",
+    "refusing to drive org.mozilla.firefox on a real phone: geckodriver would erase its data. " +
+      "Install Firefox Beta and set WINNOW_ANDROID_PACKAGE=org.mozilla.firefox_beta",
+  );
+  if (EMULATOR) {
+    execFileSync(ADB, ["-s", ANDROID_SERIAL, "root"]);
+    execFileSync(ADB, ["-s", ANDROID_SERIAL, "wait-for-device"]);
+  }
   const options = new firefox.Options();
   // selenium's enableMobile() writes `deviceSerial`, which geckodriver
   // ignores; the capability is `androidDeviceSerial`.
@@ -95,10 +107,16 @@ export async function buildDriver(extraPrefs = {}) {
     "extensions.webextensions.uuids",
     JSON.stringify({ "winnow@misuse.org": UUID }),
   );
-  const prefs = { ...extraPrefs };
+  // These tests play real videos on whatever machine or phone runs them,
+  // next to a person who may be on a call. Scaling the output to zero silences
+  // it below the page: the video element is still unmuted at full volume, so
+  // the autoplay policy judges it exactly as it would an audible one.
+  const prefs = { "media.volume_scale": "0.0", ...extraPrefs };
   if (ANDROID) {
-    prefs["gfx.webrender.software"] = true;
-    prefs["layers.gpu-process.enabled"] = false;
+    if (EMULATOR) {
+      prefs["gfx.webrender.software"] = true;
+      prefs["layers.gpu-process.enabled"] = false;
+    }
     if (prefs["media.autoplay.default"] === 0) prefs["media.geckoview.autoplay.request"] = false;
   }
   for (const [k, v] of Object.entries(prefs)) options.setPreference(k, v);

@@ -17,7 +17,7 @@ import { ANDROID_CLIENT } from "../../src/lib/innertubeClient.ts";
 import { desktopPageUrl } from "../../src/lib/ytUrl.ts";
 import { buildDriver, openExtensionPage, seedRealConfig } from "./driver.mjs";
 
-const VIDEO_ID = "dQw4w9WgXcQ"; // has human-made English captions
+const VIDEO_ID = "iG9CE55wbtY"; // TED talk with human-made English captions
 
 const FETCH_PAGE = `
 const [url, callback] = arguments;
@@ -27,7 +27,7 @@ fetch(url, { credentials: "include", headers: { "Accept-Language": "en-US,en;q=0
     callback({
       finalHost: new URL(res.url).hostname,
       status: res.status,
-      hasInitialData: /var ytInitialData\\s*=\\s*\\{/.test(html),
+      hasInitialData: /var ytInitialData\\s*=\\s*\\{|id="yt-initial-data"/.test(html),
       videoRenderers: (html.match(/"videoRenderer"/g) ?? []).length,
     });
   })

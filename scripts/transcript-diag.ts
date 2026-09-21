@@ -13,7 +13,7 @@ import {
 
 const VIDEOS = process.argv.slice(2).length
   ? process.argv.slice(2)
-  : ["dQw4w9WgXcQ", "jNQXAC9IVRw", "9bZkp7q19f0"];
+  : ["iG9CE55wbtY", "jNQXAC9IVRw", "9bZkp7q19f0"];
 
 for (const videoId of VIDEOS) {
   console.log(`\n=== ${videoId} ===`);

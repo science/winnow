@@ -2,24 +2,39 @@
 // (#/watch/<id>), and on a phone Back is how people leave fullscreen — so
 // Back must exit fullscreen without also closing (or reloading) the player.
 //
-// Run: npm run test:e2e:android  (emulator; scripts/android-emulator.sh start)
+// Run: npm run test:e2e:android  (emulator or phone; docs/DEVELOPMENT.md, Android tier)
 import { strict as assert } from "node:assert";
 import { test } from "node:test";
 import { By, until } from "selenium-webdriver";
 import { ANDROID, buildDriver, openExtensionPage } from "../extension/driver.mjs";
 import { pressBack } from "./ui.mjs";
 
-const VIDEO_ID = "dQw4w9WgXcQ";
+const VIDEO_ID = "aqz-KE-bpKQ"; // Big Buck Bunny
 const EMBED = By.css("[data-testid='watch-embed']");
 
 const PAGE_STATE = `
 const frame = document.querySelector("[data-testid='watch-embed']");
 return {
   fullscreen: document.fullscreenElement === frame && frame !== null,
-  landscape: innerWidth > innerHeight,
   hash: location.hash,
   stamp: frame?.dataset.stamp ?? null,
 };`;
+
+const VIEWPORT = "return `${innerWidth}x${innerHeight}`;";
+
+/** Resolves once the viewport has kept one size for 1.5 s. */
+async function screenSettled(driver) {
+  let last = "";
+  let since = Date.now();
+  await driver.wait(async () => {
+    const now = await driver.executeScript(VIEWPORT);
+    if (now !== last) {
+      last = now;
+      since = Date.now();
+    }
+    return Date.now() - since >= 1_500;
+  }, 20_000, "the screen never stopped rotating");
+}
 
 /** The mobile player hides its controls; a tap on the video reveals them.
  * The embed replaces its bootstrap document while loading, which detaches
@@ -55,23 +70,20 @@ test("Back leaves fullscreen and keeps the same player open", { skip: !ANDROID }
     await driver.executeScript("arguments[0].dataset.stamp = 'same-frame';", iframe);
 
     await enterFullscreen(driver);
-    // Fullscreen video rotates the screen; Back is only meaningful once the
-    // transition has finished, which is also the earliest a person could press it.
-    await driver.wait(
-      async () => {
-        const state = await driver.executeScript(PAGE_STATE);
-        return state.fullscreen && state.landscape;
-      },
-      15_000,
-      "never settled into landscape fullscreen",
-    );
+    await driver.wait(async () => (await driver.executeScript(PAGE_STATE)).fullscreen, 15_000, "never entered fullscreen");
+    // Firefox turns the screen for a fullscreen video, and a Back pressed
+    // mid-turn is swallowed. Which way it ends up is Firefox's business and
+    // depends on how the phone is lying: on a rotation-locked Pixel 8 flat on
+    // a desk it turned to landscape and straight back within 120 ms in about
+    // half the runs (2026-09-21, Firefox 157.0b4). So wait for the screen to
+    // stop moving, not for a particular orientation.
+    await screenSettled(driver);
 
     pressBack();
     await driver.wait(async () => !(await driver.executeScript(PAGE_STATE)).fullscreen, 10_000, "Back did not leave fullscreen");
-    await driver.wait(async () => !(await driver.executeScript(PAGE_STATE)).landscape, 15_000, "never rotated back");
+    await screenSettled(driver);
     assert.deepEqual(await driver.executeScript(PAGE_STATE), {
       fullscreen: false,
-      landscape: false,
       hash: `#/watch/${VIDEO_ID}`,
       stamp: "same-frame",
     });

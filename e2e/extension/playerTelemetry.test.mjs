@@ -33,7 +33,7 @@ const VIDEO_ID = "jNQXAC9IVRw"; // "Me at the zoo" — stable, embeddable
 // The round-trip needs a video longer than FINISHED_TAIL_SEC*2: "Me at the
 // zoo" is 19s, so it counts as finished (and its position is deliberately
 // dropped) within 4s of playing.
-const LONG_VIDEO_ID = "dQw4w9WgXcQ"; // 3:33, stable, embeddable
+const LONG_VIDEO_ID = "aqz-KE-bpKQ"; // Big Buck Bunny, 10:34, stable, embeddable
 const PLAYBACK_KEY = "winnow:playback:v1";
 const PLAYER_ORIGIN = "https://www.youtube-nocookie.com";
 const COLLECT_MS = 12_000;

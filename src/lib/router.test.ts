@@ -9,9 +9,9 @@ describe("parseHash", () => {
   });
 
   it("should route #/watch/<id> to the watch view with the video id", () => {
-    expect(parseHash("#/watch/dQw4w9WgXcQ")).toEqual({
+    expect(parseHash("#/watch/jNQXAC9IVRw")).toEqual({
       name: "watch",
-      videoId: "dQw4w9WgXcQ",
+      videoId: "jNQXAC9IVRw",
     });
   });
 

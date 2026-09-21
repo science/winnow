@@ -41,7 +41,7 @@ import {
   seedRealConfig,
 } from "./driver.mjs";
 
-const VIDEO_ID = "dQw4w9WgXcQ"; // 3:33 — long enough not to finish mid-test
+const VIDEO_ID = "aqz-KE-bpKQ"; // Big Buck Bunny, 10:34 — long enough not to finish mid-test
 const PLAYBACK_KEY = "winnow:playback:v1";
 
 const PLANT_MARKER = `

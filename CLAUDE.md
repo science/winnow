@@ -72,11 +72,13 @@ Before implementing anything, search the codebase for existing infrastructure. E
 | E2E (free) | Playwright against the built feed page in demo mode (fixture data, storage shim) | `e2e/nonlive/` | CI |
 | Live | Real AI-provider calls (and manual real-YouTube checks) | `e2e/live/` (`npm run test:e2e:live`; keys from gitignored `.env.production` or env) | manual only; skip gracefully when keys absent |
 | Extension | Built zip installed into real headless Firefox (selenium + geckodriver), true `moz-extension://` origin, live YouTube network | `e2e/extension/` (`npm run test:e2e:ext`) | manual only; after manifest/DNR/embed changes |
-| Android | The same extension tests plus native-UI ones (toolbar button, fullscreen + Back) against real Firefox for Android on an emulator | `e2e/extension/` + `e2e/android/` (`npm run test:e2e:android`; `scripts/android-emulator.sh start` first) | manual only; after anything the extension tier covers, or layout/background.ts changes |
+| Android | The same extension tests plus native-UI ones (toolbar button, fullscreen + Back) against real Firefox for Android — on an emulator, or Firefox Beta on a USB phone | `e2e/extension/` + `e2e/android/` (`npm run test:e2e:android`; `scripts/android-emulator.sh start` first, or the phone env vars in `docs/DEVELOPMENT.md`) | manual only; after anything the extension tier covers, or layout/background.ts changes |
 
 Rules (movie-night conventions):
 - Every test touching an external API is live-tier. The free tier must pass with API keys absent and network blocked.
 - **Selectors live only inside e2e helpers** (`e2e/helpers/`). Spec files describe behavior through `fillX`/`clickX`/`getX`/`waitForX` helpers; no inline locators. Locator preference inside helpers: `getByLabel` → `getByRole` → `data-testid` → raw CSS.
+- **Automated browsers are silent.** `e2e/extension/driver.mjs` sets `media.volume_scale` to `0.0` for every session (desktop, emulator, phone) — the user is often on a call next to the machine running the tests. Never remove it, and never assert audibility by ear; the video element stays unmuted, so autoplay-policy tests are unaffected.
+- **No Rick Astley in tests.** Extension/Android tests play real YouTube videos out loud on the user's devices. Never use `dQw4w9WgXcQ` (or any other prank/earworm video) as a test video; use Big Buck Bunny (`aqz-KE-bpKQ`, long), "Me at the zoo" (`jNQXAC9IVRw`, short), or a TED talk (`iG9CE55wbtY`, human-made captions).
 - Unit tests alone are not sufficient: any multi-stage workflow (fetch → parse → score → bucket) needs at least one integration test wiring real internals with stubbed externals.
 - Every provider/network interface gets a stub implementation for tests.
 
