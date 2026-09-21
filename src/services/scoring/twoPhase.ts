@@ -472,6 +472,11 @@ export async function runTwoPhaseScoring(
           };
         }
       }
+      // Saved as each batch lands, not once at the end: a phone's OS kills a
+      // backgrounded browser without warning, and every digest costs money.
+      // freshEntries only grows and saves are issued in order, so a later
+      // snapshot always supersedes an earlier one.
+      if (batchDigests && batchDigests.size > 0) await saveEnrichment({ ...cache, ...freshEntries });
       done += batch.length;
       deps.onProgress?.(done, toEnrich.length);
     }
@@ -479,7 +484,6 @@ export async function runTwoPhaseScoring(
   await Promise.all(Array.from({ length: CONCURRENCY }, enrichWorker));
 
   result.enriched = Object.keys(freshEntries).length;
-  if (result.enriched > 0) await saveEnrichment({ ...cache, ...freshEntries });
 
   // Phase 2b — rank everything that has a digest. Pure, instant.
   for (const video of videos) {

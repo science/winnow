@@ -202,6 +202,22 @@ describe("runTwoPhaseScoring", () => {
     expect(softScoresHashFor(profile, "other-model")).not.toBe(base);
   });
 
+  it("should keep the digests a run already paid for when the page dies before it finishes", async () => {
+    // A phone's OS kills a backgrounded browser without warning. Three
+    // batches; the third never answers, standing in for the killed page.
+    const { callFn: answer } = stubCall();
+    let digestCalls = 0;
+    const callFn = ((spec: { name: string; user: string }) => {
+      if (spec.name === "digest_videos" && ++digestCalls === 3) return new Promise(() => {});
+      return answer(spec as never);
+    }) as StructuredCallFn;
+    const deps = memoryDeps(callFn);
+    const ids = Array.from({ length: 12 }, (_, i) => `vid${i}`);
+
+    void runTwoPhaseScoring(ids.map((id) => video(id)), deps);
+    await vi.waitFor(() => expect(Object.keys(deps.enrichmentCache)).toHaveLength(8));
+  });
+
   it("should make a second run fully cache-served: no LLM calls, same scores", async () => {
     const { callFn, calls } = stubCall();
     const deps = memoryDeps(callFn);
