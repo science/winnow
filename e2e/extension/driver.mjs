@@ -77,6 +77,17 @@ function androidOptions() {
   return options;
 }
 
+/**
+ * Make a server on this machine's 127.0.0.1 reachable from the browser under
+ * test. On the emulator 127.0.0.1 is the phone itself, so the port is
+ * reverse-forwarded; on desktop there is nothing to do.
+ *
+ * @param {number} port
+ */
+export function exposeLocalPort(port) {
+  if (ANDROID) execFileSync(ADB, ["-s", ANDROID_SERIAL, "reverse", `tcp:${port}`, `tcp:${port}`]);
+}
+
 export async function buildDriver(extraPrefs = {}) {
   assert.ok(existsSync(ZIP), `${ZIP} missing — run \`npm run zip\` first`);
   const options = ANDROID ? androidOptions() : new firefox.Options().addArguments("-headless");
@@ -152,5 +163,16 @@ export async function openExtensionPage(driver, path) {
   );
   const handles = await driver.getAllWindowHandles();
   await driver.switchTo().window(handles.find((h) => !before.includes(h)) ?? handles[handles.length - 1]);
+  // On Android the tab's handle exists before the page does; a script run in
+  // that gap lands in about:blank, where there is no `browser`.
+  await driver.wait(
+    () =>
+      driver.executeScript(
+        "return location.href.startsWith(arguments[0]) && document.readyState === 'complete';",
+        `moz-extension://${UUID}/`,
+      ),
+    20_000,
+    `${url} never finished loading`,
+  );
   return url;
 }

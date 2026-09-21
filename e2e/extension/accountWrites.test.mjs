@@ -31,7 +31,8 @@ import { createServer } from "node:http";
 import { test } from "node:test";
 import { By, until } from "selenium-webdriver";
 import { HISTORY_MIN_WATCH_SEC } from "../../src/lib/watchHistory.ts";
-import { UUID, buildDriver, chromeScript, openExtensionPage } from "./driver.mjs";
+import { desktopPageUrl } from "../../src/lib/ytUrl.ts";
+import { UUID, buildDriver, chromeScript, exposeLocalPort, openExtensionPage } from "./driver.mjs";
 
 const VIDEO_ID = "dQw4w9WgXcQ"; // 3:33 — long enough not to finish mid-test
 const PLAYBACK_KEY = "winnow:playback:v1";
@@ -40,11 +41,17 @@ const PLANT_MARKER = `
 Services.cookies.add(".youtube.com", "/", "WINNOW_E2E_SESSION", "1", true, false, false,
   Date.now() + 1e10, {}, Ci.nsICookie.SAMESITE_NONE, Ci.nsICookie.SCHEME_HTTPS);`;
 
+/** Where chrome-context observers keep what they saw. Not `window`: on
+ * desktop that is the one browser window, but on Firefox for Android the
+ * chrome window is per-tab, so a stash made before the player's tab opened is
+ * gone when the test reads it back. This global is shared process-wide. */
+const STASH = "Cu.getGlobalForObject(Services)";
+
 /** Record the Referer each embed document request was SENT with. Observed
  * at response time: http-on-modify-request observers can run before DNR's
  * rewrite and would report the pre-rewrite header. */
 const OBSERVE_EMBEDS = `
-const seen = (window.__winnowEmbedReferers = []);
+const seen = (${STASH}.__winnowEmbedReferers = []);
 Services.obs.addObserver({ observe(subject) {
   const ch = subject.QueryInterface(Ci.nsIHttpChannel);
   if (!/^https:\\/\\/www\\.youtube(-nocookie)?\\.com\\/embed\\//.test(ch.URI.spec)) return;
@@ -54,9 +61,12 @@ Services.obs.addObserver({ observe(subject) {
 }}, "http-on-examine-response");`;
 
 /** Visit youtube.com so its service worker is registered, as it is in any
- * real YouTube user's profile. */
+ * real YouTube user's profile. The desktop page, because on a phone the plain
+ * URL lands on m.youtube.com, which registers no service worker at all
+ * (measured 2026-09-21, Firefox for Android 156) — an Android user reaches
+ * this state only by browsing the desktop site, and it is the harder one. */
 async function installYouTubeServiceWorker(driver) {
-  await driver.get("https://www.youtube.com/");
+  await driver.get(desktopPageUrl("https://www.youtube.com/"));
   await driver.wait(
     () =>
       chromeScript(
@@ -86,7 +96,7 @@ callback(raw === null ? null : JSON.parse(raw));
  * player's el=embedded pings) with its status and whether it carried the
  * marker cookie. */
 const OBSERVE_HISTORY_PINGS = `
-const seen = (window.__winnowHistoryPings = []);
+const seen = (${STASH}.__winnowHistoryPings = []);
 Services.obs.addObserver({ observe(subject) {
   const ch = subject.QueryInterface(Ci.nsIHttpChannel);
   const url = new URL(ch.URI.spec);
@@ -114,7 +124,13 @@ async function seedRealConfig(driver, accountWrites) {
   await openExtensionPage(driver, "feed.html#/settings");
   const result = await driver.executeAsyncScript(STORAGE_SET, {
     "winnow:settings:v1": { provider: "openai", openaiApiKey: "sk-e2e-not-a-key", accountWrites },
-    "winnow:profile:v1": { moreOf: "chess", lessOf: "", updatedAt: 1 },
+    // The current schema, not the legacy winnow:profile:v1: by the time this
+    // page has loaded the app has already written its own profiles
+    // collection, and the legacy key is only migrated when there is none.
+    "winnow:profiles:v1": {
+      activeProfileId: "e2e",
+      profiles: [{ id: "e2e", name: "Default", moreOf: "chess", lessOf: "", updatedAt: 1 }],
+    },
   });
   assert.equal(result, "ok");
 }
@@ -227,6 +243,7 @@ test("the Referer rewrite applies to Winnow's player only, never to other sites'
   });
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
   const site = `http://127.0.0.1:${server.address().port}/`;
+  exposeLocalPort(server.address().port);
   const driver = await buildDriver();
   try {
     await installYouTubeServiceWorker(driver);
@@ -234,7 +251,7 @@ test("the Referer rewrite applies to Winnow's player only, never to other sites'
     await enableAccountWrites(driver);
     const seenAtLeast = (n) =>
       driver.wait(async () => {
-        const all = await chromeScript(driver, "return window.__winnowEmbedReferers;");
+        const all = await chromeScript(driver, `return ${STASH}.__winnowEmbedReferers;`);
         return all.length >= n ? all : null;
       }, 30_000, `never saw ${n} embed response(s)`);
 
@@ -269,7 +286,7 @@ test("account writes on: a video is recorded in watch history once it has played
     await seedRealConfig(driver, true);
     await openExtensionPage(driver, `feed.html#/watch/${VIDEO_ID}`);
     await driver.wait(until.elementLocated(By.css("[data-testid='watch-embed']")), 15_000);
-    const pings = () => chromeScript(driver, "return window.__winnowHistoryPings;");
+    const pings = () => chromeScript(driver, `return ${STASH}.__winnowHistoryPings;`);
 
     // Half the threshold in: a quick bail-out here must leave no trace.
     await driver.sleep(HISTORY_MIN_WATCH_SEC * 500);
@@ -298,7 +315,7 @@ test("account writes off: playing a video sends no watch-history ping", async ()
     await driver.wait(until.elementLocated(By.css("[data-testid='watch-embed']")), 15_000);
     // Well past the point where the on-case records.
     await driver.sleep((HISTORY_MIN_WATCH_SEC + 20) * 1000);
-    assert.deepEqual(await chromeScript(driver, "return window.__winnowHistoryPings;"), []);
+    assert.deepEqual(await chromeScript(driver, `return ${STASH}.__winnowHistoryPings;`), []);
   } finally {
     await driver.quit();
   }
