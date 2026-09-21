@@ -37,7 +37,7 @@ export interface YtPage {
 }
 
 /**
- * Pull the `var ytInitialData = {...};` blob out of a page. Returns the
+ * Pull the ytInitialData blob out of a page (either delivery shape). Returns the
  * parsed object, or null when absent/malformed (consent wall, layout change).
  */
 export function extractYtInitialData(html: string): unknown {
@@ -50,8 +50,21 @@ export function extractYtInitialData(html: string): unknown {
   }
 }
 
+// YouTube ships the blob two ways. The inline assignment is the usual one; on
+// 2026-09-21 roughly 1 in 40 cookie-less visitors got a
+// `<script id="yt-initial-data" type="application/json">` element instead,
+// with the same object inside.
+const INITIAL_DATA_ANCHORS = [
+  /var ytInitialData\s*=\s*/,
+  /<script\b[^>]*\bid="yt-initial-data"[^>]*>\s*/,
+];
+
 function rawYtInitialData(html: string): string | null {
-  return extractJsonBlob(html, /var ytInitialData\s*=\s*/);
+  for (const anchor of INITIAL_DATA_ANCHORS) {
+    const raw = extractJsonBlob(html, anchor);
+    if (raw) return raw;
+  }
+  return null;
 }
 
 export interface InnertubeConfig {

@@ -23,6 +23,15 @@ describe("extractYtInitialData", () => {
     expect(data["contents"]).toEqual({ foo: [1, 2, { bar: "a};b" }] });
   });
 
+  it("should read the blob when YouTube ships it as a JSON script element", () => {
+    // Served to roughly 1 in 40 cookie-less visitors on 2026-09-21: no
+    // `var ytInitialData = …`; the page parses this element's text instead.
+    const html =
+      '<script id="yt-initial-data" type="application/json" nonce="n0">{"contents":{"foo":"a}\\u003c/b"}}</script>' +
+      "<script>const el = document.getElementById('yt-initial-data'); window['ytInitialData'] = JSON.parse(el.textContent);</script>";
+    expect(extractYtInitialData(html)).toEqual({ contents: { foo: "a}</b" } });
+  });
+
   it("should return null when the blob is absent", () => {
     expect(extractYtInitialData("<html>consent wall</html>")).toBeNull();
   });
