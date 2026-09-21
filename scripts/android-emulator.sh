@@ -75,6 +75,11 @@ boot() { # $1 = extra emulator flags
     wait_for_boot
   fi
   install_firefox
+  # A factory-fresh device answers the first fullscreen with a one-time
+  # "swipe to exit" confirmation window that takes focus and swallows the
+  # next Back press. (Its sibling, the notification-permission prompt, is
+  # per-app state that geckodriver wipes each session: see driver.mjs.)
+  "$ADB" -s "$SERIAL" shell settings put secure immersive_mode_confirmations confirmed
   wait_for_idle
   echo "ready: $SERIAL"
 }

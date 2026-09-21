@@ -38,19 +38,17 @@ const PLAYBACK_KEY = "winnow:playback:v1";
 const PLAYER_ORIGIN = "https://www.youtube-nocookie.com";
 const COLLECT_MS = 12_000;
 
-/** Collect what the player posts to the page. Runs in page context. */
-const SNIFF = `
-const [ms, callback] = arguments;
-const events = [];
-const onMessage = (e) => {
+/** Start recording what the player posts to the page. Installed BEFORE the
+ * player exists: the duration arrives in ONE early message, and a listener
+ * attached after the player's page has loaded misses it about one run in
+ * four ("no sample carried a positive duration"). The player is then opened
+ * by hash, which keeps this document — and the listener — alive. */
+const START_SNIFFING = `
+window.__winnowPlayerEvents = [];
+window.addEventListener("message", (e) => {
   const raw = typeof e.data === "string" ? e.data : JSON.stringify(e.data);
-  events.push({ origin: e.origin, raw: String(raw).slice(0, 4000) });
-};
-window.addEventListener("message", onMessage);
-setTimeout(() => {
-  window.removeEventListener("message", onMessage);
-  callback({ events });
-}, ms);
+  window.__winnowPlayerEvents.push({ origin: e.origin, raw: String(raw).slice(0, 4000) });
+});
 `;
 
 function parseSamples(events) {
@@ -74,13 +72,16 @@ test("the player reports an advancing clock to a moz-extension page", async () =
   const driver = await buildDriver({ "media.autoplay.default": 0 });
   await driver.manage().setTimeouts({ script: 60_000 });
   try {
-    await openExtensionPage(driver, `feed.html?demo=1#/watch/${VIDEO_ID}`);
+    await openExtensionPage(driver, "feed.html?demo=1");
+    await driver.executeScript(START_SNIFFING);
+    await driver.executeScript("location.hash = arguments[0];", `#/watch/${VIDEO_ID}`);
     const frame = await driver.wait(
       until.elementLocated(By.css("[data-testid='watch-embed']")),
       15_000,
     );
     assert.match(await frame.getAttribute("src"), /enablejsapi=1&origin=moz-extension%3A/);
-    const { events } = await driver.executeAsyncScript(SNIFF, COLLECT_MS);
+    await driver.sleep(COLLECT_MS);
+    const events = await driver.executeScript("return window.__winnowPlayerEvents;");
     const samples = parseSamples(events);
 
     assert.ok(

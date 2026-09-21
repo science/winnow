@@ -110,6 +110,13 @@ export async function buildDriver(extraPrefs = {}) {
     new firefox.ServiceBuilder(geckodriverPath()).addArguments("--allow-system-access"),
   );
   const driver = await builder.build();
+  if (ANDROID) {
+    // The first playing video makes Android ask whether Firefox may post
+    // notifications; the prompt takes window focus from the page. Granted
+    // here, not once per device: geckodriver clears the app's data — runtime
+    // permissions included — at every session start.
+    execFileSync(ADB, ["-s", ANDROID_SERIAL, "shell", "pm", "grant", ANDROID_PACKAGE, "android.permission.POST_NOTIFICATIONS"]);
+  }
   await driver.installAddon(ZIP, true);
   return driver;
 }
@@ -161,15 +168,23 @@ export async function openExtensionPage(driver, path) {
          });`,
     url,
   );
-  const handles = await driver.getAllWindowHandles();
-  await driver.switchTo().window(handles.find((h) => !before.includes(h)) ?? handles[handles.length - 1]);
+  // Wait for a genuinely NEW handle. Asking for the tab and listing the
+  // handles race: about one run in ten the list didn't have it yet, and a
+  // "take the last handle" fallback then left the driver on the PREVIOUS tab
+  // — itself a loaded extension page, so every check below passed on it.
+  const opened = await driver.wait(
+    async () => (await driver.getAllWindowHandles()).find((h) => !before.includes(h)) ?? null,
+    15_000,
+    `no new tab appeared for ${url}`,
+  );
+  await driver.switchTo().window(opened);
   // On Android the tab's handle exists before the page does; a script run in
   // that gap lands in about:blank, where there is no `browser`.
   await driver.wait(
     () =>
       driver.executeScript(
         "return location.href.startsWith(arguments[0]) && document.readyState === 'complete';",
-        `moz-extension://${UUID}/`,
+        url.split("#")[0],
       ),
     20_000,
     `${url} never finished loading`,
@@ -187,16 +202,20 @@ browser.storage.local.set(items).then(() => callback("ok"), (e) => callback(Stri
  * text pass the onboarding gate. The test profile is signed out, so no feed
  * loads and the fake key is never used.
  *
+ * Written from a DEMO-mode page on purpose. A non-demo page's own stores do
+ * an initial write shortly after load, and when that landed after the seed it
+ * clobbered it — the next page then showed onboarding (about one run in
+ * three once openExtensionPage started waiting for the page to load). Demo
+ * mode never touches browser.storage.local, so here the seed is the only
+ * writer.
+ *
  * @param {import("selenium-webdriver").WebDriver} driver
  * @param {{ accountWrites?: boolean }} [opts]
  */
 export async function seedRealConfig(driver, { accountWrites = false } = {}) {
-  await openExtensionPage(driver, "feed.html#/settings");
+  await openExtensionPage(driver, "feed.html?demo=1#/settings");
   const result = await driver.executeAsyncScript(STORAGE_SET, {
     "winnow:settings:v1": { provider: "openai", openaiApiKey: "sk-e2e-not-a-key", accountWrites },
-    // The current schema, not the legacy winnow:profile:v1: by the time this
-    // page has loaded the app has already written its own profiles
-    // collection, and the legacy key is only migrated when there is none.
     "winnow:profiles:v1": {
       activeProfileId: "e2e",
       profiles: [{ id: "e2e", name: "Default", moreOf: "chess", lessOf: "", updatedAt: 1 }],

@@ -48,3 +48,8 @@ export async function pressToolbarButton() {
   await tapLabel(LABELS.extensions, "the Extensions menu entry");
   await tapLabel(LABELS.openWinnow, "Winnow's toolbar button");
 }
+
+/** The hardware/gesture Back action. */
+export function pressBack() {
+  adb("shell", "input", "keyevent", "KEYCODE_BACK");
+}

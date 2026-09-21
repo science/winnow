@@ -26,8 +26,11 @@ test("demo mode leaves the user's stored data exactly as it was", async () => {
   const driver = await buildDriver();
   await driver.manage().setTimeouts({ script: 20_000 });
   try {
-    // A non-demo page to seed "real" data, as a real install would have it.
-    await openExtensionPage(driver, "feed.html#/settings");
+    // Seed "real" data, as a real install would have it — from a demo page,
+    // so that only demo pages are ever open: a non-demo page's own initial
+    // store writes can land after the snapshot and fail this test for a
+    // reason that has nothing to do with demo mode.
+    await openExtensionPage(driver, "feed.html?demo=1#/settings");
     await driver.executeAsyncScript(STORAGE_OP, "set", REAL);
     const before = await driver.executeAsyncScript(STORAGE_OP, "get", null);
 
