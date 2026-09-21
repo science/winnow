@@ -20,7 +20,7 @@
     aria-pressed={current === "up"}
     onclick={(e) => vote("up", e)}
     title="Good recommendation — show me more like this"
-    class={`rounded px-2 py-0.5 text-[11px] ${
+    class={`rounded px-2 py-0.5 text-[11px] touch:min-h-10 touch:px-3 touch:text-xs ${
       current === "up"
         ? "bg-accent-muted text-white"
         : "bg-surface-raised text-ink-faint hover:bg-surface-hover hover:text-ink"
@@ -32,7 +32,7 @@
     aria-pressed={current === "down"}
     onclick={(e) => vote("down", e)}
     title="Bad recommendation — show me fewer like this"
-    class={`rounded px-2 py-0.5 text-[11px] ${
+    class={`rounded px-2 py-0.5 text-[11px] touch:min-h-10 touch:px-3 touch:text-xs ${
       current === "down"
         ? "bg-danger/70 text-white"
         : "bg-surface-raised text-ink-faint hover:bg-surface-hover hover:text-ink"

@@ -16,11 +16,11 @@
   <header class="flex items-center justify-between py-5">
     <a href="#/" class="flex items-baseline gap-2 no-underline">
       <span class="text-2xl font-semibold tracking-tight text-ink">winnow</span>
-      <span class="text-sm text-ink-faint">watch what matters</span>
+      <span class="hidden text-sm text-ink-faint sm:inline">watch what matters</span>
     </a>
     <nav class="flex items-center gap-4 text-sm">
-      <a href="#/" class="text-ink-muted hover:text-ink">Feed</a>
-      <a href="#/settings" class="text-ink-muted hover:text-ink">Settings</a>
+      <a href="#/" class="text-ink-muted hover:text-ink touch:py-2">Feed</a>
+      <a href="#/settings" class="text-ink-muted hover:text-ink touch:py-2">Settings</a>
     </nav>
   </header>
 

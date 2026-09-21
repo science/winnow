@@ -15,6 +15,16 @@
   --color-danger: #c97064;
 }
 
+/* Touch-first devices, for tap-target sizing. Not `pointer: coarse` alone: a
+   touchscreen that also takes a stylus reports `pointer: fine` (measured
+   2026-09-21 on Firefox for Android in the emulator; S-Pen-class phones do
+   the same), while still reporting that it can't hover. */
+@custom-variant touch {
+  @media (hover: none), (pointer: coarse) {
+    @slot;
+  }
+}
+
 html,
 body {
   height: 100%;

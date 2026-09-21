@@ -103,7 +103,7 @@
     <button
       type="button"
       onclick={close}
-      class="shrink-0 rounded-md bg-surface px-3 py-1.5 text-sm text-ink hover:bg-surface-hover"
+      class="shrink-0 rounded-md bg-surface px-3 py-1.5 text-sm text-ink hover:bg-surface-hover touch:min-h-10"
       data-testid="close-player">Close player ✕</button
     >
   </div>

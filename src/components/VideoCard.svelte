@@ -24,10 +24,10 @@
 <a
   href={`#/watch/${video.id}`}
   aria-expanded={open}
-  class={`group flex gap-4 rounded-lg p-3 no-underline transition-colors hover:bg-surface-hover ${watched && !open ? "opacity-45" : ""} ${open ? "rounded-b-none bg-surface-raised" : ""}`}
+  class={`group flex gap-3 rounded-lg p-2 no-underline sm:gap-4 sm:p-3 transition-colors hover:bg-surface-hover ${watched && !open ? "opacity-45" : ""} ${open ? "rounded-b-none bg-surface-raised" : ""}`}
   data-testid="video-card"
 >
-  <div class="relative w-48 shrink-0 self-start">
+  <div class="relative w-28 shrink-0 self-start sm:w-48">
     {#if video.thumbnailUrl}
       <img
         src={video.thumbnailUrl}

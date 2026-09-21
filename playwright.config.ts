@@ -10,6 +10,7 @@ if (existsSync(".env.production")) {
 // Two tiers (see CLAUDE.md):
 //  - nonlive (default, CI): the BUILT page in demo mode — fixture data,
 //    stub scorer, zero network, zero keys.
+//  - nonlive-mobile (default, CI): the same page on a phone-sized touch screen.
 //  - live (manual): real provider calls with keys from .env.production;
 //    specs skip gracefully when keys are absent.
 export default defineConfig({
@@ -20,7 +21,15 @@ export default defineConfig({
     baseURL: "http://localhost:4173",
   },
   projects: [
-    { name: "nonlive", testDir: "e2e/nonlive" },
+    { name: "nonlive", testDir: "e2e/nonlive", testIgnore: /mobileLayout\.spec\.ts/ },
+    // Layout at the narrow end of what Firefox for Android is used on. Only
+    // the layout spec: the behavior specs don't depend on the viewport.
+    {
+      name: "nonlive-mobile",
+      testDir: "e2e/nonlive",
+      testMatch: /mobileLayout\.spec\.ts/,
+      use: { viewport: { width: 360, height: 740 }, hasTouch: true, isMobile: true, deviceScaleFactor: 2 },
+    },
     { name: "live", testDir: "e2e/live", timeout: 120_000 },
   ],
   webServer: {
