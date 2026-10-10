@@ -47,6 +47,18 @@ function jsonResponse(body: string, status = 200): Response {
   return new Response(body, { status, headers: { "Content-Type": "application/json" } });
 }
 
+/** A fetch that never answers on its own — only an abort ends it, the way a
+ * request on a dead connection behaves after a laptop sleeps. */
+function hangingFetch() {
+  return vi.fn(
+    (input: RequestInfo | URL, init?: RequestInit) =>
+      new Promise<Response>((_resolve, reject) => {
+        const signal = init?.signal ?? (input instanceof Request ? input.signal : undefined);
+        signal?.addEventListener("abort", () => reject(signal.reason));
+      }),
+  );
+}
+
 afterEach(() => {
   vi.unstubAllGlobals();
 });
@@ -160,6 +172,17 @@ describe("structuredCall", () => {
       kind: "network",
     });
   });
+
+  it.each(["anthropic", "openai"] as const)(
+    "should give up on an unanswered %s call, as a retryable network error",
+    async (provider) => {
+      vi.stubGlobal("fetch", hangingFetch());
+      await expect(structuredCall({ ...spec(provider), timeoutMs: 50 })).rejects.toMatchObject({
+        name: "ProviderError",
+        kind: "network",
+      });
+    },
+  );
 
   it("should reject an Anthropic response missing the forced tool output", async () => {
     stubFetch(() => jsonResponse(JSON.stringify({ content: [] })));

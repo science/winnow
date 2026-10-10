@@ -78,6 +78,13 @@ describe("fetchSearchPage", () => {
     expect(init.credentials).toBe("include");
   });
 
+  it("should never wait on YouTube without a deadline", async () => {
+    const mock = stubFetch(SAMPLE_HTML);
+    await fetchSearchPage("woodworking");
+    const [, init] = mock.mock.calls[0]! as unknown as [string, RequestInit];
+    expect(init.signal).toBeInstanceOf(AbortSignal);
+  });
+
   it("should name the mobile site when YouTube redirects there anyway", async () => {
     // m.youtube.com carries no `var ytInitialData` blob; without this the
     // failure reads as a layout change instead of what it is.

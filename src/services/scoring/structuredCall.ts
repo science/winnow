@@ -23,7 +23,17 @@ export interface StructuredCallSpec {
   /** Tool name (Anthropic) / json_schema name (OpenAI). */
   name: string;
   maxTokens?: number;
+  /** Override for PROVIDER_TIMEOUT_MS (tests). */
+  timeoutMs?: number;
 }
+
+/** Deadline for one provider call. The SDK default is 10 minutes, and a call
+ * on a connection that died (laptop sleep, network change, a phone pausing a
+ * background tab) waits all of it — while every Retry joins the same stuck
+ * run. A digest batch of four full transcripts answers in well under a
+ * minute. A timeout surfaces as a network error, so it gets the one house
+ * retry. */
+export const PROVIDER_TIMEOUT_MS = 120_000;
 
 /** Map an SDK failure onto the house error taxonomy. Both SDKs expose the
  * same error shapes: APIConnectionError (network) and APIError (.status).
@@ -47,6 +57,7 @@ export async function structuredCall<T>(spec: StructuredCallSpec): Promise<T> {
       apiKey: spec.apiKey,
       dangerouslyAllowBrowser: true,
       maxRetries: 0,
+      timeout: spec.timeoutMs ?? PROVIDER_TIMEOUT_MS,
     });
     let message: Anthropic.Message;
     try {
@@ -86,6 +97,7 @@ export async function structuredCall<T>(spec: StructuredCallSpec): Promise<T> {
     apiKey: spec.apiKey,
     dangerouslyAllowBrowser: true,
     maxRetries: 0,
+    timeout: spec.timeoutMs ?? PROVIDER_TIMEOUT_MS,
   });
   let completion: OpenAI.Chat.Completions.ChatCompletion;
   try {

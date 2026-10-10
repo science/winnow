@@ -4,6 +4,8 @@ import {
   openFeedDemoWithSeed,
   expectUnvettedFoldVisible,
   getUnvettedFoldText,
+  getUnvettedReasonText,
+  visitSettingsAndBack,
   clickUnvettedFold,
   getUnvettedVideoTitles,
   expectVideoCardHidden,
@@ -47,6 +49,13 @@ test("should keep unvetted videos out of the visible feed behind an awaiting-vet
   await expectFeedBottomMarker(page);
 });
 
+test("should say why videos stayed unvetted without opening the fold", async ({ page }) => {
+  await openFeedDemoWithSeed(page, [...NORMALS, UNVETTED]);
+
+  await expectUnvettedFoldVisible(page);
+  expect(await getUnvettedReasonText(page)).toMatch(/couldn't vet 1 video/i);
+});
+
 test("should offer retry scoring inside the awaiting-vetting fold, not in the main feed", async ({ page }) => {
   await openFeedDemoWithSeed(page, [...NORMALS, UNVETTED]);
 
@@ -69,6 +78,20 @@ test("should show scoring progress instead of unscored cards while a run is acti
   await expectScoringProgressHidden(page);
   // Vetted now — the videos appear in the scored tiers.
   await expectVideoCardVisible(page, NORMALS[0]!.title);
+});
+
+test("should keep showing scoring progress after a trip to Settings mid-run", async ({ page }) => {
+  // Enough videos for several slow demo batches, so the run outlasts the trip.
+  const many = Array.from({ length: 60 }, (_, i) =>
+    demoVideo({ id: `manyvideo${String(i).padStart(2, "0")}`, source: "home", title: `Many ${i}` }),
+  );
+  await openFeedDemoWithSeed(page, many, { slow: true });
+  await expectScoringProgressVisible(page);
+
+  await visitSettingsAndBack(page);
+
+  await expectScoringProgressVisible(page);
+  await expectRetryScoringHidden(page);
 });
 
 test("should not show a transcript coverage line in demo mode", async ({ page }) => {

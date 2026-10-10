@@ -223,6 +223,20 @@ export async function expectUnvettedFoldVisible(page: Page): Promise<void> {
   await expect(page.getByTestId("unvetted-fold")).toBeVisible();
 }
 
+/** The one-line reason a run left videos unvetted, shown above the fold. */
+export async function getUnvettedReasonText(page: Page): Promise<string> {
+  return page.getByTestId("unvetted-reason").innerText();
+}
+
+/** Leave the feed for Settings and come straight back through the header
+ * links, the way a person does — the feed component remounts. */
+export async function visitSettingsAndBack(page: Page): Promise<void> {
+  const nav = page.getByRole("navigation");
+  await nav.getByRole("link", { name: "Settings" }).click();
+  await expect(page.getByRole("heading", { name: /interest profiles/i })).toBeVisible();
+  await nav.getByRole("link", { name: "Feed" }).click();
+}
+
 export async function getUnvettedFoldText(page: Page): Promise<string> {
   return page.getByTestId("unvetted-fold").innerText();
 }

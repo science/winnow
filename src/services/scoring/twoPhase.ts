@@ -275,6 +275,9 @@ export interface TwoPhaseResult {
   /** Videos with no usable digest after this run. */
   unknownIds: string[];
   fatalError: ProviderError | null;
+  /** Message of the last non-fatal permanent failure (translation or an
+   * enrichment batch), so the feed can say why videos stayed unvetted. */
+  failure: string | null;
   /** Rides into the existing transcript-coverage UI line. */
   transcripts: { fetched: number; attempted: number; failures: Record<string, number> };
   /** Fresh LLM digests this run (0 on a fully cached run). */
@@ -320,6 +323,7 @@ export async function runTwoPhaseScoring(
     scores: {},
     unknownIds: [],
     fatalError: null,
+    failure: null,
     transcripts: { fetched: 0, attempted: 0, failures: {} },
     enriched: 0,
     target: canonicalizeTarget(null),
@@ -348,6 +352,7 @@ export async function runTwoPhaseScoring(
   if (storedTarget?.inputHash === targetInputHash && !flushFeedback) {
     target = canonicalizeTarget(storedTarget.target);
   } else {
+    let translated = true;
     try {
       try {
         target = await translateProfile(deps.profile, feedback, deps.provider, deps.apiKey, deps.model, callFn);
@@ -362,17 +367,31 @@ export async function runTwoPhaseScoring(
         err instanceof ProviderError
           ? err
           : new ProviderError("bad_response", err instanceof Error ? err.message : String(err));
-      result.fatalError = pe.kind === "auth" ? pe : null;
-      if (pe.kind !== "auth") log.warn("profile translation failed permanently", pe);
-      result.unknownIds = videos.map((v) => v.id);
-      return result;
+      // Only the vote fold-in failed: the stored target still describes this
+      // profile, so rank with it and leave the votes pending for next run.
+      // Giving up here blanked the whole feed's scores over a set of votes.
+      if (pe.kind !== "auth" && storedTarget?.inputHash === targetInputHash) {
+        log.warn("folding in votes failed; ranking with the stored target", pe);
+        target = canonicalizeTarget(storedTarget.target);
+        translated = false;
+      } else {
+        result.fatalError = pe.kind === "auth" ? pe : null;
+        if (pe.kind !== "auth") {
+          log.warn("profile translation failed permanently", pe);
+          result.failure = pe.message;
+        }
+        result.unknownIds = videos.map((v) => v.id);
+        return result;
+      }
     }
-    await saveTarget({
-      inputHash: targetInputHash,
-      target,
-      feedbackHash,
-      feedbackCount: feedback.length,
-    });
+    if (translated) {
+      await saveTarget({
+        inputHash: targetInputHash,
+        target,
+        feedbackHash,
+        feedbackCount: feedback.length,
+      });
+    }
   }
   result.target = target;
   const subscribedIds = deps.subscribedIds ?? new Set<string>();
@@ -456,6 +475,7 @@ export async function runTwoPhaseScoring(
           result.fatalError = err;
         } else {
           log.warn("enrichment batch failed permanently", err);
+          result.failure = err instanceof Error ? err.message : String(err);
         }
       }
       for (const { video, transcript } of batch) {

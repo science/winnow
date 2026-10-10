@@ -20,6 +20,7 @@ import {
   videos as videosStore,
   scores as scoresStore,
   pendingScores,
+  scoringActive,
   status,
   transcriptCoverage,
 } from "../../stores/feedStore";
@@ -65,13 +66,33 @@ export interface ScoringResult {
   unknownIds: string[];
   /** Set when the run aborted (invalid API key). */
   fatalError: ProviderError | null;
+  /** Message of the last non-fatal permanent batch failure, if any. */
+  failure: string | null;
 }
 
 const defaultSleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
 
+function errorMessage(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}
+
+/** The line the feed shows when a run ends with videos it could not vet.
+ * Without it the only visible outcome of a provider failure was a growing
+ * "N awaiting vetting" fold, and Retry silently failed the same way. */
+export function scoringFailureText(unvetted: number, failure: string | null): string | null {
+  if (unvetted === 0) return null;
+  const what = `${unvetted} ${unvetted === 1 ? "video" : "videos"}`;
+  return `Couldn't vet ${what} — ${failure ?? "the AI provider returned no analysis for them"}`;
+}
+
 export async function runScoring(videos: Video[], deps: ScoringDeps): Promise<ScoringResult> {
   const sleep = deps.sleep ?? defaultSleep;
-  const result: ScoringResult = { scores: { ...deps.cache }, unknownIds: [], fatalError: null };
+  const result: ScoringResult = {
+    scores: { ...deps.cache },
+    unknownIds: [],
+    fatalError: null,
+    failure: null,
+  };
 
   const misses = videos.filter((v) => !deps.cache[v.id]);
   const batches: Video[][] = [];
@@ -104,6 +125,7 @@ export async function runScoring(videos: Video[], deps: ScoringDeps): Promise<Sc
         result.fatalError = err;
       } else {
         log.warn("scoring batch failed permanently", err);
+        result.failure = errorMessage(err);
       }
       result.unknownIds.push(...wanted);
       scored += batch.length;
@@ -275,7 +297,17 @@ export async function pendingVotes(
  * Concurrent calls coalesce: the feed remounts on every watch → back
  * navigation, and stacking a second pipeline on an in-flight one would
  * double-fetch transcripts and double-spend provider calls. */
-export const scoreFeed: () => Promise<void> = coalesceRuns(scoreFeedOnce);
+export const scoreFeed: () => Promise<void> = coalesceRuns(async () => {
+  scoringActive.set(true);
+  try {
+    await scoreFeedOnce();
+  } finally {
+    scoringActive.set(false);
+    // Early returns (nothing to score, profile switched mid-run) and throws
+    // never reach the run's own idle/error update.
+    status.update((s) => (s.phase === "scoring" ? { ...s, phase: "idle", detail: "" } : s));
+  }
+});
 
 async function scoreFeedOnce(): Promise<void> {
   await settingsReady;
@@ -321,7 +353,10 @@ async function scoreFeedOnce(): Promise<void> {
   // keyed by videoId, so they're ordinary misses on their first run.
   const $videos = [...get(videosStore), ...get(discoveredStore).map((e) => e.video)];
   const misses = $videos.filter((v) => !cache[v.id]);
-  if (misses.length === 0) return;
+  if (misses.length === 0) {
+    status.update((s) => ({ ...s, scoringFailure: null }));
+    return;
+  }
 
   pendingScores.set(new Set(misses.map((v) => v.id)));
   status.update((s) => ({ ...s, phase: "scoring", scoredCount: 0, scoreTotal: misses.length }));
@@ -373,16 +408,31 @@ async function scoreFeedOnce(): Promise<void> {
   await storageSet<StoredScores>(runKeys.scores, { profileHash: hash, scores: result.scores });
   if (!stillCurrent()) return;
   pendingScores.set(new Set());
+  finishRun(result);
+}
 
+/** Final status of a run: the key error banner, or idle with the reason any
+ * videos were left unvetted. */
+function finishRun(result: {
+  fatalError: ProviderError | null;
+  unknownIds: string[];
+  failure: string | null;
+}): void {
   if (result.fatalError) {
     status.update((s) => ({
       ...s,
       phase: "error",
       detail:
         "Your AI provider rejected the API key (401). Check it in Settings — scoring is paused until then.",
+      scoringFailure: null,
     }));
   } else {
-    status.update((s) => ({ ...s, phase: "idle", detail: "" }));
+    status.update((s) => ({
+      ...s,
+      phase: "idle",
+      detail: "",
+      scoringFailure: scoringFailureText(new Set(result.unknownIds).size, result.failure),
+    }));
   }
 }
 
@@ -475,15 +525,5 @@ async function scoreFeedTwoPhase(
   transcriptCoverage.set(result.transcripts.attempted > 0 ? result.transcripts : null);
   scoresStore.set(result.scores);
   pendingScores.set(new Set());
-
-  if (result.fatalError) {
-    status.update((s) => ({
-      ...s,
-      phase: "error",
-      detail:
-        "Your AI provider rejected the API key (401). Check it in Settings — scoring is paused until then.",
-    }));
-  } else {
-    status.update((s) => ({ ...s, phase: "idle", detail: "" }));
-  }
+  finishRun(result);
 }

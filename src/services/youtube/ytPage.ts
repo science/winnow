@@ -108,6 +108,8 @@ export async function getInnertubeConfig(): Promise<InnertubeConfig | null> {
   return cachedInnertubeConfig;
 }
 
+const YT_PAGE_TIMEOUT_MS = 30_000;
+
 /** Shared credentialed fetch + ytInitialData extraction for any youtube.com
  * page. Signed-out handling differs per caller: feeds need a session,
  * search works without one. */
@@ -116,6 +118,9 @@ async function fetchYtPage(url: string): Promise<YtPage> {
   const res = await fetch(desktopPageUrl(url), {
     credentials: "include",
     headers: { "Accept-Language": "en-US,en;q=0.9" },
+    // Covers the body read below too. Without it a stalled page load left
+    // the feed in "fetching" with Refresh disabled.
+    signal: AbortSignal.timeout(YT_PAGE_TIMEOUT_MS),
   });
   if (!res.ok) {
     throw new PageParseError(`YouTube returned HTTP ${res.status} for ${url}`);

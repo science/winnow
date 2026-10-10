@@ -116,15 +116,20 @@ export function captionTracksFrom(playerResponse: unknown): CaptionTrack[] {
   return Array.isArray(tracks) ? tracks : [];
 }
 
+const TRANSCRIPT_TIMEOUT_MS = 20_000;
+
 /** Fetch a transcript excerpt for one video. Never throws; failures come
  * back as `{ failure: <stage> }` so callers can aggregate a breakdown.
  * `deps.fetchFn` is injectable for tests. */
 export async function fetchTranscriptExcerpt(
   videoId: string,
   maxChars: number = TRANSCRIPT_EXCERPT_CHARS,
-  deps: { fetchFn?: typeof fetch } = {},
+  deps: { fetchFn?: typeof fetch; timeoutMs?: number } = {},
 ): Promise<TranscriptOutcome> {
   const fetchFn = deps.fetchFn ?? fetch;
+  // One deadline for the whole excerpt (both requests and their bodies): a
+  // hung fetch here used to hang the scoring run that awaited it.
+  const signal = AbortSignal.timeout(deps.timeoutMs ?? TRANSCRIPT_TIMEOUT_MS);
   try {
     const playerRes = await fetchFn(
       "https://www.youtube.com/youtubei/v1/player?prettyPrint=false",
@@ -133,6 +138,7 @@ export async function fetchTranscriptExcerpt(
         credentials: "omit",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ context: { client: { ...ANDROID_CLIENT, hl: "en" } }, videoId }),
+        signal,
       },
     );
     if (!playerRes.ok) {
@@ -151,7 +157,7 @@ export async function fetchTranscriptExcerpt(
     const track = pickCaptionTrack(captionTracksFrom(player));
     if (!track?.baseUrl) return { failure: "no-tracks" };
 
-    const ttRes = await fetchFn(`${track.baseUrl}&fmt=json3`, { credentials: "omit" });
+    const ttRes = await fetchFn(`${track.baseUrl}&fmt=json3`, { credentials: "omit", signal });
     if (!ttRes.ok) return { failure: `timedtext-http-${ttRes.status}` };
     const body = await ttRes.text();
     if (!body) return { failure: "empty-body" };
@@ -171,6 +177,7 @@ export async function fetchTranscriptExcerpt(
     return { excerpt, source: "player" };
   } catch (err) {
     log.debug("transcript fetch failed for", videoId, err);
+    if (signal.aborted) return { failure: "timeout" };
     return { failure: "network" };
   }
 }

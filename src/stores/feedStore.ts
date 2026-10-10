@@ -19,6 +19,9 @@ export interface FeedStatus {
   warnings: string[];
   scoredCount: number;
   scoreTotal: number;
+  /** Why the last scoring run left videos unvetted (provider error text),
+   * null when it vetted everything or failed on the key (that's an error). */
+  scoringFailure: string | null;
 }
 
 interface StoredVideos {
@@ -36,7 +39,18 @@ export const status = writable<FeedStatus>({
   warnings: [],
   scoredCount: 0,
   scoreTotal: 0,
+  scoringFailure: null,
 });
+
+/** True while a scoring run is in flight. Feed loads finish into "scoring"
+ * rather than "idle" while it is: the feed remounts on Settings → Feed, and an
+ * idle phase mid-run hid the progress panel and every pending video, and put a
+ * Retry button on screen that could only join the run already going. */
+export const scoringActive = writable(false);
+
+function settledPhase(): FeedPhase {
+  return get(scoringActive) ? "scoring" : "idle";
+}
 
 /** Session-only transcript coverage from the last scoring run — the
  * production-visible signal that the transcript seam works (log.info is
@@ -81,7 +95,7 @@ export async function initFeed(): Promise<void> {
     videos.set(storedVideos.videos);
     fetchedAt = storedVideos.fetchedAt;
   }
-  status.update((s) => ({ ...s, phase: "idle", detail: "" }));
+  status.update((s) => ({ ...s, phase: settledPhase(), detail: "" }));
   if (!storedVideos || Date.now() - fetchedAt > VIDEOS_TTL_MS) {
     await refresh();
   }
@@ -106,7 +120,7 @@ export async function refresh(): Promise<void> {
     const subWarnings = await refreshSubscriptions(load.videos);
     status.update((s) => ({
       ...s,
-      phase: "idle",
+      phase: settledPhase(),
       detail: "",
       warnings: [...load.warnings, ...subWarnings],
     }));

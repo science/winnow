@@ -172,6 +172,15 @@ function fetchStub(opts: StubOpts = {}) {
 }
 
 describe("fetchTranscriptExcerpt", () => {
+  it("should give up on a YouTube request that never answers", async () => {
+    const fetchFn = ((_url: string, init?: RequestInit) =>
+      new Promise<Response>((_resolve, reject) => {
+        init?.signal?.addEventListener("abort", () => reject(init.signal!.reason));
+      })) as typeof fetch;
+    const result = await fetchTranscriptExcerpt("vid00000001", 2000, { fetchFn, timeoutMs: 50 });
+    expect(result).toEqual({ failure: "timeout" });
+  });
+
   it("should fetch player with the ANDROID client and return the timedtext excerpt", async () => {
     const { fetchFn, calls } = fetchStub();
     const result = await fetchTranscriptExcerpt("vid00000001", 2000, { fetchFn });

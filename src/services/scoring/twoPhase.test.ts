@@ -379,6 +379,32 @@ describe("runTwoPhaseScoring — deferred feedback", () => {
     expect(calls.filter((c) => c.name === "translate_profile")).toHaveLength(before + 1);
   });
 
+  it("should keep ranking with the stored target when folding in votes fails", async () => {
+    const { callFn } = stubCall();
+    const deps = memoryDeps(callFn);
+    await runTwoPhaseScoring([video("aaaaaaaaaa1")], deps);
+
+    // The vote flush's re-translation fails; the stored target still matches
+    // the profile, so the feed must not go unvetted over the votes.
+    const failingTranslate = (async (spec: Parameters<StructuredCallFn>[0]) => {
+      if (spec.name === "translate_profile") {
+        throw new ProviderError("bad_request", "Anthropic HTTP 400: nope");
+      }
+      return callFn(spec);
+    }) as StructuredCallFn;
+    const fresh = ["bbbbbbbbbb1", "bbbbbbbbbb2", "bbbbbbbbbb3"].map((id) => video(id));
+    const result = await runTwoPhaseScoring([video("aaaaaaaaaa1"), ...fresh], {
+      ...deps,
+      callFn: failingTranslate,
+      feedback: vote,
+    });
+
+    expect(result.unknownIds).toEqual([]);
+    expect(Object.keys(result.scores)).toHaveLength(4);
+    // Still pending: the next run tries the flush again.
+    expect(pendingFeedback(await deps.loadTarget!(), vote).pending).toBe(true);
+  });
+
   it("should fold in pending votes on an explicit flush regardless of new-video share", async () => {
     const { callFn, calls } = stubCall();
     const deps = memoryDeps(callFn);

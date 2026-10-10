@@ -243,6 +243,9 @@
       </section>
     {:else if unvetted.length > 0}
       <section data-testid="tier-unvetted">
+        {#if $status.scoringFailure}
+          <p class="mb-2 text-sm text-caution" data-testid="unvetted-reason">{$status.scoringFailure}</p>
+        {/if}
         <button
           onclick={() => (showUnvetted = !showUnvetted)}
           class="w-full rounded-md bg-surface-raised px-3 py-2 text-left text-sm text-ink-faint hover:bg-surface-hover"
