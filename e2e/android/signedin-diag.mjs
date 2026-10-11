@@ -16,6 +16,10 @@
 // from .env.production) and, in the account-writes step, puts ONE video into
 // the signed-in account's YouTube watch history. Never part of a tier.
 //
+// YouTube budget: a cold run fetches up to 60 transcripts from whatever network
+// the device is on. On home Wi-Fi that is the household IP that bulk fetching
+// once got Google-blocked (docs/DEVELOPMENT.md invariants); keep reruns few.
+//
 //   WINNOW_TARGET=android WINNOW_ANDROID_SERIAL=<serial> \
 //   WINNOW_ANDROID_PACKAGE=org.mozilla.firefox_beta ADB=/usr/bin/adb \
 //   node e2e/android/signedin-diag.mjs

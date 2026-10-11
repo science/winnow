@@ -9,6 +9,10 @@
 // Measured 2026-09-21 (Firefox for Android 156): a backgrounded run keeps
 // going and completes while hidden; after a page death the restarted run
 // needs only the videos not yet digested ("Scoring 0/40" after dying at 8/48).
+//
+// YouTube budget: a cold run fetches up to 60 transcripts from whatever network
+// the device is on. On home Wi-Fi that is the household IP that bulk fetching
+// once got Google-blocked (docs/DEVELOPMENT.md invariants); keep reruns few.
 import { execFileSync } from "node:child_process";
 import { homedir } from "node:os";
 import { By, until } from "selenium-webdriver";

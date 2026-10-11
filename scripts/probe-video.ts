@@ -2,7 +2,7 @@
 // shows exactly what the digest says when a single ranking looks wrong.
 // Videos from the committed gotham capture carry their real metadata; any
 // other id gets a synthesized Video from the flags (the transcript is
-// always fetched live).
+// fetched once, then served from the diag transcript cache).
 //
 //   npx vite-node scripts/probe-video.ts [videoId] [flags]
 //     --title=...     synthesized metadata for ids outside the capture
@@ -17,7 +17,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { parseFeedPage } from "../src/services/youtube/feedParser";
 import { enrichBatch, enrichmentModelFor, translateProfile } from "../src/services/scoring/twoPhase";
-import { fetchTranscriptExcerpt } from "../src/services/youtube/transcripts";
+import { diagFetchExcerpt } from "./diagTranscripts";
 import { ENRICH_TRANSCRIPT_CHARS } from "../src/services/scoring/enrichPrompt";
 import { canonicalizeTarget, rankVideo } from "../src/lib/rubricScorer";
 import { describeTarget } from "../src/lib/targetDisplay";
@@ -63,7 +63,7 @@ const video: Video = videos.find((v) => v.id === VIDEO) ?? {
 };
 console.log("video:", JSON.stringify(video, null, 1));
 
-const excerpt = await fetchTranscriptExcerpt(VIDEO, ENRICH_TRANSCRIPT_CHARS);
+const excerpt = await diagFetchExcerpt(VIDEO, ENRICH_TRANSCRIPT_CHARS);
 const transcript = "excerpt" in excerpt ? excerpt.excerpt : null;
 console.log("transcript:", transcript ? `${transcript.length} chars` : JSON.stringify(excerpt));
 

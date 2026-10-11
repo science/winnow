@@ -49,7 +49,7 @@ import {
 } from "./translatePrompt";
 import { structuredCall } from "./structuredCall";
 import { isRetryable, ProviderError } from "./providerTypes";
-import { TRANSCRIPT_EXCERPT_CHARS, type TranscriptOutcome } from "../youtube/transcripts";
+import { TRANSCRIPT_EXCERPT_CHARS, fetchExcerpts, type TranscriptOutcome } from "../youtube/transcripts";
 
 // Enrichment models: the cheapest tier per provider — phase 1 is high-volume
 // (full transcripts) and taxonomic, not creative. Reviewed constants; both
@@ -415,22 +415,17 @@ export async function runTwoPhaseScoring(
   const toFetch = provisional.filter((v) => !v.isLive).slice(0, cap);
   const transcripts = new Map<string, string>();
   result.transcripts.attempted = toFetch.length;
-  let nextFetch = 0;
-  async function transcriptWorker(): Promise<void> {
-    while (nextFetch < toFetch.length) {
-      const video = toFetch[nextFetch++]!;
-      const outcome = await fetchExcerpt(video.id, ENRICH_TRANSCRIPT_CHARS);
-      if ("excerpt" in outcome) {
-        transcripts.set(video.id, outcome.excerpt);
-        result.transcripts.fetched += 1;
-        await deps.saveExcerpt?.(video.id, outcome.excerpt.slice(0, TRANSCRIPT_EXCERPT_CHARS));
-      } else {
-        result.transcripts.failures[outcome.failure] =
-          (result.transcripts.failures[outcome.failure] ?? 0) + 1;
-      }
-    }
+  const pass = await fetchExcerpts(
+    toFetch.map((v) => v.id),
+    (id) => fetchExcerpt(id, ENRICH_TRANSCRIPT_CHARS),
+    CONCURRENCY,
+  );
+  result.transcripts.failures = pass.failures;
+  for (const [id, { excerpt }] of pass.excerpts) {
+    transcripts.set(id, excerpt);
+    result.transcripts.fetched += 1;
+    await deps.saveExcerpt?.(id, excerpt.slice(0, TRANSCRIPT_EXCERPT_CHARS));
   }
-  await Promise.all(Array.from({ length: CONCURRENCY }, transcriptWorker));
 
   // Decide what actually needs the LLM: content changed, or never digested.
   const toEnrich: EnrichInput[] = [];

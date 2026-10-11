@@ -188,6 +188,16 @@ describe("enrichWithTranscripts", () => {
     expect(result.fetched).toBe(60);
   });
 
+  it("should stop fetching once YouTube rate-limits", async () => {
+    const videos = ids(20).map(video);
+    const fetchExcerpt = vi.fn(async () => ({ failure: "timedtext-http-429" }));
+    const result = await enrichWithTranscripts(videos, new Set(videos.map((v) => v.id)), {
+      fetchExcerpt, loadCache: emptyCache, saveCache: noSave,
+    });
+    expect(fetchExcerpt.mock.calls.length).toBeLessThanOrEqual(2);
+    expect(result.failures["skipped-rate-limited"]).toBe(20 - fetchExcerpt.mock.calls.length);
+  });
+
   it("should skip live videos", async () => {
     const live = { ...video("livenow0001"), isLive: true };
     const fetchExcerpt = vi.fn(excerptOf);

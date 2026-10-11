@@ -27,7 +27,7 @@ import {
 import { discovered as discoveredStore } from "../../stores/discoveryStore";
 import { subscribedIds, subscriptionsReady } from "../../stores/subscriptionsStore";
 import { settings, profile as profileStore, settingsReady } from "../../stores/settingsStore";
-import { fetchTranscriptExcerpt, type TranscriptOutcome } from "../youtube/transcripts";
+import { fetchExcerpts, fetchTranscriptExcerpt, type TranscriptOutcome } from "../youtube/transcripts";
 import { isDemoMode } from "../youtube/feedSource";
 import { coalesceRuns } from "../../lib/singleFlight";
 import {
@@ -223,29 +223,19 @@ export async function enrichWithTranscripts(
   const cache = (await loadCache()) ?? {};
   const excerpts = new Map<string, string>();
   const fresh: Record<string, TranscriptCacheEntry> = {};
-  const failures: Record<string, number> = {};
 
-  const toFetch: Video[] = [];
+  const toFetch: string[] = [];
   for (const v of targets) {
     const hit = cache[v.id];
     if (hit) excerpts.set(v.id, hit.excerpt);
-    else toFetch.push(v);
+    else toFetch.push(v.id);
   }
 
-  let next = 0;
-  async function worker(): Promise<void> {
-    while (next < toFetch.length) {
-      const v = toFetch[next++]!;
-      const outcome = await fetchExcerpt(v.id);
-      if ("excerpt" in outcome) {
-        excerpts.set(v.id, outcome.excerpt);
-        fresh[v.id] = { excerpt: outcome.excerpt, source: outcome.source, fetchedAt: Date.now() };
-      } else {
-        failures[outcome.failure] = (failures[outcome.failure] ?? 0) + 1;
-      }
-    }
+  const { excerpts: fetchedNow, failures } = await fetchExcerpts(toFetch, fetchExcerpt, TRANSCRIPT_CONCURRENCY);
+  for (const [id, outcome] of fetchedNow) {
+    excerpts.set(id, outcome.excerpt);
+    fresh[id] = { excerpt: outcome.excerpt, source: outcome.source, fetchedAt: Date.now() };
   }
-  await Promise.all(Array.from({ length: TRANSCRIPT_CONCURRENCY }, worker));
   status.update((s) => ({ ...s, detail: "" }));
 
   if (Object.keys(fresh).length > 0) await saveCache({ ...cache, ...fresh });

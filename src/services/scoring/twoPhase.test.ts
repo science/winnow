@@ -276,6 +276,17 @@ describe("runTwoPhaseScoring", () => {
     expect(result.transcripts.attempted).toBe(0);
   });
 
+  it("should stop fetching transcripts once YouTube rate-limits, and still score every video from metadata", async () => {
+    const { callFn } = stubCall();
+    const fetchExcerpt = vi.fn(async () => ({ failure: "timedtext-http-429" }));
+    const deps = memoryDeps(callFn, { fetchExcerpt });
+    const ids = Array.from({ length: 10 }, (_, i) => `ratelimit0${i}`);
+    const result = await runTwoPhaseScoring(ids.map((id) => video(id)), deps);
+    expect(fetchExcerpt.mock.calls.length).toBeLessThanOrEqual(2);
+    expect(result.transcripts.failures["skipped-rate-limited"]).toBe(10 - fetchExcerpt.mock.calls.length);
+    for (const id of ids) expect(result.scores[id]).toBeDefined();
+  });
+
   it("should respect the per-run transcript cap", async () => {
     const { callFn } = stubCall();
     const fetchExcerpt = vi.fn(async () => ({ excerpt: "words", source: "player" as const }));

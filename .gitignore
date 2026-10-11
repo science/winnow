@@ -19,3 +19,6 @@ credentials/
 # gunzip on demand); raw captures must go through scripts/scrub-capture.ts
 src/services/youtube/fixtures/gotham-poor-ranking-capture.json
 src/services/youtube/fixtures/pii-warning-*
+
+# Diag-script transcript cache (scripts/diagTranscripts.ts): fetched once, kept locally
+.diag-cache/

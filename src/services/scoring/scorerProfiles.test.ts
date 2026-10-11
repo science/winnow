@@ -9,7 +9,8 @@ vi.mock("./anthropicScorer", () => ({
   ANTHROPIC_MODEL: "claude-test-model",
   scoreBatchAnthropic: vi.fn(),
 }));
-vi.mock("../youtube/transcripts", () => ({
+vi.mock("../youtube/transcripts", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../youtube/transcripts")>()),
   fetchTranscriptExcerpt: vi.fn(async () => ({ failure: "disabled-in-test" })),
 }));
 

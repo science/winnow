@@ -14,7 +14,8 @@ vi.mock("./anthropicScorer", () => ({
 vi.mock("./structuredCall", () => ({
   structuredCall: vi.fn(),
 }));
-vi.mock("../youtube/transcripts", () => ({
+vi.mock("../youtube/transcripts", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../youtube/transcripts")>()),
   TRANSCRIPT_EXCERPT_CHARS: 3000,
   fetchTranscriptExcerpt: vi.fn(async () => ({ failure: "disabled-in-test" })),
 }));

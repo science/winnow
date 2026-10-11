@@ -181,3 +181,33 @@ export async function fetchTranscriptExcerpt(
     return { failure: "network" };
   }
 }
+
+/** Transcript pass for a scoring run: `concurrency` fetches at a time. The
+ * first 429 (Google's IP-wide "automated queries" block, which also starves
+ * the user's own YouTube) stops the pass; every further request would extend
+ * the block, so the rest count as "skipped-rate-limited" and stay retryable. */
+export async function fetchExcerpts(
+  videoIds: string[],
+  fetchOne: (videoId: string) => Promise<TranscriptOutcome>,
+  concurrency: number,
+): Promise<{ excerpts: Map<string, TranscriptResult>; failures: Record<string, number> }> {
+  const excerpts = new Map<string, TranscriptResult>();
+  const failures: Record<string, number> = {};
+  let next = 0;
+  let rateLimited = false;
+  async function worker(): Promise<void> {
+    while (!rateLimited && next < videoIds.length) {
+      const id = videoIds[next++]!;
+      const outcome = await fetchOne(id);
+      if ("excerpt" in outcome) {
+        excerpts.set(id, outcome);
+      } else {
+        failures[outcome.failure] = (failures[outcome.failure] ?? 0) + 1;
+        if (outcome.failure.endsWith("-http-429")) rateLimited = true;
+      }
+    }
+  }
+  await Promise.all(Array.from({ length: concurrency }, worker));
+  if (next < videoIds.length) failures["skipped-rate-limited"] = videoIds.length - next;
+  return { excerpts, failures };
+}

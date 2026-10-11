@@ -8,7 +8,8 @@
 //     --capture   replay the committed gotham capture (pairs with
 //                 DIAG_PROFILE=gotham for the exact mis-ranking feed)
 //
-// Keys from .env.production (gitignored) or the environment.
+// Keys from .env.production (gitignored) or the environment. Transcripts go
+// through scripts/diagTranscripts.ts (disk cache + per-run budget).
 
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { gunzipSync } from "node:zlib";
@@ -17,7 +18,7 @@ import { dirname, join } from "node:path";
 import { parseFeedPage } from "../src/services/youtube/feedParser";
 import { extractYtInitialData } from "../src/services/youtube/ytPage";
 import { runTwoPhaseScoring, enrichmentModelFor } from "../src/services/scoring/twoPhase";
-import { fetchTranscriptExcerpt } from "../src/services/youtube/transcripts";
+import { diagFetchExcerpt, diagTranscriptStats } from "./diagTranscripts";
 import { isEmptyTarget, matchedTopics } from "../src/lib/rubricScorer";
 import { DIGEST_TIER_QUALIFIERS } from "../src/lib/digest";
 import { TIER_THRESHOLDS } from "../src/lib/tiers";
@@ -173,7 +174,7 @@ async function main(): Promise<void> {
     model,
     profile,
     feedback: [],
-    fetchExcerpt: (id, maxChars) => fetchTranscriptExcerpt(id, maxChars),
+    fetchExcerpt: diagFetchExcerpt,
     loadEnrichment: async () => enrichmentCache,
     saveEnrichment: async (c) => {
       enrichmentCache = c;
@@ -195,6 +196,7 @@ async function main(): Promise<void> {
     `${result.transcripts.fetched}/${result.transcripts.attempted}`,
     result.transcripts.failures,
   );
+  console.log(diagTranscriptStats());
   console.log(`enriched: ${result.enriched}, unknown: ${result.unknownIds.length}`);
   if (result.fatalError) console.log("FATAL:", result.fatalError.kind, result.fatalError.message);
 

@@ -1,6 +1,8 @@
 import { describe, it, expect } from "vitest";
+import type { TranscriptOutcome } from "./transcripts";
 import {
   ANDROID_CLIENT,
+  fetchExcerpts,
   fetchTranscriptExcerpt,
   parseTimedtextXml,
   pickCaptionTrack,
@@ -253,5 +255,48 @@ describe("fetchTranscriptExcerpt", () => {
     expect(await fetchTranscriptExcerpt("vid00000001", 2000, { fetchFn })).toEqual({
       failure: "network",
     });
+  });
+});
+
+describe("fetchExcerpts", () => {
+  const ids = Array.from({ length: 20 }, (_, i) => `vid${String(i).padStart(8, "0")}`);
+
+  it("should fetch every video, a bounded number at a time", async () => {
+    let inFlight = 0;
+    let peak = 0;
+    const fetchOne = async (id: string): Promise<TranscriptOutcome> => {
+      peak = Math.max(peak, ++inFlight);
+      await new Promise((r) => setTimeout(r, 1));
+      inFlight--;
+      return id.endsWith("3") ? { failure: "no-tracks" } : { excerpt: `text of ${id}`, source: "player" };
+    };
+    const { excerpts, failures } = await fetchExcerpts(ids, fetchOne, 2);
+    expect(excerpts.size).toBe(18);
+    expect(excerpts.get("vid00000000")?.excerpt).toBe("text of vid00000000");
+    expect(failures).toEqual({ "no-tracks": 2 });
+    expect(peak).toBe(2);
+  });
+
+  // Google answers a flood of automated requests with an IP-wide block that
+  // also starves the user's own browsing; every further request prolongs it.
+  it("should start no new fetches once YouTube answers 429, and count the skipped videos", async () => {
+    const asked: string[] = [];
+    const fetchOne = async (id: string): Promise<TranscriptOutcome> => {
+      asked.push(id);
+      await new Promise((r) => setTimeout(r, 1));
+      return id === ids[0] ? { failure: "timedtext-http-429" } : { excerpt: "x", source: "player" };
+    };
+    const { excerpts, failures } = await fetchExcerpts(ids, fetchOne, 2);
+    expect(asked.length).toBe(2);
+    expect(excerpts.size).toBe(1);
+    expect(failures).toEqual({ "timedtext-http-429": 1, "skipped-rate-limited": 18 });
+  });
+
+  it("should treat a 429 from the player request the same way", async () => {
+    let n = 0;
+    const fetchOne = async (): Promise<TranscriptOutcome> => (n++, { failure: "player-http-429" });
+    const { failures } = await fetchExcerpts(ids, fetchOne, 1);
+    expect(n).toBe(1);
+    expect(failures).toEqual({ "player-http-429": 1, "skipped-rate-limited": 19 });
   });
 });
