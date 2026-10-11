@@ -20,6 +20,6 @@ credentials/
 src/services/youtube/fixtures/gotham-poor-ranking-capture.json
 src/services/youtube/fixtures/pii-warning-*
 
-# Local transcript fixtures for dev tools (scripts/transcriptStore.ts): the
-# creators' text, so never committed to this public repo
-local-fixtures/
+# Clone of the PRIVATE repo science/winnow-fixtures: transcripts and other
+# copyrighted or personal data that must never land in this public repo
+private-fixtures/
