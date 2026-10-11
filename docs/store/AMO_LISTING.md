@@ -35,7 +35,20 @@ YouTube's algorithm optimizes for minutes watched. Winnow optimizes for somethin
 
 Source code: https://github.com/science/winnow
 
-## Version notes (What's new — 0.3.0)
+## Version notes (What's new — 0.3.1)
+
+Scoring can no longer stall silently.
+
+- **Fixed: videos stuck "awaiting vetting" with nothing happening.** A request to YouTube or to your AI provider that never answered (a laptop waking from sleep, a Wi-Fi change, a phone that paused Firefox in the background) could hold a scoring run forever, and Retry only waited on that same stuck run. Every request now has a deadline, so a stuck run ends and the next one starts clean.
+- **Fixed: the feed forgetting a run was in progress.** Visiting Settings or pressing Refresh mid-run hid the progress bar and the videos still being scored. Progress now stays on screen until the run ends.
+- **Winnow says why.** When videos are left unvetted, a line above the fold now gives the provider's reason — for example, an exhausted credit balance — instead of only a Retry button.
+- **Votes can't blank the feed.** If folding your recent votes into your profile fails, Winnow keeps ranking with your existing profile instead of dropping every score.
+
+Permissions are unchanged from the previously listed versions.
+
+Notes to reviewer (addition for this version): no new host, permission, or remote code. The change adds request timeouts (`AbortSignal.timeout` on youtube.com fetches; the AI SDKs' `timeout` option) and UI state fixes.
+
+## Version notes (previous release — 0.3.0)
 
 Winnow now works on Firefox for Android.
 
@@ -52,7 +65,7 @@ Permissions are unchanged from the previously listed versions.
 
 Notes to reviewer (addition for this version): every youtube.com page request now carries the query parameter `app=desktop` (`src/lib/ytUrl.ts`), so that a mobile user agent receives the same desktop document Winnow already parses instead of a redirect to m.youtube.com. It sets no cookie and is a no-op on desktop. No new host, permission, or remote code.
 
-## Version notes (previous release — 0.2.4)
+## Version notes (older release — 0.2.4)
 
 Watch history, if you want it.
 
