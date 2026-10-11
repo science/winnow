@@ -23,6 +23,9 @@ export interface StructuredCallSpec {
   /** Tool name (Anthropic) / json_schema name (OpenAI). */
   name: string;
   maxTokens?: number;
+  /** OpenAI only; omitted means the model's own default, which differs by
+   * model (gpt-5.4-nano: none, gpt-6-luna: medium). */
+  reasoningEffort?: OpenAI.ReasoningEffort;
   /** Override for PROVIDER_TIMEOUT_MS (tests). */
   timeoutMs?: number;
 }
@@ -104,6 +107,7 @@ export async function structuredCall<T>(spec: StructuredCallSpec): Promise<T> {
     // No temperature: the gpt-5.x family rejects non-default sampling params.
     completion = await client.chat.completions.create({
       model: spec.model,
+      ...(spec.reasoningEffort ? { reasoning_effort: spec.reasoningEffort } : {}),
       messages: [
         { role: "system", content: spec.system },
         { role: "user", content: spec.user },

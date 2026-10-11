@@ -126,6 +126,21 @@ describe("structuredCall", () => {
     }
   });
 
+  it("should send a reasoning effort to OpenAI only when the call asks for one", async () => {
+    const { requests } = stubFetch((req) =>
+      req.url.includes("anthropic") ? jsonResponse(anthropicBody) : jsonResponse(openaiBody),
+    );
+    await structuredCall({ ...spec("openai"), reasoningEffort: "none" });
+    await structuredCall(spec("openai"));
+    await structuredCall({ ...spec("anthropic"), reasoningEffort: "none" });
+    const [pinned, unpinned, anthropic] = await Promise.all(
+      requests.map(async (r) => (await r.json()) as Record<string, unknown>),
+    );
+    expect(pinned!["reasoning_effort"]).toBe("none");
+    expect(unpinned!["reasoning_effort"]).toBeUndefined();
+    expect(anthropic!["reasoning_effort"]).toBeUndefined();
+  });
+
   it("should never retry internally — one 500 means one request and a server error (house retry lives in scorer.ts)", async () => {
     const { fetchMock } = stubFetch(() => new Response("boom", { status: 500 }));
     await expect(structuredCall(spec("openai"))).rejects.toMatchObject({

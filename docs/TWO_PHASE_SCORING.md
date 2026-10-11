@@ -3,7 +3,7 @@
 Status: **implemented 2026-07-15** as the default engine (`scoringStrategy` in Settings; direct single-pass kept behind the toggle for A/B until curation quality is confirmed by eyeball — migration step 5). Implementation deltas from the design below:
 
 - The taxonomy gained **`claimOverreach`** (claims made vs. evidence shown in the transcript) as the BS axis — the product question "is this video BS?" is answered there, catching science-provocateur content whose packaging looks respectable. `emotional_tone`/`format` shipped as designed; `hype_signals` lists concrete observed techniques.
-- Phase 1 reads the **full transcript** (20k-char budget via the ANDROID-player transcript route), not the 2k-char intro direct mode uses. Batches of 4 on fixed cheap models: `claude-haiku-4-5` / `gpt-5.4-nano`.
+- Phase 1 reads the **full transcript** (20k-char budget via the ANDROID-player transcript route), not the 2k-char intro direct mode uses. Batches of 4 on fixed cheap models: `claude-haiku-4-5` / `gpt-6-luna` (`gpt-5.4-nano` until 2026-10-10; it retires 2027-04-01).
 - Enrichment cache validity: transcript-backed digests are final per (model, prompt version); metadata-only digests stay provisional — every run retries the transcript and re-enriches only when the content hash changes.
 - **Votes ride into the phase-2 translation** (not a design item): a vote changes the target input hash, so the next run re-translates and re-ranks the entire feed for ~$0.001 — closing the "existing scores predate recent votes" gap direct mode accepts.
 - Code: `src/lib/digest.ts`, `src/lib/rubricScorer.ts` (pure), `src/services/scoring/enrichPrompt.ts`, `translatePrompt.ts`, `twoPhase.ts` (orchestrator). Live spec: `e2e/live/twoPhase.spec.ts`.

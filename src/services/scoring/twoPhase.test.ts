@@ -7,6 +7,8 @@ import { ENRICHMENT_PROMPT_VERSION, ENRICH_TRANSCRIPT_CHARS } from "./enrichProm
 import {
   contentHashFor,
   enrichBatch,
+  ENRICH_ANTHROPIC_MODEL,
+  ENRICH_OPENAI_MODEL,
   expectedScoresHash,
   pendingFeedback,
   runTwoPhaseScoring,
@@ -135,6 +137,19 @@ describe("enrichBatch", () => {
       callFn,
     );
     expect([...out.keys()]).toEqual(["realvideo01"]);
+  });
+
+  it("should run OpenAI enrichment without reasoning, and leave Anthropic's call alone", async () => {
+    const specs: Array<{ reasoningEffort?: string }> = [];
+    const callFn = (async (spec: { reasoningEffort?: string }) => {
+      specs.push(spec);
+      return { digests: [digestFor("realvideo01")] };
+    }) as StructuredCallFn;
+    const inputs = [{ video: video("realvideo01"), transcript: null }];
+    await enrichBatch(inputs, "openai", "k", ENRICH_OPENAI_MODEL, callFn);
+    await enrichBatch(inputs, "anthropic", "k", ENRICH_ANTHROPIC_MODEL, callFn);
+    expect(specs[0]!.reasoningEffort).toBe("none");
+    expect(specs[1]!.reasoningEffort).toBeUndefined();
   });
 });
 

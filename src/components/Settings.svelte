@@ -416,7 +416,7 @@
       </div>
       <p class="text-xs text-ink-faint">
         Two-phase reads each video's full transcript once with a fixed cheap model
-        (claude-haiku-4-5 / gpt-5.4-nano) to judge substance, hype, and whether claims outrun the
+        (claude-haiku-4-5 / gpt-6-luna) to judge substance, hype, and whether claims outrun the
         evidence — then ranks instantly against your profile; edits re-rank without re-paying.
         Direct sends metadata plus a transcript intro to the model picked below on every score.
       </p>

@@ -47,16 +47,21 @@ import {
   TRANSLATE_SYSTEM_PROMPT,
   TRANSLATOR_PROMPT_VERSION,
 } from "./translatePrompt";
-import { structuredCall } from "./structuredCall";
+import { structuredCall, type StructuredCallSpec } from "./structuredCall";
 import { isRetryable, ProviderError } from "./providerTypes";
 import { TRANSCRIPT_EXCERPT_CHARS, type TranscriptOutcome } from "../youtube/transcripts";
 
 // Enrichment models: the cheapest tier per provider — phase 1 is high-volume
 // (full transcripts) and taxonomic, not creative. Reviewed constants; both
-// participate in the enrichment cache key. gpt-5.4-nano verified against the
-// live /v1/models catalog 2026-07-15.
+// participate in the enrichment cache key. gpt-6-luna replaced gpt-5.4-nano
+// (retiring 2027-04-01) on 2026-10-10.
 export const ENRICH_ANTHROPIC_MODEL = "claude-haiku-4-5";
-export const ENRICH_OPENAI_MODEL = "gpt-5.4-nano";
+export const ENRICH_OPENAI_MODEL = "gpt-6-luna";
+// Luna defaults to medium reasoning. Measured 2026-10-10 on real feed videos
+// against haiku digests: medium is 2-3x slower per batch and no more
+// accurate than none. Changing this changes digests, so it needs an
+// ENRICHMENT_PROMPT_VERSION bump.
+const ENRICH_OPENAI_REASONING: StructuredCallSpec["reasoningEffort"] = "none";
 
 const CONCURRENCY = 2;
 const RETRY_DELAY_MS = 2000;
@@ -93,6 +98,7 @@ export async function enrichBatch(
     schema: DIGESTS_SCHEMA,
     name: "digest_videos",
     maxTokens: 8192,
+    ...(provider === "openai" ? { reasoningEffort: ENRICH_OPENAI_REASONING } : {}),
   });
   if (!Array.isArray(result.digests)) {
     throw new ProviderError("bad_response", "enrichment response missing digests array");
