@@ -20,5 +20,6 @@ credentials/
 src/services/youtube/fixtures/gotham-poor-ranking-capture.json
 src/services/youtube/fixtures/pii-warning-*
 
-# Diag-script transcript cache (scripts/diagTranscripts.ts): fetched once, kept locally
-.diag-cache/
+# Local transcript fixtures for dev tools (scripts/transcriptStore.ts): the
+# creators' text, so never committed to this public repo
+local-fixtures/

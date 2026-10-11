@@ -2,7 +2,7 @@
 // shows exactly what the digest says when a single ranking looks wrong.
 // Videos from the committed gotham capture carry their real metadata; any
 // other id gets a synthesized Video from the flags (the transcript is
-// fetched once, then served from the diag transcript cache).
+// read from the local transcript store, fetched live only the first time).
 //
 //   npx vite-node scripts/probe-video.ts [videoId] [flags]
 //     --title=...     synthesized metadata for ids outside the capture
@@ -11,13 +11,12 @@
 //     --fresh-target  rank against a live translation of the diag profile
 //                     (DIAG_MORE/DIAG_LESS override) instead of the
 //                     capture's stored (stale, v2-translator) target
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
-import { gunzipSync } from "node:zlib";
+import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { parseFeedPage } from "../src/services/youtube/feedParser";
 import { enrichBatch, enrichmentModelFor, translateProfile } from "../src/services/scoring/twoPhase";
-import { diagFetchExcerpt } from "./diagTranscripts";
+import { storedExcerpt } from "./transcriptStore";
+import { captureBundle, captureVideos } from "./captureFixture";
 import { ENRICH_TRANSCRIPT_CHARS } from "../src/services/scoring/enrichPrompt";
 import { canonicalizeTarget, rankVideo } from "../src/lib/rubricScorer";
 import { describeTarget } from "../src/lib/targetDisplay";
@@ -36,14 +35,8 @@ for (const line of readFileSync(join(here, "..", ".env.production"), "utf8").spl
   if (m && !process.env[m[1]!]) process.env[m[1]!] = m[2]!;
 }
 
-const dir = join(here, "..", "src", "services", "youtube", "fixtures");
-const jsonPath = join(dir, "gotham-poor-ranking-capture.json");
-if (!existsSync(jsonPath)) writeFileSync(jsonPath, gunzipSync(readFileSync(`${jsonPath}.gz`)));
-const bundle = JSON.parse(readFileSync(jsonPath, "utf8"));
-const videos = [
-  ...parseFeedPage(bundle.home, "home"),
-  ...parseFeedPage(bundle.subscriptions, "subscriptions"),
-];
+const bundle = captureBundle();
+const videos = captureVideos();
 const durationText = flag("duration");
 const video: Video = videos.find((v) => v.id === VIDEO) ?? {
   id: VIDEO,
@@ -63,7 +56,7 @@ const video: Video = videos.find((v) => v.id === VIDEO) ?? {
 };
 console.log("video:", JSON.stringify(video, null, 1));
 
-const excerpt = await diagFetchExcerpt(VIDEO, ENRICH_TRANSCRIPT_CHARS);
+const excerpt = await storedExcerpt(VIDEO, ENRICH_TRANSCRIPT_CHARS, { live: true });
 const transcript = "excerpt" in excerpt ? excerpt.excerpt : null;
 console.log("transcript:", transcript ? `${transcript.length} chars` : JSON.stringify(excerpt));
 

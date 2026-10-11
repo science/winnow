@@ -4,21 +4,24 @@
 // Reproduces the production add-on run without a browser.
 //
 //   npx vite-node scripts/twophase-diag.ts [maxVideos] [provider]
-//     --fixtures  score the committed parser fixtures instead of live pages
-//     --capture   replay the committed gotham capture (pairs with
-//                 DIAG_PROFILE=gotham for the exact mis-ranking feed)
+//     (default)    replay the committed gotham capture (pairs with
+//                  DIAG_PROFILE=gotham for the exact mis-ranking feed)
+//     --fixtures   score the committed parser fixtures instead
+//     --live-feed  fetch 12 live channel pages (their videos won't be in
+//                  the transcript store, so they digest from metadata)
 //
-// Keys from .env.production (gitignored) or the environment. Transcripts go
-// through scripts/diagTranscripts.ts (disk cache + per-run budget).
+// Keys from .env.production (gitignored) or the environment. Transcripts come
+// from the local store (scripts/transcriptStore.ts), never from YouTube;
+// videos missing from it are digested from metadata.
 
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
-import { gunzipSync } from "node:zlib";
+import { readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { parseFeedPage } from "../src/services/youtube/feedParser";
 import { extractYtInitialData } from "../src/services/youtube/ytPage";
 import { runTwoPhaseScoring, enrichmentModelFor } from "../src/services/scoring/twoPhase";
-import { diagFetchExcerpt, diagTranscriptStats } from "./diagTranscripts";
+import { offlineFetchExcerpt, TRANSCRIPT_STORE } from "./transcriptStore";
+import { captureVideos } from "./captureFixture";
 import { isEmptyTarget, matchedTopics } from "../src/lib/rubricScorer";
 import { DIGEST_TIER_QUALIFIERS } from "../src/lib/digest";
 import { TIER_THRESHOLDS } from "../src/lib/tiers";
@@ -52,7 +55,7 @@ if (!apiKey) {
 // Approximation of a real profile of the kind the user runs; DIAG_PROFILE=nomatch
 // swaps in a worst-case profile whose topics match nothing in the feed;
 // DIAG_PROFILE=gotham is the verbatim profile behind the 2026-07 comic-chess
-// mis-ranking (pair with --capture for the exact feed).
+// mis-ranking (the default feed replays it).
 const profile =
   process.env["DIAG_PROFILE"] === "nomatch"
     ? {
@@ -88,28 +91,6 @@ function fixtureVideos(): Video[] {
       readFileSync(join(here, "..", "src", "services", "youtube", "fixtures", file), "utf8"),
     ) as unknown;
     for (const v of parseFeedPage(data, source)) {
-      if (!seen.has(v.id)) {
-        seen.add(v.id);
-        all.push(v);
-      }
-    }
-  }
-  return all.slice(0, maxVideos);
-}
-
-// The committed production-scale capture (126 videos around the gotham
-// mis-ranking), gunzipped to a gitignored local copy on first use.
-function captureVideos(): Video[] {
-  const dir = join(here, "..", "src", "services", "youtube", "fixtures");
-  const jsonPath = join(dir, "gotham-poor-ranking-capture.json");
-  if (!existsSync(jsonPath)) {
-    writeFileSync(jsonPath, gunzipSync(readFileSync(`${jsonPath}.gz`)));
-  }
-  const bundle = JSON.parse(readFileSync(jsonPath, "utf8")) as Record<string, unknown>;
-  const all: Video[] = [];
-  const seen = new Set<string>();
-  for (const source of ["home", "subscriptions"] as const) {
-    for (const v of parseFeedPage(bundle[source], source)) {
       if (!seen.has(v.id)) {
         seen.add(v.id);
         all.push(v);
@@ -155,11 +136,11 @@ async function liveVideos(): Promise<Video[]> {
 }
 
 async function main(): Promise<void> {
-  const videos = process.argv.includes("--capture")
-    ? captureVideos()
+  const videos = process.argv.includes("--live-feed")
+    ? await liveVideos()
     : process.argv.includes("--fixtures")
       ? fixtureVideos()
-      : await liveVideos();
+      : captureVideos().slice(0, maxVideos);
   const model = enrichmentModelFor(provider);
   console.log(`${videos.length} fixture videos, provider=${provider}, model=${model}\n`);
 
@@ -174,7 +155,7 @@ async function main(): Promise<void> {
     model,
     profile,
     feedback: [],
-    fetchExcerpt: diagFetchExcerpt,
+    fetchExcerpt: offlineFetchExcerpt,
     loadEnrichment: async () => enrichmentCache,
     saveEnrichment: async (c) => {
       enrichmentCache = c;
@@ -196,7 +177,7 @@ async function main(): Promise<void> {
     `${result.transcripts.fetched}/${result.transcripts.attempted}`,
     result.transcripts.failures,
   );
-  console.log(diagTranscriptStats());
+  console.log(`transcripts come only from ${TRANSCRIPT_STORE} (fill it with scripts/capture-transcripts.ts)`);
   console.log(`enriched: ${result.enriched}, unknown: ${result.unknownIds.length}`);
   if (result.fatalError) console.log("FATAL:", result.fatalError.kind, result.fatalError.message);
 

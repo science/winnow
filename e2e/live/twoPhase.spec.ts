@@ -5,7 +5,7 @@ import { test, expect } from "@playwright/test";
 import type { Provider } from "../../src/lib/types";
 import { enrichBatch, translateProfile } from "../../src/services/scoring/twoPhase";
 import { ENRICH_TRANSCRIPT_CHARS } from "../../src/services/scoring/enrichPrompt";
-import { fetchTranscriptExcerpt } from "../../src/services/youtube/transcripts";
+import { storedExcerpt } from "../../scripts/transcriptStore";
 import { DIGEST_NUMERIC_FIELDS } from "../../src/lib/types";
 import { isEmptyTarget } from "../../src/lib/rubricScorer";
 import { ENRICH_ANTHROPIC_MODEL, ENRICH_OPENAI_MODEL } from "../../src/services/scoring/twoPhase";
@@ -22,7 +22,9 @@ for (const { provider, envVar, model } of PROVIDERS) {
     const apiKey = process.env[envVar];
     test.skip(!apiKey, `${envVar} not set — live tier needs .env.production or env keys`);
 
-    const outcome = await fetchTranscriptExcerpt(CAPTIONED_VIDEO, ENRICH_TRANSCRIPT_CHARS);
+    // From the local transcript store; fetched live only the first time
+    // (transcripts.spec.ts is the YouTube smoke test, this one tests providers).
+    const outcome = await storedExcerpt(CAPTIONED_VIDEO, ENRICH_TRANSCRIPT_CHARS, { live: true });
     expect(outcome).toHaveProperty("excerpt");
     const transcript = "excerpt" in outcome ? outcome.excerpt : null;
 
