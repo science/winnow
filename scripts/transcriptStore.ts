@@ -3,7 +3,7 @@
 // which also cut off the user's own Winnow (docs/DEVELOPMENT.md invariants).
 // So tools read transcripts from private-fixtures/transcripts.json and never
 // touch YouTube; a video missing from the store is scored from metadata.
-// Only scripts/capture-transcripts.ts (bulk, paced, by hand) and single-video
+// Only scripts/capture-transcripts.ts (paced, capped per run) and single-video
 // tools that pass { live: true } fetch, and each stored video is fetched
 // once, ever. private-fixtures/ is a clone of the PRIVATE repo
 // science/winnow-fixtures (gitignored here): this repo is public, and
@@ -11,7 +11,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { fetchTranscriptExcerpt, type TranscriptOutcome } from "../src/services/youtube/transcripts";
+import { fetchTranscriptExcerpt, isYouTubeBlock, type TranscriptOutcome } from "../src/services/youtube/transcripts";
 
 const PRIVATE_FIXTURES = join(dirname(fileURLToPath(import.meta.url)), "..", "private-fixtures");
 export const TRANSCRIPT_STORE = join(PRIVATE_FIXTURES, "transcripts.json");
@@ -43,8 +43,7 @@ export async function storedExcerpt(
   }
   if (!opts.live) return { failure: "not-in-store" };
   const outcome = await fetchTranscriptExcerpt(videoId, maxChars);
-  // Keep answers that won't change; 429s, timeouts and network errors stay unstored.
-  if ("excerpt" in outcome || outcome.failure === "no-tracks") {
+  if (isPermanent(outcome)) {
     s[videoId] = { maxChars, outcome, fetchedAt: new Date().toISOString() };
     mkdirSync(dirname(TRANSCRIPT_STORE), { recursive: true });
     // One video per line, sorted, so the private repo's diffs stay readable.
@@ -52,6 +51,15 @@ export async function storedExcerpt(
     writeFileSync(TRANSCRIPT_STORE, `{\n${lines.join(",\n")}\n}\n`);
   }
   return outcome;
+}
+
+// Keep answers about the video itself: a transcript, no captions, or the
+// player refusing it (age-gated, removed). Blocks (429s, bot checks),
+// timeouts and network errors are about this network, so they stay unstored.
+function isPermanent(outcome: TranscriptOutcome): boolean {
+  if ("excerpt" in outcome) return true;
+  const f = outcome.failure;
+  return f === "no-tracks" || (f.startsWith("player-") && !f.startsWith("player-http-") && f !== "player-parse" && !isYouTubeBlock(f));
 }
 
 /** Offline transcript source in runTwoPhaseScoring's `fetchExcerpt` shape. */

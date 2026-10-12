@@ -4,6 +4,7 @@ import {
   ANDROID_CLIENT,
   fetchExcerpts,
   fetchTranscriptExcerpt,
+  isYouTubeBlock,
   parseTimedtextXml,
   pickCaptionTrack,
   parseJson3Transcript,
@@ -227,6 +228,32 @@ describe("fetchTranscriptExcerpt", () => {
     });
   });
 
+  // Google's anti-bot check answers the player call with 200 and no
+  // captions; reporting it as no-tracks would file captioned videos as
+  // uncaptioned for good, and hide that this network is being blocked.
+  it("should report a bot check when YouTube asks to confirm we're not a bot", async () => {
+    const { fetchFn, calls } = fetchStub({
+      playerBody: { playabilityStatus: { status: "LOGIN_REQUIRED", reason: "Sign in to confirm you’re not a bot" } },
+    });
+    expect(await fetchTranscriptExcerpt("vid00000001", 2000, { fetchFn })).toEqual({
+      failure: "player-bot-check",
+    });
+    expect(calls.length).toBe(1);
+  });
+
+  it("should report why the player refused a video it won't play", async () => {
+    const ageGated = fetchStub({
+      playerBody: { playabilityStatus: { status: "LOGIN_REQUIRED", reason: "Sign in to confirm your age" } },
+    });
+    expect(await fetchTranscriptExcerpt("vid00000001", 2000, { fetchFn: ageGated.fetchFn })).toEqual({
+      failure: "player-login_required",
+    });
+    const removed = fetchStub({ playerBody: { playabilityStatus: { status: "UNPLAYABLE" } } });
+    expect(await fetchTranscriptExcerpt("vid00000001", 2000, { fetchFn: removed.fetchFn })).toEqual({
+      failure: "player-unplayable",
+    });
+  });
+
   it("should report the timedtext HTTP status when the caption fetch fails", async () => {
     const { fetchFn } = fetchStub({ timedtextStatus: 404 });
     expect(await fetchTranscriptExcerpt("vid00000001", 2000, { fetchFn })).toEqual({
@@ -292,11 +319,30 @@ describe("fetchExcerpts", () => {
     expect(failures).toEqual({ "timedtext-http-429": 1, "skipped-rate-limited": 18 });
   });
 
+  it("should stop at a bot check the same way", async () => {
+    let n = 0;
+    const fetchOne = async (): Promise<TranscriptOutcome> => (n++, { failure: "player-bot-check" });
+    const { failures } = await fetchExcerpts(ids, fetchOne, 1);
+    expect(n).toBe(1);
+    expect(failures).toEqual({ "player-bot-check": 1, "skipped-rate-limited": 19 });
+  });
+
   it("should treat a 429 from the player request the same way", async () => {
     let n = 0;
     const fetchOne = async (): Promise<TranscriptOutcome> => (n++, { failure: "player-http-429" });
     const { failures } = await fetchExcerpts(ids, fetchOne, 1);
     expect(n).toBe(1);
     expect(failures).toEqual({ "player-http-429": 1, "skipped-rate-limited": 19 });
+  });
+});
+
+describe("isYouTubeBlock", () => {
+  it("should flag 429s and bot checks, and nothing about the video itself", () => {
+    expect(isYouTubeBlock("timedtext-http-429")).toBe(true);
+    expect(isYouTubeBlock("player-http-429")).toBe(true);
+    expect(isYouTubeBlock("player-bot-check")).toBe(true);
+    expect(isYouTubeBlock("no-tracks")).toBe(false);
+    expect(isYouTubeBlock("player-login_required")).toBe(false);
+    expect(isYouTubeBlock("timeout")).toBe(false);
   });
 });

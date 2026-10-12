@@ -155,7 +155,7 @@ export async function fetchTranscriptExcerpt(
     lastTranscriptCapture.current = { videoId, playerResponseRaw: playerRaw, timedtextRaw: null };
 
     const track = pickCaptionTrack(captionTracksFrom(player));
-    if (!track?.baseUrl) return { failure: "no-tracks" };
+    if (!track?.baseUrl) return { failure: refusalFrom(player) ?? "no-tracks" };
 
     const ttRes = await fetchFn(`${track.baseUrl}&fmt=json3`, { credentials: "omit", signal });
     if (!ttRes.ok) return { failure: `timedtext-http-${ttRes.status}` };
@@ -182,9 +182,25 @@ export async function fetchTranscriptExcerpt(
   }
 }
 
+/** Why the player declined to describe the video, if it did. A bot check
+ * is Google blocking this network, not a fact about the video. */
+function refusalFrom(player: unknown): string | null {
+  const ps = (player as { playabilityStatus?: { status?: unknown; reason?: unknown } } | null)?.playabilityStatus;
+  if (typeof ps?.status !== "string" || ps.status === "OK") return null;
+  if (typeof ps.reason === "string" && /not a bot/i.test(ps.reason)) return "player-bot-check";
+  return `player-${ps.status.toLowerCase()}`;
+}
+
+/** True for failures that mean YouTube is blocking this network (an HTTP
+ * 429 or the "confirm you're not a bot" check). Each further request
+ * extends the block, so callers stop at the first one. */
+export function isYouTubeBlock(failure: string): boolean {
+  return failure.endsWith("-http-429") || failure === "player-bot-check";
+}
+
 /** Transcript pass for a scoring run: `concurrency` fetches at a time. The
- * first 429 (Google's IP-wide "automated queries" block, which also starves
- * the user's own YouTube) stops the pass; every further request would extend
+ * first block (a 429 from Google's IP-wide "automated queries" block, which
+ * also starves the user's own YouTube, or a bot check) stops the pass; every further request would extend
  * the block, so the rest count as "skipped-rate-limited" and stay retryable. */
 export async function fetchExcerpts(
   videoIds: string[],
@@ -203,7 +219,7 @@ export async function fetchExcerpts(
         excerpts.set(id, outcome);
       } else {
         failures[outcome.failure] = (failures[outcome.failure] ?? 0) + 1;
-        if (outcome.failure.endsWith("-http-429")) rateLimited = true;
+        if (isYouTubeBlock(outcome.failure)) rateLimited = true;
       }
     }
   }
